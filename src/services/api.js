@@ -185,8 +185,18 @@ export const api = {
             const q = query(collection(db, "users"), where("uid", "==", uid));
             const querySnapshot = await getDocs(q);
             if (!querySnapshot.empty) {
-                const doc = querySnapshot.docs[0];
-                return { id: doc.id, ...doc.data() };
+                const docSnap = querySnapshot.docs[0];
+                return { id: docSnap.id, ...docSnap.data() };
+            }
+
+            // Final fallback: Check by email (in case user was manually added to DB as admin without a UID)
+            const emailQuery = query(collection(db, "users"), where("email", "==", firebaseUser.email));
+            const emailSnapshot = await getDocs(emailQuery);
+            if (!emailSnapshot.empty) {
+                const emailDoc = emailSnapshot.docs[0];
+                // Update this existing document with their UID for future logins
+                await updateDoc(doc(db, "users", emailDoc.id), { uid: uid });
+                return { id: emailDoc.id, ...emailDoc.data(), uid: uid };
             }
 
             // If not found, create new 'employee' profile
