@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Search, User as UserIcon, Loader2 } from 'lucide-react'
+import { Search, User as UserIcon, Loader2, FileSpreadsheet } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { api } from '../services/api'
 import DTRTable from './DTRTable'
 
@@ -11,13 +12,14 @@ export default function AdminDashboard({ currentUser }) {
     const [userHistory, setUserHistory] = useState([])
     const [loadingHistory, setLoadingHistory] = useState(false)
     const [cutoff, setCutoff] = useState(null)
+    const [cutoffs, setCutoffs] = useState([]) // List of all available cutoffs
     const [startDate, setStartDate] = useState('')
     const [endDate, setEndDate] = useState('')
     const [submissions, setSubmissions] = useState({}) // Map userId -> submission
 
     useEffect(() => {
         loadUsers()
-        loadCutoff()
+        loadCutoffs()
     }, [])
 
     useEffect(() => {
@@ -39,11 +41,17 @@ export default function AdminDashboard({ currentUser }) {
         setLoading(false)
     }
 
-    const loadCutoff = async () => {
+    const loadCutoffs = async () => {
+        // Load all for the dropdown
+        const allCutoffs = await api.getAllCutoffs()
+        setCutoffs(allCutoffs)
+
+        // Set active/latest as current if not set
         const active = await api.getActiveCutoff()
         if (active) {
             setCutoff(active)
-            // Pre-fill fields logic could go here, but keeping inputs blank for new entries is fine
+        } else if (allCutoffs.length > 0) {
+            setCutoff(allCutoffs[0])
         }
     }
 
@@ -80,9 +88,127 @@ export default function AdminDashboard({ currentUser }) {
         u.email?.toLowerCase().includes(search.toLowerCase())
     )
 
-    // Helper to get submission status
     const getSubmissionStatus = (userId) => {
         return submissions[userId]
+    }
+
+    const handleExportDTR = () => {
+        if (!selectedUser) return
+
+        let start, end;
+
+        if (cutoff) {
+            start = cutoff.startDate.toDate();
+            end = cutoff.endDate.toDate();
+        } else {
+            // Fallback if no cutoff is selected (e.g. export all or something? but DTRTable allows viewing history)
+            // For now let's enforce cutoff for simplified export
+            if (userHistory.length === 0) return alert("No history to export");
+            // Just take the range from the history?
+            // Let's rely on the current view which is driven by cutoff
+            alert("Please select a cutoff period to export.");
+            return;
+        }
+
+        const dates = [];
+        // Generate dates
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            dates.push(new Date(d));
+        }
+
+        const exportData = dates.map(date => {
+            const dateStr = date.toLocaleDateString('en-GB');
+            const dayStr = date.toLocaleDateString('en-GB', { weekday: 'long' });
+
+            const findLog = (type) => userHistory.find(h =>
+                new Date(h.timestamp).toDateString() === date.toDateString() &&
+                h.type === type
+            );
+
+            // Reason logic: find any log for the date
+            const findAnyLog = () => userHistory.find(h =>
+                new Date(h.timestamp).toDateString() === date.toDateString()
+            );
+
+            const formatTime = (log) => log ? new Date(log.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : '';
+
+            return {
+                Date: dateStr,
+                Day: dayStr,
+                "Time In": formatTime(findLog('IN')),
+                "Time Out": formatTime(findLog('OUT')),
+                "OT In": formatTime(findLog('OT_IN')),
+                "OT Out": formatTime(findLog('OT_OUT')),
+                "Notes": findAnyLog()?.reason || ''
+            };
+        });
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(exportData);
+
+        // Adjust column widths
+        const wscols = [
+            { wch: 15 }, // Date
+            { wch: 15 }, // Day
+            { wch: 15 }, // In
+            { wch: 15 }, // Out
+            { wch: 15 }, // OT In
+            { wch: 15 }, // OT Out
+            { wch: 30 }  // Notes
+        ];
+        ws['!cols'] = wscols;
+
+        XLSX.utils.book_append_sheet(wb, ws, "DTR Record");
+
+        const fileName = `DTR_${selectedUser.name.replace(/\s+/g, '_')}_${start.toISOString().split('T')[0]}_to_${end.toISOString().split('T')[0]}.xlsx`;
+
+        XLSX.writeFile(wb, fileName);
+    }
+
+    const handleUpdateRole = async (newRole) => {
+        if (!selectedUser) return;
+        const confirmMsg = newRole === 'admin'
+            ? `Are you sure you want to PROMOTE ${selectedUser.name} to Admin?`
+            : `Are you sure you want to DEMOTE ${selectedUser.name} to Employee?`;
+
+        if (!window.confirm(confirmMsg)) return;
+
+        const res = await api.updateUserRole(selectedUser.id, newRole);
+        if (res.success) {
+            alert(`User ${newRole === 'admin' ? 'Promoted' : 'Demoted'} successfully!`);
+            // Update local state
+            const updatedUser = { ...selectedUser, role: newRole };
+            setSelectedUser(updatedUser);
+            setUsers(users.map(u => u.id === selectedUser.id ? updatedUser : u));
+        } else {
+            alert("Failed to update role: " + res.message);
+        }
+    }
+
+    const handleUpdateSeniorStatus = async (isSenior) => {
+        if (!selectedUser) return;
+        const res = await api.updateUserSeniorStatus(selectedUser.id, isSenior);
+        if (res.success) {
+            alert(`User ${isSenior ? 'promoted to Senior' : 'removed from Senior role'}`);
+            const updatedUser = { ...selectedUser, isSenior: isSenior };
+            setSelectedUser(updatedUser);
+            setUsers(users.map(u => u.id === selectedUser.id ? updatedUser : u));
+        } else {
+            alert("Failed to update senior status: " + res.message);
+        }
+    }
+
+    const handleAssignSenior = async (seniorId) => {
+        if (!selectedUser) return;
+        const res = await api.assignSenior(selectedUser.id, seniorId);
+        if (res.success) {
+            // alert("Senior assigned successfully"); // Optional to alert, or just update UI
+            const updatedUser = { ...selectedUser, assignedSeniorId: seniorId };
+            setSelectedUser(updatedUser);
+            setUsers(users.map(u => u.id === selectedUser.id ? updatedUser : u));
+        } else {
+            alert("Failed to assign senior: " + res.message);
+        }
     }
 
     return (
@@ -102,11 +228,22 @@ export default function AdminDashboard({ currentUser }) {
                 <div className="flex items-center gap-4 bg-[#1f1f23] p-2 rounded-xl border border-slate-800">
                     <div className="px-2">
                         <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Active Cutoff</p>
-                        <p className="text-xs text-white font-mono">
-                            {cutoff ? (
-                                `${new Date(cutoff.startDate.toDate()).toLocaleDateString()} - ${new Date(cutoff.endDate.toDate()).toLocaleDateString()}`
-                            ) : 'No Active Cutoff'}
-                        </p>
+                        <select
+                            className="text-xs text-white font-mono bg-[#1f1f23] border-none focus:outline-none cursor-pointer rounded px-1 py-0.5"
+                            style={{ colorScheme: 'dark' }}
+                            value={cutoff ? cutoff.id : ''}
+                            onChange={(e) => {
+                                const selectedId = e.target.value;
+                                setCutoff(cutoffs.find(c => c.id === selectedId) || null);
+                            }}
+                        >
+                            <option value="" style={{ backgroundColor: '#1f1f23', color: '#fff' }}>Select Cutoff Period</option>
+                            {cutoffs.map(cutoff => (
+                                <option key={cutoff.id} value={cutoff.id} style={{ backgroundColor: '#1f1f23', color: '#fff' }}>
+                                    {`${new Date(cutoff.startDate.toDate()).toLocaleDateString('en-GB')} - ${new Date(cutoff.endDate.toDate()).toLocaleDateString('en-GB')}`}
+                                </option>
+                            ))}
+                        </select>
                     </div>
                     <div className="h-8 w-[1px] bg-slate-700"></div>
                     <div className="flex items-center gap-2">
@@ -187,9 +324,21 @@ export default function AdminDashboard({ currentUser }) {
                                                 <div className="flex items-center gap-2">
                                                     <p className="text-sm font-bold truncate max-w-[120px]">{user.name || 'Unknown'}</p>
                                                     {isSubmitted && (
-                                                        <span className="text-[9px] bg-[#22c55e] text-black px-1.5 py-0.5 rounded font-bold uppercase shrink-0">
-                                                            SENT
-                                                        </span>
+                                                        <div className="flex gap-1">
+                                                            <span className="text-[9px] bg-[#22c55e]/20 text-[#22c55e] px-1.5 py-0.5 rounded font-bold uppercase shrink-0 border border-[#22c55e]/20">
+                                                                SENT
+                                                            </span>
+                                                            {submission.otStatus === 'approved' && (
+                                                                <span className="text-[9px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded font-bold uppercase shrink-0 border border-amber-500/20">
+                                                                    APPROVED
+                                                                </span>
+                                                            )}
+                                                            {submission.otStatus === 'declined' && (
+                                                                <span className="text-[9px] bg-red-500/20 text-red-500 px-1.5 py-0.5 rounded font-bold uppercase shrink-0 border border-red-500/20">
+                                                                    DECLINED
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     )}
                                                 </div>
                                                 <p className={`text-xs truncate ${selectedUser?.id === user.id ? 'text-purple-200' : 'text-slate-600'}`}>
@@ -201,6 +350,12 @@ export default function AdminDashboard({ currentUser }) {
                                                 <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ml-auto flex-shrink-0
                                                     ${selectedUser?.id === user.id ? 'bg-white/20 text-white' : 'bg-red-500/10 text-red-500'}`}>
                                                     ADM
+                                                </span>
+                                            )}
+                                            {user.isSenior && (
+                                                <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ml-1 flex-shrink-0
+                                                    ${selectedUser?.id === user.id ? 'bg-amber-500/20 text-white' : 'bg-amber-500/10 text-amber-500'}`}>
+                                                    SNR
                                                 </span>
                                             )}
                                         </button>
@@ -226,6 +381,63 @@ export default function AdminDashboard({ currentUser }) {
                                                 Administrator
                                             </span>
                                         )}
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 mt-4">
+                                        <button
+                                            onClick={handleExportDTR}
+                                            className="flex items-center gap-2 px-4 py-2 bg-[#22c55e] hover:bg-[#16a34a] text-black text-xs font-bold rounded-xl transition-colors shadow-lg shadow-green-900/20"
+                                        >
+                                            <FileSpreadsheet size={16} />
+                                            Export DTR to Excel
+                                        </button>
+
+                                        {/* Role Management Buttons */}
+                                        {currentUser.id !== selectedUser.id && ( // Prevent self-demotion if desired, or just allow it
+                                            <>
+                                                {selectedUser.role !== 'admin' ? (
+                                                    <button
+                                                        onClick={() => handleUpdateRole('admin')}
+                                                        className="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/20 text-xs font-bold rounded-xl transition-colors"
+                                                    >
+                                                        Promote to Admin
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => handleUpdateRole('employee')}
+                                                        className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700 text-xs font-bold rounded-xl transition-colors"
+                                                    >
+                                                        Demote to Employee
+                                                    </button>
+                                                )}
+                                                {/* Senior Role Toggle */}
+                                                <button
+                                                    onClick={() => handleUpdateSeniorStatus(!selectedUser.isSenior)}
+                                                    className={`flex items-center gap-2 px-4 py-2 border text-xs font-bold rounded-xl transition-colors
+                                                        ${selectedUser.isSenior
+                                                            ? 'bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20'
+                                                            : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'}`}
+                                                >
+                                                    {selectedUser.isSenior ? 'Remove Senior Role' : 'Make Senior'}
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+
+                                    {/* Senior Assignment */}
+                                    <div className="mt-4 p-4 bg-[#1f1f23] rounded-xl border border-slate-800">
+                                        <label className="text-xs text-slate-500 font-bold uppercase tracking-wider block mb-2">Assigned Senior</label>
+                                        <select
+                                            className="w-full bg-[#141419] text-white text-sm px-3 py-2 rounded-lg border border-slate-700 focus:outline-none focus:border-amber-500"
+                                            value={selectedUser.assignedSeniorId || ''}
+                                            onChange={(e) => handleAssignSenior(e.target.value)}
+                                        >
+                                            <option value="">-- No Senior Assigned --</option>
+                                            {users.filter(u => u.isSenior && u.id !== selectedUser.id).map(senior => (
+                                                <option key={senior.id} value={senior.id}>
+                                                    {senior.name}
+                                                </option>
+                                            ))}
+                                        </select>
                                     </div>
                                 </div>
 

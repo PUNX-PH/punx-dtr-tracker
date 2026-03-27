@@ -1,20 +1,33 @@
-import { LayoutDashboard, FileSpreadsheet, LogOut, Settings, Users } from 'lucide-react'
+import { LayoutDashboard, FileSpreadsheet, LogOut, Settings, Users, ChevronLeft, Send } from 'lucide-react'
 
-export default function Sidebar({ activeTab, onTabChange, onLogout, user }) {
+export default function Sidebar({ activeTab, onTabChange, onLogout, user, onClose }) {
     const menuItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { id: 'excel', label: 'Excel Viewer', icon: FileSpreadsheet },
+
         { id: 'admin', label: 'Admin Dashboard', icon: Users, disabled: user.role !== 'admin' },
     ]
 
     return (
-        <div className="w-64 h-screen bg-[#141419] border-r border-[#1f1f23] flex flex-col flex-shrink-0">
+        <div className="w-64 h-screen bg-[#141419] border-r border-[#1f1f23] flex flex-col flex-shrink-0 relative group">
             {/* Logo Area */}
-            <div className="p-6">
-                <h1 className="text-2xl font-bold tracking-tighter text-white">
-                    PUNX
-                </h1>
-                <p className="text-slate-500 text-xs text-[10px] font-medium tracking-widest mt-1">DTR TRACKER</p>
+            <div className="p-6 flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tighter text-white">
+                        PUNX
+                    </h1>
+                    <p className="text-slate-500 text-xs text-[10px] font-medium tracking-widest mt-1">DTR TRACKER</p>
+                </div>
+                {/* Desktop Close Button (Visible when parent is open, which it is if we are here) */}
+                {/* We only want this on desktop usually, but logic is handled by layout visibility */}
+                {onClose && (
+                    <button
+                        onClick={onClose}
+                        className="p-1 rounded-lg text-slate-500 hover:text-white hover:bg-white/10 hidden md:block transition-colors"
+                        title="Collapse Menu"
+                    >
+                        <ChevronLeft size={20} />
+                    </button>
+                )}
             </div>
 
             {/* Navigation */}
@@ -62,6 +75,14 @@ export default function Sidebar({ activeTab, onTabChange, onLogout, user }) {
                         </div>
                     </div>
                 </div>
+
+                <button
+                    onClick={() => onTabChange('dashboard')}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-white bg-[#8b5cf6] hover:bg-[#7c3aed] rounded-xl transition-colors mb-2"
+                >
+                    <Send size={18} />
+                    Send to Admin
+                </button>
 
                 <button
                     onClick={onLogout}
