@@ -229,16 +229,17 @@ export default function AdminDashboard({ currentUser }) {
                     <div className="px-2">
                         <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Active Cutoff</p>
                         <select
-                            className="text-xs text-white font-mono bg-transparent border-none focus:outline-none"
+                            className="text-xs text-white font-mono bg-[#1f1f23] border-none focus:outline-none cursor-pointer rounded px-1 py-0.5"
+                            style={{ colorScheme: 'dark' }}
                             value={cutoff ? cutoff.id : ''}
                             onChange={(e) => {
                                 const selectedId = e.target.value;
                                 setCutoff(cutoffs.find(c => c.id === selectedId) || null);
                             }}
                         >
-                            <option value="">Select Cutoff Period</option>
+                            <option value="" style={{ backgroundColor: '#1f1f23', color: '#fff' }}>Select Cutoff Period</option>
                             {cutoffs.map(cutoff => (
-                                <option key={cutoff.id} value={cutoff.id}>
+                                <option key={cutoff.id} value={cutoff.id} style={{ backgroundColor: '#1f1f23', color: '#fff' }}>
                                     {`${new Date(cutoff.startDate.toDate()).toLocaleDateString('en-GB')} - ${new Date(cutoff.endDate.toDate()).toLocaleDateString('en-GB')}`}
                                 </option>
                             ))}

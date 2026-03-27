@@ -1,4 +1,4 @@
-import { LayoutDashboard, FileSpreadsheet, LogOut, Settings, Users, ChevronLeft } from 'lucide-react'
+import { LayoutDashboard, FileSpreadsheet, LogOut, Settings, Users, ChevronLeft, Send } from 'lucide-react'
 
 export default function Sidebar({ activeTab, onTabChange, onLogout, user, onClose }) {
     const menuItems = [
@@ -75,6 +75,14 @@ export default function Sidebar({ activeTab, onTabChange, onLogout, user, onClos
                         </div>
                     </div>
                 </div>
+
+                <button
+                    onClick={() => onTabChange('dashboard')}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-white bg-[#8b5cf6] hover:bg-[#7c3aed] rounded-xl transition-colors mb-2"
+                >
+                    <Send size={18} />
+                    Send to Admin
+                </button>
 
                 <button
                     onClick={onLogout}
