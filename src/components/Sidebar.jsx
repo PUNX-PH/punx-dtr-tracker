@@ -77,8 +77,15 @@ export default function Sidebar({ activeTab, onTabChange, onLogout, user, onClos
                 </div>
 
                 <button
-                    onClick={() => onTabChange('dashboard')}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-white bg-[#8b5cf6] hover:bg-[#7c3aed] rounded-xl transition-colors mb-2"
+                    onClick={() => {
+                        if (activeTab !== 'dashboard') {
+                            onTabChange('dashboard');
+                            setTimeout(() => document.getElementById('hidden-submit-dtr-btn')?.click(), 100);
+                        } else {
+                            document.getElementById('hidden-submit-dtr-btn')?.click();
+                        }
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-white bg-[#8b5cf6] hover:bg-[#7c3aed] rounded-xl transition-colors mb-2 shadow-lg shadow-purple-900/20"
                 >
                     <Send size={18} />
                     Send to Admin

@@ -414,6 +414,18 @@ export const api = {
         }
     },
 
+    deleteSubmission: async (submissionId) => {
+        try {
+            const { deleteDoc } = await import("firebase/firestore");
+            const subRef = doc(db, "submissions", submissionId);
+            await deleteDoc(subRef);
+            return { success: true };
+        } catch (error) {
+            console.error("Delete submission error", error);
+            return { success: false, message: error.message };
+        }
+    },
+
     getSubmissionsForCutoff: async (cutoffId) => {
         try {
             const q = query(collection(db, "submissions"), where("cutoffId", "==", cutoffId));

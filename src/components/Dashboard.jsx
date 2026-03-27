@@ -71,6 +71,7 @@ export default function Dashboard({ user }) {
 
     const handleSubmitDTR = async () => {
         // if (files.length === 0) return alert("Please select at least one image") // Optional now
+        if (submission) return alert("You have already submitted your DTR. Please click 'Resubmit / Update' first to make changes.")
         if (!activeCutoff) return alert("No active cutoff period")
 
         setUploading(true)
@@ -90,12 +91,7 @@ export default function Dashboard({ user }) {
             const res = await api.submitDTR(user.id, activeCutoff.id, base64Array)
             if (res.success) {
                 alert("DTR Submitted Successfully!")
-                setSubmission({
-                    status: 'pending',
-                    submittedAt: new Date().toISOString()
-                })
-                setShowCutoffAlert(false)
-                setFiles([]) // Clear files
+                window.location.reload()
             } else {
                 alert("Failed to submit: " + res.message)
             }
@@ -251,7 +247,16 @@ export default function Dashboard({ user }) {
                                     </div>
                                 </div>
                                 <button
-                                    onClick={() => setSubmission(null)} // Reset local state to show form again
+                                    onClick={async () => {
+                                        if (window.confirm("Are you sure you want to cancel your previous submission to make changes?")) {
+                                            const res = await api.deleteSubmission(submission.id);
+                                            if (res.success) {
+                                                setSubmission(null);
+                                            } else {
+                                                alert("Failed to cancel submission");
+                                            }
+                                        }
+                                    }}
                                     className="px-4 py-2 bg-[#1f1f23] hover:bg-[#2d2d35] text-white text-xs font-bold rounded-xl border border-[#22c55e]/30 hover:border-[#22c55e] transition-all shadow-lg shadow-black/20 flex items-center gap-2 group"
                                 >
                                     <Clock size={14} className="group-hover:text-[#22c55e] transition-colors" />
@@ -260,7 +265,7 @@ export default function Dashboard({ user }) {
                             </div>
                         ) : (
                             <div className="space-y-4">
-                                <div className="p-4 bg-[#1f1f23] rounded-xl border border-dashed border-slate-700 flex flex-col items-center justify-center text-center gap-2">
+                                <div className="p-4 bg-[#1f1f23] rounded-xl border border-dashed border-slate-700 flex flex-col items-center justify-center text-center gap-2 mt-4">
                                     <Upload className="text-slate-500" />
                                     <p className="text-sm text-slate-400">Upload image/ attachments (Optional)</p>
                                     <input
@@ -271,19 +276,16 @@ export default function Dashboard({ user }) {
                                         className="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-[#8b5cf6] file:text-white hover:file:bg-[#7c3aed]"
                                     />
                                     {files.length > 0 && (
-                                        <div className="text-xs text-slate-400 italic">
+                                        <div className="text-xs text-slate-400 italic mt-2">
                                             {files.length} file(s) selected
                                         </div>
                                     )}
                                 </div>
-
-                                <button
-                                    onClick={handleSubmitDTR}
-                                    disabled={uploading}
-                                    className="w-full py-3 bg-[#8b5cf6] hover:bg-[#7c3aed] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-lg shadow-purple-900/20"
-                                >
-                                    {uploading ? "Sending..." : "Send to Admin"}
-                                </button>
+                                {uploading && (
+                                    <div className="mt-4 p-3 bg-[#8b5cf6]/20 text-[#8b5cf6] text-center rounded-xl text-xs font-bold animate-pulse">
+                                        Uploading and sending... please wait.
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
@@ -355,6 +357,8 @@ export default function Dashboard({ user }) {
                     </table>
                 </div>
             </div>
+            {/* Hidden Button to allow Sidebar to trigger form submit */}
+            <button id="hidden-submit-dtr-btn" className="hidden" onClick={handleSubmitDTR} />
         </div>
     )
 }
