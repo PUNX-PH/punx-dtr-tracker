@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { collection, query, where, getDocs, getDoc, setDoc, addDoc, updateDoc, doc, Timestamp, orderBy, limit } from "firebase/firestore";
+import { collection, query, where, getDocs, getDoc, setDoc, addDoc, updateDoc, doc, Timestamp, orderBy, limit, onSnapshot, writeBatch } from "firebase/firestore";
 
 export const api = {
     login: async (pin) => {
@@ -104,6 +104,18 @@ export const api = {
         }
     },
 
+    deleteLog: async (logId) => {
+        try {
+            const { deleteDoc } = await import("firebase/firestore");
+            const logRef = doc(db, "logs", logId);
+            await deleteDoc(logRef);
+            return { success: true };
+        } catch (error) {
+            console.error("Delete log error", error);
+            return { success: false, message: error.message };
+        }
+    },
+
     getUserProfile: async (uid) => {
         try {
             // First try to find by uid field (if stored that way) or document ID
@@ -202,6 +214,102 @@ export const api = {
         }
     },
 
+    updateUserRole: async (userId, newRole) => {
+        try {
+            const userRef = doc(db, "users", userId);
+            await updateDoc(userRef, { role: newRole });
+            return { success: true };
+        } catch (error) {
+            console.error("Update role error", error);
+            return { success: false, message: error.message };
+        }
+    },
+
+    updateUserSeniorStatus: async (userId, isSenior) => {
+        try {
+            const userRef = doc(db, "users", userId);
+            await updateDoc(userRef, { isSenior: isSenior });
+            return { success: true };
+        } catch (error) {
+            console.error("Update senior status error", error);
+            return { success: false, message: error.message };
+        }
+    },
+
+    assignSenior: async (employeeId, seniorId) => {
+        try {
+            const userRef = doc(db, "users", employeeId);
+            await updateDoc(userRef, { assignedSeniorId: seniorId });
+            return { success: true };
+        } catch (error) {
+            console.error("Assign senior error", error);
+            return { success: false, message: error.message };
+        }
+    },
+
+    getSeniors: async () => {
+        try {
+            const q = query(collection(db, "users"), where("isSenior", "==", true));
+            const querySnapshot = await getDocs(q);
+            return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        } catch (error) {
+            console.error("Get seniors error", error);
+            return [];
+        }
+    },
+
+    // Notifications
+    createNotification: async (recipientId, type, title, message, data = {}) => {
+        try {
+            await addDoc(collection(db, "notifications"), {
+                recipientId,
+                type,
+                title,
+                message,
+                data,
+                read: false,
+                createdAt: Timestamp.now()
+            });
+            return { success: true };
+        } catch (error) {
+            console.error("Create notification error", error);
+            return { success: false };
+        }
+    },
+
+    getNotifications: (userId, callback) => {
+        const q = query(
+            collection(db, "notifications"),
+            where("recipientId", "==", userId),
+            orderBy("createdAt", "desc"),
+            limit(20)
+        );
+        return onSnapshot(q, (snapshot) => {
+            const notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            callback(notifications);
+        });
+    },
+
+    markNotificationRead: async (id) => {
+        try {
+            const notifRef = doc(db, "notifications", id);
+            await updateDoc(notifRef, { read: true });
+        } catch (error) {
+            console.error("Mark read error", error);
+        }
+    },
+
+    updateOTStatus: async (submissionId, status) => { // status: 'approved' | 'declined'
+        try {
+            const subRef = doc(db, "submissions", submissionId);
+            await updateDoc(subRef, { otStatus: status });
+            return { success: true };
+        } catch (error) {
+            console.error("Update OT status error", error);
+            return { success: false, message: error.message };
+        }
+    },
+
     // Cutoff Management
     setCutoff: async (startDate, endDate) => {
         try {
@@ -234,6 +342,20 @@ export const api = {
         }
     },
 
+    getAllCutoffs: async () => {
+        try {
+            const q = query(collection(db, "cutoffs"), orderBy("createdAt", "desc"));
+            const querySnapshot = await getDocs(q);
+            return querySnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+        } catch (error) {
+            console.error("Get all cutoffs error", error);
+            return [];
+        }
+    },
+
     // DTR Submission
     submitDTR: async (userId, cutoffId, attachments) => {
         try {
@@ -250,6 +372,26 @@ export const api = {
             };
 
             await setDoc(subRef, submission);
+
+            // Check for overtime to notify senior
+            if (submission.hasOvertime) {
+                // Fetch user to get assigned senior
+                const userDoc = await getDoc(doc(db, "users", userId));
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    if (userData.assignedSeniorId) {
+                        // Create notification for senior
+                        await api.createNotification(
+                            userData.assignedSeniorId,
+                            'OT_APPROVAL',
+                            'Overtime Approval Needed',
+                            `${userData.name} has submitted DTR with overtime.`,
+                            { submissionId, employeeId: userId, employeeName: userData.name }
+                        );
+                    }
+                }
+            }
+
             return { success: true };
         } catch (error) {
             console.error("Submit DTR error", error);

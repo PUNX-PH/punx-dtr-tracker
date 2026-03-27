@@ -28,7 +28,7 @@ export default function History({ history }) {
                                         {isTimeIn ? 'Time In' : 'Time Out'}
                                     </p>
                                     <p className="text-xs text-slate-400 dark:text-slate-500">
-                                        {new Date(log.timestamp).toLocaleDateString()}
+                                        {new Date(log.timestamp).toLocaleDateString('en-GB')}
                                     </p>
                                 </div>
                             </div>

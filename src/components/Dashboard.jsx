@@ -70,12 +70,12 @@ export default function Dashboard({ user }) {
     }
 
     const handleSubmitDTR = async () => {
-        if (files.length === 0) return alert("Please select at least one image")
+        // if (files.length === 0) return alert("Please select at least one image") // Optional now
         if (!activeCutoff) return alert("No active cutoff period")
 
         setUploading(true)
         try {
-            // Convert ALL files to Base64
+            // Convert ALL files to Base64 (if any)
             const promises = files.map(file => {
                 return new Promise((resolve, reject) => {
                     const reader = new FileReader();
@@ -109,24 +109,36 @@ export default function Dashboard({ user }) {
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500 relative">
-            {/* Cutoff Alert Modal */}
+            {/* Cutoff Alert - Compact Popup */}
             {showCutoffAlert && activeCutoff && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-                    <div className="bg-[#141419] border border-[#f6e05e]/50 p-8 rounded-3xl max-w-md w-full shadow-2xl relative">
-                        <button onClick={() => setShowCutoffAlert(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white"><XCircle size={24} /></button>
-                        <h3 className="text-2xl font-bold text-white mb-2">DTR Cutoff Active!</h3>
-                        <p className="text-slate-400 mb-6">
-                            The cutoff period <span className="text-[#f6e05e] font-mono font-bold">
-                                {new Date(activeCutoff.startDate.toDate()).toLocaleDateString()} - {new Date(activeCutoff.endDate.toDate()).toLocaleDateString()}
-                            </span> is currently active.
-                        </p>
-                        <p className="text-sm text-slate-500 mb-6">Please verify your logs and submit your DTR with signature below.</p>
+                <div className="fixed top-24 right-4 md:right-8 z-50 animate-in slide-in-from-right fade-in duration-500 max-w-sm w-full">
+                    <div className="bg-[#141419] border border-[#f6e05e]/50 p-6 rounded-2xl shadow-2xl relative bg-opacity-95 backdrop-blur-md">
                         <button
                             onClick={() => setShowCutoffAlert(false)}
-                            className="w-full py-3 bg-[#f6e05e] hover:bg-[#d6bc3d] text-black font-bold rounded-xl transition-colors"
+                            className="absolute top-3 right-3 text-slate-500 hover:text-white transition-colors"
                         >
-                            Okay, I'll Submit
+                            <XCircle size={20} />
                         </button>
+
+                        <div className="flex items-start gap-4">
+                            <div className="p-3 bg-[#f6e05e]/10 text-[#f6e05e] rounded-xl shrink-0">
+                                <Clock size={24} />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-white mb-1">DTR Cutoff Active!</h3>
+                                <p className="text-slate-400 text-xs mb-3 leading-relaxed">
+                                    Period: <span className="text-[#f6e05e] font-mono font-bold">
+                                        {new Date(activeCutoff.startDate.toDate()).toLocaleDateString('en-GB')} - {new Date(activeCutoff.endDate.toDate()).toLocaleDateString('en-GB')}
+                                    </span>
+                                </p>
+                                <button
+                                    onClick={() => setShowCutoffAlert(false)}
+                                    className="text-xs font-bold text-[#f6e05e] hover:text-white transition-colors uppercase tracking-wider"
+                                >
+                                    Dismiss
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
@@ -148,7 +160,7 @@ export default function Dashboard({ user }) {
                     <p className="text-slate-500">System overview and activity log</p>
                     {activeCutoff && (
                         <span className="px-2 py-0.5 bg-[#f6e05e]/10 text-[#f6e05e] text-[10px] font-bold uppercase rounded">
-                            Cutoff: {new Date(activeCutoff.startDate.toDate()).toLocaleDateString()} - {new Date(activeCutoff.endDate.toDate()).toLocaleDateString()}
+                            Cutoff: {new Date(activeCutoff.startDate.toDate()).toLocaleDateString('en-GB')} - {new Date(activeCutoff.endDate.toDate()).toLocaleDateString('en-GB')}
                         </span>
                     )}
                 </div>
@@ -250,7 +262,7 @@ export default function Dashboard({ user }) {
                             <div className="space-y-4">
                                 <div className="p-4 bg-[#1f1f23] rounded-xl border border-dashed border-slate-700 flex flex-col items-center justify-center text-center gap-2">
                                     <Upload className="text-slate-500" />
-                                    <p className="text-sm text-slate-400">Upload image/ attachments</p>
+                                    <p className="text-sm text-slate-400">Upload image/ attachments (Optional)</p>
                                     <input
                                         type="file"
                                         accept="image/*"
@@ -267,7 +279,7 @@ export default function Dashboard({ user }) {
 
                                 <button
                                     onClick={handleSubmitDTR}
-                                    disabled={uploading || files.length === 0}
+                                    disabled={uploading}
                                     className="w-full py-3 bg-[#8b5cf6] hover:bg-[#7c3aed] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-lg shadow-purple-900/20"
                                 >
                                     {uploading ? "Sending..." : "Send to Admin"}
@@ -325,7 +337,7 @@ export default function Dashboard({ user }) {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-sm text-slate-400 font-medium">
-                                            {new Date(log.timestamp).toLocaleDateString()}
+                                            {new Date(log.timestamp).toLocaleDateString('en-GB')}
                                         </td>
                                         <td className="px-6 py-4 text-sm text-slate-400 font-mono">
                                             {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

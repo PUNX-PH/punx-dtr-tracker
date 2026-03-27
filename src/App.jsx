@@ -3,7 +3,7 @@ import { auth } from './firebase'
 import { onAuthStateChanged } from 'firebase/auth'
 import Login from './components/Login'
 import Dashboard from './components/Dashboard'
-import ExcelViewer from './components/ExcelViewer'
+
 import Layout from './components/Layout'
 import AdminDashboard from './components/AdminDashboard'
 
@@ -17,6 +17,15 @@ function App() {
         // Listen for Firebase Auth changes (Persistence)
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             if (firebaseUser) {
+                // Domain Security Check
+                if (!firebaseUser.email.endsWith('@punx.ai')) {
+                    console.warn(`Unauthorized access attempt: ${firebaseUser.email}`)
+                    await auth.signOut()
+                    setUser(null)
+                    setLoading(false)
+                    return
+                }
+
                 // Fetch or Create user profile in Firestore
                 const { api } = await import('./services/api');
                 const profile = await api.ensureUserProfile(firebaseUser);
@@ -77,11 +86,7 @@ function App() {
                     onTabChange={setActiveTab}
                 >
                     {activeTab === 'dashboard' && <Dashboard user={user} />}
-                    {activeTab === 'excel' && (
-                        <div className="h-full bg-white dark:bg-[#141419] rounded-3xl overflow-hidden border border-[#1f1f23]">
-                            <ExcelViewer isOpen={true} onClose={() => setActiveTab('dashboard')} />
-                        </div>
-                    )}
+
                     {activeTab === 'admin' && user.role === 'admin' && (
                         <AdminDashboard currentUser={user} />
                     )}

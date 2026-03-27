@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Pencil, Save, X, Loader2, Zap } from 'lucide-react'
+import { Pencil, Save, X, Loader2, Zap, Trash2 } from 'lucide-react'
 import { api } from '../services/api'
 
 export default function DTRTable({ user, history, onRefresh, initialDate, periodEnd }) {
@@ -21,15 +21,28 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
     const rows = useMemo(() => {
         const dates = []
         const start = new Date(anchorDate)
-        // start.setDate(anchorDate.getDate() - anchorDate.getDay()) // Removed: Start from selected date
 
-        for (let i = 0; i < 16; i++) {
+        let numDays = 16 // Default
+
+        if (periodEnd) {
+            const end = new Date(periodEnd)
+            // Calculate difference in days (inclusive)
+            const diffTime = Math.abs(end - start)
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+
+            // If start is before or equal to end, use difference + 1
+            if (start <= end) {
+                numDays = diffDays + 1
+            }
+        }
+
+        for (let i = 0; i < numDays; i++) {
             const d = new Date(start)
             d.setDate(start.getDate() + i)
             dates.push(d)
         }
         return dates
-    }, [anchorDate])
+    }, [anchorDate, periodEnd])
 
     const getCellKey = (date, type) => `${date.toDateString()}_${type}`
 
@@ -84,43 +97,58 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
     }
 
     const handleSmartFill = () => {
-        if (!window.confirm("Auto-fill Regular Time (9:00 AM - 6:00 PM) for Mon-Fri?\n\nThis will fill entries up to today or the end of the period. Existing entries won't be overwritten.")) return;
+        if (!window.confirm("Auto-fill Regular Time (9:00 AM - 6:00 PM) for Mon-Fri?\n\nThis will fill entries for the displayed period (excluding weekends). Existing entries won't be overwritten.")) return;
 
         const newEdits = { ...edits }
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
 
-        const limitDate = periodEnd ? new Date(periodEnd) : today
-        // Ensure we don't go beyond today even if cutoff is future
-        const effectiveLimit = limitDate < today ? limitDate : today
+        // Define the limit: Use periodEnd if available, otherwise just fill the visible rows
+        // We removed the restriction to stop at 'today'
+        const limitDate = periodEnd ? new Date(periodEnd) : rows[rows.length - 1]
 
         rows.forEach(date => {
             // Check constraints
             const day = date.getDay()
             const isWeekend = day === 0 || day === 6
-            const isFuture = date > effectiveLimit
+            const isFuture = date > limitDate
 
+            // Only skip if it's strictly beyond the defined period end (if it exists)
+            // or if it's a weekend
             if (!isWeekend && !isFuture) {
                 // key generators
                 const keyIn = getCellKey(date, 'IN')
                 const keyOut = getCellKey(date, 'OUT')
 
                 // Check if already has value in edits OR history
-                // For logic check, we need to know if it exists in history
                 const hasInHistory = findLog(date, 'IN')
                 const hasOutHistory = findLog(date, 'OUT')
 
-                // For edits, check if key exists (even if empty string potentially, though we want to fill if not present)
                 const hasInEdit = edits[keyIn] !== undefined
                 const hasOutEdit = edits[keyOut] !== undefined
-
-                // Smart fill logic: Only fill if:
-                // 1. Not in history
-                // 2. Not already in edits (or we could overwrite if empty? let's stick to 'not in edits' for safety)
 
                 if (!hasInHistory && !hasInEdit) newEdits[keyIn] = "09:00"
                 if (!hasOutHistory && !hasOutEdit) newEdits[keyOut] = "18:00"
             }
+        })
+
+        setEdits(newEdits)
+    }
+
+    const handleClearRecords = () => {
+        if (!window.confirm("Are you sure you want to CLEAR all records for this view?\n\nThis will mark all entries in the displayed period for deletion. You must click 'Save Changes' to confirm.")) return;
+
+        const newEdits = { ...edits }
+
+        rows.forEach(date => {
+            // For every row in the current view, set all time fields to empty string
+            // This triggers the delete logic in handleSave
+            const types = ['IN', 'OUT', 'OT_IN', 'OT_OUT']
+            types.forEach(type => {
+                const key = getCellKey(date, type)
+                newEdits[key] = ""
+            })
+            // Optionally clear reasons too?
+            // const keyReason = getCellKey(date, 'REASON')
+            // newEdits[keyReason] = "" 
         })
 
         setEdits(newEdits)
@@ -160,13 +188,18 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                 for (const type of timeTypes) {
                     const timeStr = edits[`${dateStr}_${type}`]
                     if (timeStr !== undefined) { // Explicitly checked for presence in edits
-                        if (!timeStr) continue // Skip empty strings if cleared? Or should we support delete? (Currently API doesn't support delete)
-
                         const existingLog = findLog(dateObj, type)
 
+                        // Case 1: Cleared value (delete)
+                        if (timeStr === '') {
+                            if (existingLog) {
+                                promises.push(api.deleteLog(existingLog.id))
+                            }
+                            continue; // Skip creating/updating with empty value
+                        }
+
+                        // Case 2: Update or Create
                         // Use the edited reason, or preserve existing reason if not edited
-                        // Ideally we attach reason to the IN log, or OUT if IN is missing
-                        // Simple logic: If we are saving this log, and reason is edited, attach it.
                         let reasonToSave = undefined
                         if (reason !== undefined) reasonToSave = reason
 
@@ -260,6 +293,14 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                 <span className="hidden sm:inline">Smart Fill</span>
                             </button>
                             <button
+                                onClick={handleClearRecords}
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20 text-sm font-bold transition-colors mr-2 border border-red-500/20"
+                                title="Clear all records in view"
+                            >
+                                <Trash2 size={16} />
+                                <span className="hidden sm:inline">Clear</span>
+                            </button>
+                            <button
                                 onClick={handleCancel}
                                 disabled={saving}
                                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 text-sm font-bold transition-colors"
@@ -322,12 +363,13 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                     <tbody className="text-sm">
                         {rows.map((date, i) => (
                             <tr key={i} className="border-b border-[#1f1f23] group hover:bg-white/5 transition-colors">
-                                {/* Day & Date */}
-                                <td className="py-3 text-slate-400 border-r border-[#1f1f23] font-medium text-left px-4">
-                                    {date.toLocaleDateString('en-US', { weekday: 'long' })}
+                                {/* Day */}
+                                <td className="py-4 text-white border-r border-[#1f1f23] font-bold text-left px-4 text-base">
+                                    {date.toLocaleDateString('en-GB', { weekday: 'long' })}
                                 </td>
-                                <td className="py-3 text-slate-300 border-r border-[#1f1f23] font-mono">
-                                    {date.toLocaleDateString()}
+                                {/* Date */}
+                                <td className="py-4 text-white border-r border-[#1f1f23] font-mono text-center text-base">
+                                    {date.toLocaleDateString('en-GB')}
                                 </td>
 
                                 {/* Regular IN */}
