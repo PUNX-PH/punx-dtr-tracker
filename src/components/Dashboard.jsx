@@ -370,8 +370,8 @@ export default function Dashboard({ user }) {
                                         ))}
                                     </div>
                                 )}
-                                {/* Saved Attachment Groups List */}
-                                {attachmentGroups.length > 0 && (
+                                {/* Saved Attachment Groups and Links List */}
+                                {(attachmentGroups.length > 0 || submissionLinks.length > 0) && (
                                     <div className="space-y-3">
                                         <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">
                                             Attachments ({attachmentGroups.length + submissionLinks.length})
@@ -426,32 +426,35 @@ export default function Dashboard({ user }) {
                                     </div>
                                 )}
 
-                                {/* Upload / Add Link Area */}
-                                <div className="grid grid-cols-2 gap-3 mt-4">
-                                    <div className="p-4 bg-[#1f1f23] rounded-xl border border-dashed border-slate-700 flex flex-col items-center justify-center text-center gap-2 relative hover:bg-[#2d2d35] transition-colors cursor-pointer group">
-                                        <Upload className="text-slate-500 group-hover:text-white transition-colors" />
-                                        <p className="text-sm text-slate-400 group-hover:text-white transition-colors text-balance">
-                                            {attachmentGroups.length > 0 ? 'Add another file' : 'Upload file(s)'}
-                                        </p>
-                                        <input
-                                            type="file"
-                                            accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.ppt,.pptx,.zip,.rar"
-                                            multiple
-                                            onChange={handleFileChange}
-                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                        />
-                                    </div>
+                                {/* Upload Area */}
+                                <div className="p-4 bg-[#1f1f23] rounded-xl border border-dashed border-slate-700 flex flex-col items-center justify-center text-center gap-2 mt-4">
+                                    <Upload className="text-slate-500" />
+                                    <p className="text-sm text-slate-400">
+                                        {attachmentGroups.length > 0 || submissionLinks.length > 0 ? 'Add another attachment' : 'Upload image/ attachments (Optional)'}
+                                    </p>
+                                    <input
+                                        type="file"
+                                        accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.ppt,.pptx,.zip,.rar"
+                                        multiple
+                                        onChange={handleFileChange}
+                                        className="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-[#8b5cf6] file:text-white hover:file:bg-[#7c3aed]"
+                                    />
+                                    {files.length > 0 && (
+                                        <div className="text-xs text-slate-400 italic mt-2">
+                                            {files.length} file(s) selected
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="flex justify-center mt-2">
                                     <button
                                         onClick={() => {
                                             setShowLinkBox(true);
                                             setShowCommentBox(false);
                                         }}
-                                        className="p-4 bg-[#1f1f23] rounded-xl border border-dashed border-slate-700 flex flex-col items-center justify-center text-center gap-2 hover:bg-[#2d2d35] transition-colors group"
+                                        className="text-xs text-[#8b5cf6] hover:text-white flex items-center gap-1 transition-colors"
                                     >
-                                        <LinkIcon className="text-slate-500 group-hover:text-white transition-colors" />
-                                        <p className="text-sm text-slate-400 group-hover:text-white transition-colors text-balance">
-                                            Add URL link
-                                        </p>
+                                        <LinkIcon size={12} />
+                                        <span>Or add a URL Link</span>
                                     </button>
                                 </div>
 
