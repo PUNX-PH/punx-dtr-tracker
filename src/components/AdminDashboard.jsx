@@ -299,7 +299,9 @@ export default function AdminDashboard({ currentUser }) {
                             ) : (
                                 filteredUsers.map(user => {
                                     const submission = getSubmissionStatus(user.id)
-                                    const isSubmitted = !!submission
+                                    const isSubmitted = !!submission && submission.status !== 'rejected'
+                                    const isApproved = submission?.status === 'approved'
+                                    const badgeColor = isApproved ? 'bg-[#22c55e]/20 text-[#22c55e] border-[#22c55e]/20' : 'bg-amber-500/20 text-amber-500 border-amber-500/20'
 
                                     return (
                                         <button
@@ -313,7 +315,7 @@ export default function AdminDashboard({ currentUser }) {
                                         >
                                             {/* Status Indicator Bar */}
                                             {isSubmitted && (
-                                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#22c55e]" />
+                                                <div className={`absolute left-0 top-0 bottom-0 w-1 ${isApproved ? 'bg-[#22c55e]' : 'bg-amber-500'}`} />
                                             )}
 
                                             <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0
@@ -326,7 +328,7 @@ export default function AdminDashboard({ currentUser }) {
                                                     <p className="text-sm font-bold truncate max-w-[120px]">{user.name || 'Unknown'}</p>
                                                     {isSubmitted && (
                                                         <div className="flex gap-1">
-                                                            <span className="text-[9px] bg-[#22c55e]/20 text-[#22c55e] px-1.5 py-0.5 rounded font-bold uppercase shrink-0 border border-[#22c55e]/20">
+                                                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase shrink-0 border ${badgeColor}`}>
                                                                 SENT
                                                             </span>
                                                             {submission.otStatus === 'approved' && (
