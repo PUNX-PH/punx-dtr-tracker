@@ -356,7 +356,7 @@ export default function Dashboard({ user }) {
                                     </p>
                                     <input
                                         type="file"
-                                        accept="image/*"
+                                        accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.ppt,.pptx,.zip,.rar"
                                         multiple
                                         onChange={handleFileChange}
                                         className="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-[#8b5cf6] file:text-white hover:file:bg-[#7c3aed]"
