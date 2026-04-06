@@ -27,8 +27,8 @@ export default function NotificationToast({
     if (!notification) return null
 
     return (
-        <div className={`fixed top-4 right-4 z-[9999] transition-all duration-500 transform ${visible ? 'translate-y-0 opacity-100' : '-translate-y-10 opacity-0 pointer-events-none'}`}>
-            <div className="bg-[#141419] border border-[#f6e05e]/50 p-6 rounded-2xl shadow-2xl relative bg-opacity-95 backdrop-blur-md w-96">
+        <div className={`fixed top-[260px] right-4 md:right-8 z-[9999] transition-all duration-500 transform ${visible ? 'translate-y-0 opacity-100' : '-translate-y-10 opacity-0 pointer-events-none'}`}>
+            <div className="bg-[#141419] border border-[#f6e05e]/50 p-6 rounded-2xl shadow-2xl relative bg-opacity-95 backdrop-blur-md w-96 max-w-[calc(100vw-2rem)]">
                 <button
                     onClick={handleClose}
                     className="absolute top-3 right-3 text-slate-500 hover:text-white transition-colors"

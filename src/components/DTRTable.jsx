@@ -54,9 +54,9 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
         )
     }
 
-    // Helper to find ANY log for a specific date (to get/set reason)
+    // Helper to find ANY log for a specific date (to get/set reason), ignoring EDIT logs which are for activity tracking
     const findAnyLogForDate = (date) => {
-        return history.find(h => new Date(h.timestamp).toDateString() === date.toDateString())
+        return history.find(h => h.type !== 'EDIT' && new Date(h.timestamp).toDateString() === date.toDateString())
     }
 
     const getInputValue = (date, type) => {
