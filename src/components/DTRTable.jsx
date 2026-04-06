@@ -239,8 +239,9 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                             promises.push(api.updateLog(anyLog.id, new Date(anyLog.timestamp), reason))
                             changedFields.push(`Notes updated`)
                         } else {
-                            // No log exists to attach reason to. 
-                            console.warn(`Cannot save reason for ${dateStr} without a time entry.`)
+                            // No log exists to attach reason to. Create a standalone note log.
+                            promises.push(api.createLog(user.id, 'NOTE', dateObj, '12:00', reason))
+                            changedFields.push(`Notes added`)
                         }
                     }
                 }

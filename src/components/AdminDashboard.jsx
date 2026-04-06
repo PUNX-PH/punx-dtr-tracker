@@ -128,7 +128,7 @@ export default function AdminDashboard({ currentUser }) {
 
             // Reason logic: find any log for the date
             const findAnyLog = () => userHistory.find(h =>
-                new Date(h.timestamp).toDateString() === date.toDateString()
+                h.type !== 'EDIT' && new Date(h.timestamp).toDateString() === date.toDateString()
             );
 
             const formatTime = (log) => log ? new Date(log.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : '';

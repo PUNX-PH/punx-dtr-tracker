@@ -41,19 +41,24 @@ export default function Layout({ children, user, onLogout, activeTab, onTabChang
         return () => unsubscribe();
     }, [user]);
 
-    const handleDismiss = async (id) => {
+    const handleDismiss = async (notif) => {
         setNotification(null);
-        await api.markNotificationRead(id);
+        // Only permanently auto-dismiss read status if it's an informational alert, not an actionable workflow
+        if (notif.type !== 'OT_APPROVAL' && notif.type !== 'DTR_APPROVAL') {
+            await api.markNotificationRead(notif.id);
+        }
     }
 
     const handleApprove = async (notif) => {
         if (notif.type === 'OT_APPROVAL') {
             await api.updateOTStatus(notif.data.submissionId, 'approved');
-            handleDismiss(notif.id);
+            await api.markNotificationRead(notif.id);
+            handleDismiss(notif);
             alert(`OT Approved for ${notif.data.employeeName}`);
         } else if (notif.type === 'DTR_APPROVAL') {
             await api.updateDTRStatus(notif.data.submissionId, 'approved', notif.data.employeeId, user.name);
-            handleDismiss(notif.id);
+            await api.markNotificationRead(notif.id);
+            handleDismiss(notif);
             alert(`DTR Approved for ${notif.data.employeeName}`);
         }
     }
@@ -61,11 +66,13 @@ export default function Layout({ children, user, onLogout, activeTab, onTabChang
     const handleDecline = async (notif) => {
         if (notif.type === 'OT_APPROVAL') {
             await api.updateOTStatus(notif.data.submissionId, 'declined');
-            handleDismiss(notif.id);
+            await api.markNotificationRead(notif.id);
+            handleDismiss(notif);
             alert(`OT Declined for ${notif.data.employeeName}`);
         } else if (notif.type === 'DTR_APPROVAL') {
             await api.updateDTRStatus(notif.data.submissionId, 'rejected', notif.data.employeeId, user.name);
-            handleDismiss(notif.id);
+            await api.markNotificationRead(notif.id);
+            handleDismiss(notif);
             alert(`DTR Rejected for ${notif.data.employeeName}`);
         }
     }

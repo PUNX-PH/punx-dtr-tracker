@@ -20,7 +20,7 @@ export default function NotificationToast({
     const handleClose = () => {
         setVisible(false)
         setTimeout(() => {
-            onDismiss(notification.id)
+            onDismiss(notification)
         }, 300) // Wait for animation
     }
 
