@@ -317,13 +317,7 @@ export const api = {
     updateDTRStatus: async (submissionId, status, employeeId, seniorName) => {
         try {
             const subRef = doc(db, "submissions", submissionId);
-            
-            if (status === 'rejected') {
-                const { deleteDoc } = await import("firebase/firestore");
-                await deleteDoc(subRef);
-            } else {
-                await updateDoc(subRef, { status: status }); // 'approved'
-            }
+            await updateDoc(subRef, { status: status }); // 'approved' or 'rejected'
             
             // If rejected, notify the original user
             if (status === 'rejected' && employeeId) {
@@ -407,11 +401,24 @@ export const api = {
 
             const initialStatus = assignedSeniorId ? 'pending_senior' : 'pending';
 
+            // Combine with existing attachments if present (so we don't lose previous files on resubmission)
+            let finalAttachments = attachments;
+            let finalComments = attachmentComments;
+
+            const existingSub = await getDoc(subRef);
+            if (existingSub.exists()) {
+                const prevData = existingSub.data();
+                if (prevData.attachments && prevData.attachments.length > 0) {
+                    finalAttachments = [...prevData.attachments, ...attachments];
+                    finalComments = [...(prevData.attachmentComments || []), ...attachmentComments];
+                }
+            }
+
             const submission = {
                 userId,
                 cutoffId,
-                attachments: attachments, // Array of Base64 strings
-                attachmentComments: attachmentComments, // Array of { comment, fileCount } objects
+                attachments: finalAttachments,
+                attachmentComments: finalComments,
                 status: initialStatus,
                 submittedAt: Timestamp.now()
             };

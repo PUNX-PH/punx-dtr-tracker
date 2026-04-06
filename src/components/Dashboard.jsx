@@ -46,7 +46,7 @@ export default function Dashboard({ user }) {
     useEffect(() => {
         const btn = document.getElementById('sidebar-send-btn');
         if (btn) {
-            if (submission) {
+            if (submission && submission.status !== 'rejected') {
                 btn.disabled = true;
                 btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-circle-2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg> DTR Sent`;
             } else {
@@ -112,7 +112,7 @@ export default function Dashboard({ user }) {
     }
 
     const handleSubmitDTR = async () => {
-        if (submission) return alert("You have already submitted your DTR. Please click 'Resubmit / Update' first to make changes.")
+        if (submission && submission.status !== 'rejected') return alert("You have already submitted your DTR. Please click 'Resubmit / Update' first to make changes.")
         if (!activeCutoff) return alert("No active cutoff period")
         if (showCommentBox) {
             return alert("Please save or cancel your current attachment comment first.")
@@ -296,7 +296,7 @@ export default function Dashboard({ user }) {
 
                         {!activeCutoff ? (
                             <div className="text-slate-500 text-sm">No active cutoff period.</div>
-                        ) : submission ? (
+                        ) : submission && submission.status !== 'rejected' ? (
                             <div className="flex items-center justify-between bg-[#22c55e]/10 border border-[#22c55e]/20 p-4 rounded-2xl">
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 rounded-full bg-[#22c55e] flex items-center justify-center text-black">
@@ -328,6 +328,44 @@ export default function Dashboard({ user }) {
                             </div>
                         ) : (
                             <div className="space-y-4">
+                                {submission && submission.status === 'rejected' && (
+                                    <div className="flex items-start gap-4 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl animate-in fade-in slide-in-from-top-2">
+                                        <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center text-red-500 shrink-0">
+                                            <XCircle size={24} />
+                                        </div>
+                                        <div>
+                                            <p className="text-red-500 font-bold mb-1">DTR Rejected</p>
+                                            <p className="text-xs text-red-400/80 leading-relaxed max-w-lg">
+                                                Your submission was rejected by your assigned senior. Please update your time records or upload any missing attachments below before resubmitting.
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Render previous attachments if rejected */}
+                                {submission && submission.attachments && submission.attachments.length > 0 && (
+                                    <div className="space-y-3">
+                                        <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">
+                                            Previously Uploaded Attachments
+                                        </p>
+                                        {submission.attachmentComments?.map((commentObj, idx) => (
+                                            <div key={idx} className="p-3 bg-slate-800/30 border border-slate-700/50 rounded-xl flex items-start gap-3">
+                                                <div className="p-2 bg-slate-700/50 rounded-lg shrink-0">
+                                                    <Upload size={14} className="text-slate-400" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-[10px] text-slate-500 mb-1">
+                                                        {commentObj.fileCount} previous file(s) attached
+                                                    </p>
+                                                    <div className="flex items-start gap-1.5">
+                                                        <MessageSquare size={12} className="text-slate-500 mt-0.5 shrink-0" />
+                                                        <p className="text-xs text-slate-400 leading-relaxed italic">"{commentObj.comment}"</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                                 {/* Saved Attachment Groups List */}
                                 {attachmentGroups.length > 0 && (
                                     <div className="space-y-3">
