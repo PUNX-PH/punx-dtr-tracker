@@ -278,15 +278,19 @@ export const api = {
     },
 
     getNotifications: (userId, callback) => {
+        // Query by recipientId only to prevent composite index requirements
         const q = query(
             collection(db, "notifications"),
             where("recipientId", "==", userId),
-            orderBy("createdAt", "desc"),
-            limit(20)
+            limit(50)
         );
         return onSnapshot(q, (snapshot) => {
             const notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // Sort manually client-side (descending by createdAt)
+            notifications.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
             callback(notifications);
+        }, (error) => {
+            console.error("Firebase getNotifications error:", error);
         });
     },
 
