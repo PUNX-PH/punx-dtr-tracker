@@ -402,16 +402,6 @@ export default function Dashboard({ user }) {
                                     </div>
                                 )}
 
-                                        </div>
-                                        <button
-                                            onClick={() => { setShowCommentBox(true); setCommentSaved(false); }}
-                                            className="text-[10px] text-slate-500 hover:text-white font-bold uppercase tracking-wider transition-colors shrink-0"
-                                        >
-                                            Edit
-                                        </button>
-                                    </div>
-                                )}
-
                                 {uploading && (
                                     <div className="mt-4 p-3 bg-[#8b5cf6]/20 text-[#8b5cf6] text-center rounded-xl text-xs font-bold animate-pulse">
                                         Uploading and sending... please wait.

@@ -490,9 +490,26 @@ export default function AdminDashboard({ currentUser }) {
                                             })()}
                                         </div>
 
-                                        {/* Attachment Comment */}
+                                        {/* Attachment Comments */}
                                         {(() => {
                                             const sub = getSubmissionStatus(selectedUser.id);
+                                            // Handle new array format
+                                            if (sub.attachmentComments && sub.attachmentComments.length > 0) {
+                                                return (
+                                                    <div className="mt-3 space-y-2 max-w-sm">
+                                                        <p className="text-[10px] text-[#8b5cf6] font-bold uppercase tracking-wider flex items-center gap-1">
+                                                            <span>💬</span> Attachment Comments ({sub.attachmentComments.length})
+                                                        </p>
+                                                        {sub.attachmentComments.map((item, idx) => (
+                                                            <div key={idx} className="p-2.5 bg-[#1f1f23] rounded-lg border border-slate-700">
+                                                                <p className="text-[10px] text-slate-500 mb-1">{item.fileCount} file(s)</p>
+                                                                <p className="text-xs text-slate-300 leading-relaxed">{item.comment}</p>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )
+                                            }
+                                            // Handle legacy single comment format
                                             if (sub.attachmentComment) {
                                                 return (
                                                     <div className="mt-3 p-3 bg-[#1f1f23] rounded-lg border border-slate-700 max-w-sm">
