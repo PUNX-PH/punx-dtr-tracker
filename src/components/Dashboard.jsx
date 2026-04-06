@@ -224,8 +224,16 @@ export default function Dashboard({ user }) {
             {/* DTR Table View and Submission Panel */}
             {activeCutoff && (
                 <>
+                    <DTRTable
+                        user={user}
+                        history={history}
+                        onRefresh={loadHistory}
+                        initialDate={activeCutoff ? activeCutoff.startDate.toDate() : null}
+                        periodEnd={activeCutoff ? activeCutoff.endDate.toDate() : null}
+                    />
+
                     {/* Submission Panel */}
-                    <div className="bg-[#141419] rounded-3xl border border-[#1f1f23] p-6 mb-8">
+                    <div className="bg-[#141419] rounded-3xl border border-[#1f1f23] p-6 mt-8">
                         <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
                             <Send size={20} className="text-[#8b5cf6]" />
                             Submit DTR
@@ -289,14 +297,6 @@ export default function Dashboard({ user }) {
                             </div>
                         )}
                     </div>
-
-                    <DTRTable
-                        user={user}
-                        history={history}
-                        onRefresh={loadHistory}
-                        initialDate={activeCutoff ? activeCutoff.startDate.toDate() : null}
-                        periodEnd={activeCutoff ? activeCutoff.endDate.toDate() : null}
-                    />
                 </>
             )}
 
