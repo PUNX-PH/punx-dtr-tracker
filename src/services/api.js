@@ -441,13 +441,14 @@ export const api = {
         }
     },
 
-    logEditActivity: async (userId, summary) => {
+    logEditActivity: async (userId, summary, details = []) => {
         try {
             const editLog = {
                 employeeId: userId,
                 type: 'EDIT',
                 timestamp: Timestamp.now(),
-                reason: summary
+                reason: summary,
+                editDetails: details
             };
             const docRef = await addDoc(collection(db, "logs"), editLog);
             return {

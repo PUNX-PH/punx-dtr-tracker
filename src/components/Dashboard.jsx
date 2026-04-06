@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { CheckCircle2, Clock, CheckCircle, XCircle, Send, Upload, MessageSquare, X, Save, Pencil, ChevronLeft, ChevronRight } from 'lucide-react'
+import { CheckCircle2, Clock, CheckCircle, XCircle, Send, Upload, MessageSquare, X, Save, Pencil, ChevronLeft, ChevronRight, Eye } from 'lucide-react'
 import { api } from '../services/api'
 import ClockComp from './Clock'
 import DTRTable from './DTRTable'
@@ -17,6 +17,7 @@ export default function Dashboard({ user }) {
     const [showCommentBox, setShowCommentBox] = useState(false)
     const [attachmentGroups, setAttachmentGroups] = useState([]) // Array of { files: File[], comment: string }
     const [activityPage, setActivityPage] = useState(1)
+    const [selectedEditLog, setSelectedEditLog] = useState(null)
     const ITEMS_PER_PAGE = 10
 
     // Stats for the cards (calculated from history)
@@ -457,7 +458,7 @@ export default function Dashboard({ user }) {
                                     const isEditLog = log.type === 'EDIT'
 
                                     return (
-                                        <tr key={log.id} className="hover:bg-white/5 transition-colors">
+                                        <tr key={log.id} className={`hover:bg-white/5 transition-colors ${isEditLog ? 'cursor-pointer hover:bg-[#f59e0b]/5' : ''}`} onClick={() => isEditLog && setSelectedEditLog(log)}>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
                                                     <div className={`w-2 h-2 rounded-full ${config.dot}`} />
@@ -479,9 +480,9 @@ export default function Dashboard({ user }) {
                                             </td>
                                             <td className="px-6 py-4 text-right">
                                                 {isEditLog ? (
-                                                    <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-[#f59e0b]/10 text-[#f59e0b] text-[10px] font-bold uppercase tracking-wider">
-                                                        <Pencil size={10} />
-                                                        Record Edit
+                                                    <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-[#f59e0b]/10 text-[#f59e0b] text-[10px] font-bold uppercase tracking-wider group/badge">
+                                                        <Eye size={10} />
+                                                        View Details
                                                     </div>
                                                 ) : isManual ? (
                                                     <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-[#8b5cf6]/10 text-[#8b5cf6] text-[10px] font-bold uppercase tracking-wider">
@@ -556,6 +557,73 @@ export default function Dashboard({ user }) {
                     </div>
                 )}
             </div>
+            {/* Edit Detail Modal */}
+            {selectedEditLog && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setSelectedEditLog(null)}>
+                    <div className="bg-[#141419] border border-[#f59e0b]/30 rounded-2xl shadow-2xl shadow-amber-900/20 w-full max-w-lg mx-4 animate-in zoom-in-95 duration-300" onClick={e => e.stopPropagation()}>
+                        {/* Modal Header */}
+                        <div className="p-6 border-b border-[#1f1f23] flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 bg-[#f59e0b]/10 rounded-xl">
+                                    <Pencil size={18} className="text-[#f59e0b]" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-white">Edit Details</h3>
+                                    <p className="text-xs text-slate-500">
+                                        {new Date(selectedEditLog.timestamp).toLocaleDateString('en-GB')} at {new Date(selectedEditLog.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setSelectedEditLog(null)}
+                                className="p-2 hover:bg-white/10 rounded-xl text-slate-500 hover:text-white transition-all"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="p-6 max-h-[60vh] overflow-y-auto space-y-3">
+                            {selectedEditLog.editDetails && selectedEditLog.editDetails.length > 0 ? (
+                                selectedEditLog.editDetails.map((detail, i) => (
+                                    <div key={i} className="p-4 bg-[#1a1a22] rounded-xl border border-[#1f1f23] hover:border-[#f59e0b]/20 transition-colors">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-[#f59e0b]" />
+                                            <span className="text-sm font-bold text-white">{detail.date}</span>
+                                        </div>
+                                        <div className="pl-4 space-y-1">
+                                            {detail.changes.split(', ').map((change, j) => (
+                                                <div key={j} className="flex items-center gap-2 text-xs">
+                                                    <span className="text-slate-600">→</span>
+                                                    <span className="text-slate-300">{change}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                /* Fallback: parse from reason string for older logs */
+                                <div className="p-4 bg-[#1a1a22] rounded-xl border border-[#1f1f23]">
+                                    <p className="text-sm text-slate-300 leading-relaxed">
+                                        {selectedEditLog.reason || 'No details available.'}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="p-4 border-t border-[#1f1f23] flex justify-end">
+                            <button
+                                onClick={() => setSelectedEditLog(null)}
+                                className="px-4 py-2 bg-[#1f1f23] hover:bg-[#2d2d35] text-white text-xs font-bold rounded-xl border border-slate-700 hover:border-[#f59e0b]/50 transition-all"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Hidden Button to allow Sidebar to trigger form submit */}
             <button id="hidden-submit-dtr-btn" className="hidden" onClick={handleSubmitDTR} />
         </div>

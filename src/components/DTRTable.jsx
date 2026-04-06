@@ -257,7 +257,12 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                 const summary = editSummaryParts.length <= 3
                     ? editSummaryParts.join(' | ')
                     : `${editSummaryParts.slice(0, 3).join(' | ')} (+${editSummaryParts.length - 3} more)`
-                await api.logEditActivity(user.id, summary)
+                // Build structured details for the detail modal
+                const details = editSummaryParts.map(part => {
+                    const [dateLabel, ...rest] = part.split(': ')
+                    return { date: dateLabel, changes: rest.join(': ') }
+                })
+                await api.logEditActivity(user.id, summary, details)
             }
 
             alert("Changes saved successfully!")
