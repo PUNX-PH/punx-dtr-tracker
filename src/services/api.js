@@ -317,7 +317,13 @@ export const api = {
     updateDTRStatus: async (submissionId, status, employeeId, seniorName) => {
         try {
             const subRef = doc(db, "submissions", submissionId);
-            await updateDoc(subRef, { status: status }); // 'approved' or 'rejected'
+            
+            if (status === 'rejected') {
+                const { deleteDoc } = await import("firebase/firestore");
+                await deleteDoc(subRef);
+            } else {
+                await updateDoc(subRef, { status: status }); // 'approved'
+            }
             
             // If rejected, notify the original user
             if (status === 'rejected' && employeeId) {

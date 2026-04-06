@@ -42,6 +42,20 @@ export default function Dashboard({ user }) {
         }
     }
 
+    // Disable the Sidebar "Send to Admin" button dynamically if submitted
+    useEffect(() => {
+        const btn = document.getElementById('sidebar-send-btn');
+        if (btn) {
+            if (submission) {
+                btn.disabled = true;
+                btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-circle-2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg> DTR Sent`;
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-send"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg> Send to Admin`;
+            }
+        }
+    }, [submission]);
+
     const loadHistory = async () => {
         const data = await api.getHistory(user.id)
         setHistory(data)

@@ -77,6 +77,7 @@ export default function Sidebar({ activeTab, onTabChange, onLogout, user, onClos
                 </div>
 
                 <button
+                    id="sidebar-send-btn"
                     onClick={() => {
                         if (activeTab !== 'dashboard') {
                             onTabChange('dashboard');
@@ -85,7 +86,7 @@ export default function Sidebar({ activeTab, onTabChange, onLogout, user, onClos
                             document.getElementById('hidden-submit-dtr-btn')?.click();
                         }
                     }}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-white bg-[#8b5cf6] hover:bg-[#7c3aed] rounded-xl transition-colors mb-2 shadow-lg shadow-purple-900/20"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-white bg-[#8b5cf6] hover:bg-[#7c3aed] rounded-xl transition-colors mb-2 shadow-lg shadow-purple-900/20 disabled:scale-100 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     <Send size={18} />
                     Send to Admin
