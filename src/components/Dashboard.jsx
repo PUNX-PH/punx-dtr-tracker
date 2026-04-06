@@ -374,13 +374,6 @@ export default function Dashboard({ user }) {
                                     </div>
                                 )}
 
-                                <button
-                                    onClick={handleSubmitDTR}
-                                    disabled={uploading || (files.length > 0 && !commentSaved)}
-                                    className="w-full py-3 bg-[#8b5cf6] hover:bg-[#7c3aed] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-lg shadow-purple-900/20"
-                                >
-                                    {uploading ? "Sending..." : "Send to Admin"}
-                                </button>
                             </div>
                         )}
                     </div>
