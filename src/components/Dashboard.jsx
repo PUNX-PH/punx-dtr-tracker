@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { CheckCircle2, Clock, CheckCircle, XCircle, Send, Upload, MessageSquare, X, Save, Pencil, ChevronLeft, ChevronRight, Eye } from 'lucide-react'
+import { CheckCircle2, Clock, CheckCircle, XCircle, Send, Upload, MessageSquare, X, Save, Pencil, ChevronLeft, ChevronRight, Eye, Link as LinkIcon } from 'lucide-react'
 import { api } from '../services/api'
 import ClockComp from './Clock'
 import DTRTable from './DTRTable'
@@ -17,7 +17,9 @@ export default function Dashboard({ user }) {
     const [attachmentComment, setAttachmentComment] = useState('')
     const [showCommentBox, setShowCommentBox] = useState(false)
     const [attachmentGroups, setAttachmentGroups] = useState([]) // Array of { files: File[], comment: string }
-
+    const [submissionLinks, setSubmissionLinks] = useState([]) // Array of url strings
+    const [showLinkBox, setShowLinkBox] = useState(false)
+    const [linkInput, setLinkInput] = useState('')
     // Stats for the cards (calculated from history)
     const todayLogs = history.filter(h => new Date(h.timestamp).toDateString() === new Date().toDateString());
     const hasTimeIn = todayLogs.some(l => l.type === 'IN');
@@ -85,6 +87,7 @@ export default function Dashboard({ user }) {
         if (e.target.files && e.target.files.length > 0) {
             setFiles(Array.from(e.target.files))
             setShowCommentBox(true)
+            setShowLinkBox(false)
             setAttachmentComment('')
         }
     }
@@ -110,8 +113,8 @@ export default function Dashboard({ user }) {
     const handleSubmitDTR = async () => {
         if (submission && submission.status !== 'rejected') return alert("You have already submitted your DTR. Please click 'Resubmit / Update' first to make changes.")
         if (!activeCutoff) return alert("No active cutoff period")
-        if (showCommentBox) {
-            return alert("Please save or cancel your current attachment comment first.")
+        if (showCommentBox || showLinkBox) {
+            return alert("Please save or cancel your current attachment or link first.")
         }
 
         setUploading(true)
@@ -135,12 +138,15 @@ export default function Dashboard({ user }) {
                 allComments.push({ comment: group.comment, fileCount: group.files.length })
             }
 
-            const res = await api.submitDTR(user.id, activeCutoff.id, allBase64, allComments)
+            const res = await api.submitDTR(user.id, activeCutoff.id, allBase64, allComments, submissionLinks)
             if (res.success) {
                 alert("DTR Submitted Successfully!")
                 setAttachmentGroups([])
+                setSubmissionLinks([])
                 setAttachmentComment('')
+                setLinkInput('')
                 setShowCommentBox(false)
+                setShowLinkBox(false)
                 setFiles([])
                 window.location.reload()
             } else {
@@ -368,8 +374,29 @@ export default function Dashboard({ user }) {
                                 {attachmentGroups.length > 0 && (
                                     <div className="space-y-3">
                                         <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">
-                                            Attachments ({attachmentGroups.length})
+                                            Attachments ({attachmentGroups.length + submissionLinks.length})
                                         </p>
+                                        
+                                        {/* URLs */}
+                                        {submissionLinks.map((url, idx) => (
+                                            <div key={`link-${idx}`} className="p-3 bg-[#1a1a22] border border-[#3b82f6]/20 rounded-xl flex items-start gap-3 animate-in fade-in duration-300">
+                                                <div className="p-2 bg-[#3b82f6]/10 rounded-lg shrink-0">
+                                                    <LinkIcon size={14} className="text-[#3b82f6]" />
+                                                </div>
+                                                <div className="flex-1 min-w-0 flex items-center h-full">
+                                                    <a href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-slate-300 hover:text-white underline break-all">{url}</a>
+                                                </div>
+                                                <button
+                                                    onClick={() => setSubmissionLinks(prev => prev.filter((_, i) => i !== idx))}
+                                                    className="p-1.5 hover:bg-red-500/10 rounded-lg text-slate-600 hover:text-red-400 transition-all shrink-0"
+                                                    title="Remove link"
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                            </div>
+                                        ))}
+
+                                        {/* Files */}
                                         {attachmentGroups.map((group, idx) => (
                                             <div key={idx} className="p-3 bg-[#1a1a22] border border-[#22c55e]/20 rounded-xl flex items-start gap-3 animate-in fade-in duration-300">
                                                 <div className="p-2 bg-[#8b5cf6]/10 rounded-lg shrink-0">
@@ -399,25 +426,76 @@ export default function Dashboard({ user }) {
                                     </div>
                                 )}
 
-                                {/* Upload Area */}
-                                <div className="p-4 bg-[#1f1f23] rounded-xl border border-dashed border-slate-700 flex flex-col items-center justify-center text-center gap-2 mt-4">
-                                    <Upload className="text-slate-500" />
-                                    <p className="text-sm text-slate-400">
-                                        {attachmentGroups.length > 0 ? 'Add another attachment' : 'Upload image/ attachments (Optional)'}
-                                    </p>
-                                    <input
-                                        type="file"
-                                        accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.ppt,.pptx,.zip,.rar"
-                                        multiple
-                                        onChange={handleFileChange}
-                                        className="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-[#8b5cf6] file:text-white hover:file:bg-[#7c3aed]"
-                                    />
-                                    {files.length > 0 && (
-                                        <div className="text-xs text-slate-400 italic mt-2">
-                                            {files.length} file(s) selected
-                                        </div>
-                                    )}
+                                {/* Upload / Add Link Area */}
+                                <div className="grid grid-cols-2 gap-3 mt-4">
+                                    <div className="p-4 bg-[#1f1f23] rounded-xl border border-dashed border-slate-700 flex flex-col items-center justify-center text-center gap-2 relative hover:bg-[#2d2d35] transition-colors cursor-pointer group">
+                                        <Upload className="text-slate-500 group-hover:text-white transition-colors" />
+                                        <p className="text-sm text-slate-400 group-hover:text-white transition-colors text-balance">
+                                            {attachmentGroups.length > 0 ? 'Add another file' : 'Upload file(s)'}
+                                        </p>
+                                        <input
+                                            type="file"
+                                            accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.ppt,.pptx,.zip,.rar"
+                                            multiple
+                                            onChange={handleFileChange}
+                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            setShowLinkBox(true);
+                                            setShowCommentBox(false);
+                                        }}
+                                        className="p-4 bg-[#1f1f23] rounded-xl border border-dashed border-slate-700 flex flex-col items-center justify-center text-center gap-2 hover:bg-[#2d2d35] transition-colors group"
+                                    >
+                                        <LinkIcon className="text-slate-500 group-hover:text-white transition-colors" />
+                                        <p className="text-sm text-slate-400 group-hover:text-white transition-colors text-balance">
+                                            Add URL link
+                                        </p>
+                                    </button>
                                 </div>
+
+                                {/* Link Input Box */}
+                                {showLinkBox && (
+                                    <div className="p-4 bg-[#1a1a22] rounded-xl border border-[#3b82f6]/30 animate-in slide-in-from-top fade-in duration-300">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <LinkIcon size={16} className="text-[#3b82f6]" />
+                                            <label className="text-sm font-bold text-white">Paste URL Link</label>
+                                        </div>
+                                        <input
+                                            type="url"
+                                            value={linkInput}
+                                            onChange={(e) => setLinkInput(e.target.value)}
+                                            placeholder="https://..."
+                                            className="w-full px-3 py-2 bg-black/50 border border-slate-700/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#3b82f6] focus:ring-1 focus:ring-[#3b82f6] mb-3"
+                                        />
+                                        <div className="flex justify-end gap-2 mt-3">
+                                            <button
+                                                onClick={() => {
+                                                    setShowLinkBox(false);
+                                                    setLinkInput('');
+                                                }}
+                                                className="flex items-center gap-1.5 px-4 py-2 bg-[#1f1f23] hover:bg-[#2d2d35] text-slate-400 hover:text-white text-xs font-bold rounded-lg border border-slate-700 transition-all"
+                                            >
+                                                <X size={14} />
+                                                Cancel
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    if (linkInput.trim()) {
+                                                        setSubmissionLinks(prev => [...prev, linkInput.trim()]);
+                                                        setShowLinkBox(false);
+                                                        setLinkInput('');
+                                                    }
+                                                }}
+                                                className="flex items-center gap-1.5 px-4 py-2 bg-[#3b82f6] hover:bg-[#2563eb] text-white text-xs font-bold rounded-lg transition-all shadow-lg shadow-blue-900/20"
+                                            >
+                                                <Save size={14} />
+                                                Add Link
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Comment Box - appears after file selection */}
                                 {showCommentBox && (

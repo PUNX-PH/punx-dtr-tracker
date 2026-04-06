@@ -383,7 +383,7 @@ export const api = {
     },
 
     // DTR Submission
-        submitDTR: async (userId, cutoffId, attachments, attachmentComments = []) => {
+        submitDTR: async (userId, cutoffId, attachments, attachmentComments = [], links = []) => {
         try {
             // Use composite ID to prevent duplicates per cutoff
             const submissionId = `${userId}_${cutoffId}`;
@@ -404,6 +404,7 @@ export const api = {
             // Combine with existing attachments if present (so we don't lose previous files on resubmission)
             let finalAttachments = attachments;
             let finalComments = attachmentComments;
+            let finalLinks = links;
 
             const existingSub = await getDoc(subRef);
             if (existingSub.exists()) {
@@ -412,6 +413,9 @@ export const api = {
                     finalAttachments = [...prevData.attachments, ...attachments];
                     finalComments = [...(prevData.attachmentComments || []), ...attachmentComments];
                 }
+                if (prevData.links && prevData.links.length > 0) {
+                    finalLinks = [...(prevData.links || []), ...links];
+                }
             }
 
             const submission = {
@@ -419,6 +423,7 @@ export const api = {
                 cutoffId,
                 attachments: finalAttachments,
                 attachmentComments: finalComments,
+                links: finalLinks,
                 status: initialStatus,
                 submittedAt: Timestamp.now()
             };

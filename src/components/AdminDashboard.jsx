@@ -452,6 +452,30 @@ export default function AdminDashboard({ currentUser }) {
                                             DTR Submitted
                                         </p>
 
+                                        {/* URLs */}
+                                        {(() => {
+                                            const sub = getSubmissionStatus(selectedUser.id);
+                                            if (sub.links && sub.links.length > 0) {
+                                                return (
+                                                    <div className="flex flex-col gap-1 items-end w-full max-w-sm mb-2">
+                                                        {sub.links.map((link, idx) => (
+                                                            <a
+                                                                key={`link-${idx}`}
+                                                                href={link}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-xs text-[#3b82f6] hover:text-[#2563eb] underline break-all bg-[#1a1a22] p-2 rounded-lg border border-[#3b82f6]/20 w-fit text-right"
+                                                            >
+                                                                {link}
+                                                            </a>
+                                                        ))}
+                                                    </div>
+                                                )
+                                            }
+                                            return null;
+                                        })()}
+
+                                        {/* Image Attachments */}
                                         <div className="flex flex-wrap gap-2 justify-end max-w-sm">
                                             {(() => {
                                                 const sub = getSubmissionStatus(selectedUser.id);
