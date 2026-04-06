@@ -445,7 +445,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                             onChange={(e) => handleEditChange(date, 'REASON', e.target.value)}
                                         />
                                     ) : (
-                                        <div className="py-3 px-2 text-xs truncate max-w-[150px] text-white" title={getDisplayValue(date, 'REASON')}>{getDisplayValue(date, 'REASON') || ''}</div>
+                                        <div className="py-3 px-2 text-xs text-white whitespace-pre-wrap break-words" title={getDisplayValue(date, 'REASON')}>{getDisplayValue(date, 'REASON') || ''}</div>
                                     )}
                                 </td>
                             </tr>
