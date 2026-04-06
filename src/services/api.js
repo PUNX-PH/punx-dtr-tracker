@@ -310,6 +310,28 @@ export const api = {
         }
     },
 
+    updateDTRStatus: async (submissionId, status, employeeId, seniorName) => {
+        try {
+            const subRef = doc(db, "submissions", submissionId);
+            await updateDoc(subRef, { status: status }); // 'approved' or 'rejected'
+            
+            // If rejected, notify the original user
+            if (status === 'rejected' && employeeId) {
+                await api.createNotification(
+                    employeeId,
+                    'DTR_REJECTED',
+                    'DTR Rejected',
+                    `Your assigned senior (${seniorName}) has rejected your DTR. Please revise and resubmit.`,
+                    { submissionId }
+                );
+            }
+            return { success: true };
+        } catch (error) {
+            console.error("Update DTR status error", error);
+            return { success: false, message: error.message };
+        }
+    },
+
     // Cutoff Management
     setCutoff: async (startDate, endDate) => {
         try {
@@ -357,40 +379,44 @@ export const api = {
     },
 
     // DTR Submission
-    submitDTR: async (userId, cutoffId, attachments, attachmentComments = []) => {
+        submitDTR: async (userId, cutoffId, attachments, attachmentComments = []) => {
         try {
             // Use composite ID to prevent duplicates per cutoff
             const submissionId = `${userId}_${cutoffId}`;
             const subRef = doc(db, "submissions", submissionId);
+
+            // Fetch user to get assigned senior before creating submission
+            let assignedSeniorId = null;
+            let employeeName = "Unknown";
+            const userDoc = await getDoc(doc(db, "users", userId));
+            if (userDoc.exists()) {
+                const userData = userDoc.data();
+                assignedSeniorId = userData.assignedSeniorId;
+                employeeName = userData.name;
+            }
+
+            const initialStatus = assignedSeniorId ? 'pending_senior' : 'pending';
 
             const submission = {
                 userId,
                 cutoffId,
                 attachments: attachments, // Array of Base64 strings
                 attachmentComments: attachmentComments, // Array of { comment, fileCount } objects
-                status: 'pending',
+                status: initialStatus,
                 submittedAt: Timestamp.now()
             };
 
             await setDoc(subRef, submission);
 
-            // Check for overtime to notify senior
-            if (submission.hasOvertime) {
-                // Fetch user to get assigned senior
-                const userDoc = await getDoc(doc(db, "users", userId));
-                if (userDoc.exists()) {
-                    const userData = userDoc.data();
-                    if (userData.assignedSeniorId) {
-                        // Create notification for senior
-                        await api.createNotification(
-                            userData.assignedSeniorId,
-                            'OT_APPROVAL',
-                            'Overtime Approval Needed',
-                            `${userData.name} has submitted DTR with overtime.`,
-                            { submissionId, employeeId: userId, employeeName: userData.name }
-                        );
-                    }
-                }
+            // If user has a senior, trigger DTR approval notification to them
+            if (assignedSeniorId) {
+                await api.createNotification(
+                    assignedSeniorId,
+                    'DTR_APPROVAL',
+                    'DTR Approval Required',
+                    `${employeeName} has submitted their DTR for approval.`,
+                    { submissionId, employeeId: userId, employeeName }
+                );
             }
 
             return { success: true };

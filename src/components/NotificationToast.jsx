@@ -28,44 +28,46 @@ export default function NotificationToast({
 
     return (
         <div className={`fixed bottom-4 right-4 z-50 transition-all duration-500 transform ${visible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'}`}>
-            <div className="bg-[#141419] border border-amber-500/30 rounded-2xl shadow-2xl p-4 w-80 relative overflow-hidden group">
-                {/* Glow Effect */}
-                <div className="absolute top-0 left-0 w-full h-1 bg-amber-500/50"></div>
-                <div className="absolute -left-10 -top-10 w-32 h-32 bg-amber-500/10 rounded-full blur-3xl group-hover:bg-amber-500/20 transition-all"></div>
-
+            <div className="bg-[#141419] border border-[#f6e05e]/50 p-6 rounded-2xl shadow-2xl relative bg-opacity-95 backdrop-blur-md w-96">
                 <button
                     onClick={handleClose}
                     className="absolute top-3 right-3 text-slate-500 hover:text-white transition-colors"
                 >
-                    <X size={16} />
+                    <XCircle size={20} />
                 </button>
 
-                <div className="flex gap-4 relative z-10">
-                    <div className="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500 flex-shrink-0">
-                        <Clock size={24} />
+                <div className="flex items-start gap-4">
+                    <div className={`p-3 rounded-xl shrink-0 ${notification.type === 'DTR_REJECTED' ? 'bg-red-500/10 text-red-500' : 'bg-[#f6e05e]/10 text-[#f6e05e]'}`}>
+                        {notification.type === 'DTR_REJECTED' ? <XCircle size={24} /> : <Clock size={24} />}
                     </div>
-
-                    <div className="flex-1">
-                        <h4 className="text-white font-bold text-sm mb-1">{notification.title}</h4>
-                        <p className="text-slate-400 text-xs leading-relaxed mb-3">
+                    <div className="flex-1 w-full flex flex-col items-start text-left">
+                        <h3 className="text-lg font-bold text-white mb-1">{notification.title}</h3>
+                        <p className="text-slate-400 text-xs mb-3 leading-relaxed">
                             {notification.message}
                         </p>
 
-                        {notification.type === 'OT_APPROVAL' && (
-                            <div className="flex gap-2">
+                        {(notification.type === 'OT_APPROVAL' || notification.type === 'DTR_APPROVAL') ? (
+                            <div className="flex gap-3 w-full mt-1">
                                 <button
                                     onClick={() => onApprove(notification)}
-                                    className="flex-1 py-1.5 bg-[#22c55e] hover:bg-[#16a34a] text-black text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1"
+                                    className="text-xs font-bold text-[#22c55e] hover:text-[#16a34a] transition-colors uppercase tracking-wider"
                                 >
-                                    <Check size={12} /> Approve
+                                    Approve
                                 </button>
                                 <button
                                     onClick={() => onDecline(notification)}
-                                    className="flex-1 py-1.5 bg-[#1f1f23] hover:bg-red-500/20 text-red-500 border border-slate-700 hover:border-red-500/50 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1"
+                                    className="text-xs font-bold text-red-500 hover:text-red-400 transition-colors uppercase tracking-wider ml-2"
                                 >
-                                    <XCircle size={12} /> Decline
+                                    Reject
                                 </button>
                             </div>
+                        ) : (
+                            <button
+                                onClick={handleClose}
+                                className={`text-xs font-bold transition-colors uppercase tracking-wider ${notification.type === 'DTR_REJECTED' ? 'text-red-500 hover:text-red-400' : 'text-[#f6e05e] hover:text-white'}`}
+                            >
+                                Dismiss
+                            </button>
                         )}
                     </div>
                 </div>

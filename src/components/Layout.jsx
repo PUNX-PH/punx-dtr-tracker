@@ -47,15 +47,27 @@ export default function Layout({ children, user, onLogout, activeTab, onTabChang
     }
 
     const handleApprove = async (notif) => {
-        await api.updateOTStatus(notif.data.submissionId, 'approved');
-        handleDismiss(notif.id);
-        alert(`OT Approved for ${notif.data.employeeName}`);
+        if (notif.type === 'OT_APPROVAL') {
+            await api.updateOTStatus(notif.data.submissionId, 'approved');
+            handleDismiss(notif.id);
+            alert(`OT Approved for ${notif.data.employeeName}`);
+        } else if (notif.type === 'DTR_APPROVAL') {
+            await api.updateDTRStatus(notif.data.submissionId, 'approved', notif.data.employeeId, user.name);
+            handleDismiss(notif.id);
+            alert(`DTR Approved for ${notif.data.employeeName}`);
+        }
     }
 
     const handleDecline = async (notif) => {
-        await api.updateOTStatus(notif.data.submissionId, 'declined');
-        handleDismiss(notif.id);
-        alert(`OT Declined for ${notif.data.employeeName}`);
+        if (notif.type === 'OT_APPROVAL') {
+            await api.updateOTStatus(notif.data.submissionId, 'declined');
+            handleDismiss(notif.id);
+            alert(`OT Declined for ${notif.data.employeeName}`);
+        } else if (notif.type === 'DTR_APPROVAL') {
+            await api.updateDTRStatus(notif.data.submissionId, 'rejected', notif.data.employeeId, user.name);
+            handleDismiss(notif.id);
+            alert(`DTR Rejected for ${notif.data.employeeName}`);
+        }
     }
 
     return (
