@@ -27,7 +27,7 @@ export default function NotificationToast({
     if (!notification) return null
 
     return (
-        <div className={`fixed bottom-4 right-4 z-50 transition-all duration-500 transform ${visible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'}`}>
+        <div className={`fixed top-4 right-4 z-[9999] transition-all duration-500 transform ${visible ? 'translate-y-0 opacity-100' : '-translate-y-10 opacity-0 pointer-events-none'}`}>
             <div className="bg-[#141419] border border-[#f6e05e]/50 p-6 rounded-2xl shadow-2xl relative bg-opacity-95 backdrop-blur-md w-96">
                 <button
                     onClick={handleClose}

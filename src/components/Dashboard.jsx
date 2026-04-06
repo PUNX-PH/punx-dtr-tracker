@@ -90,10 +90,6 @@ export default function Dashboard({ user }) {
     }
 
     const handleSaveComment = () => {
-        if (!attachmentComment.trim()) {
-            alert('Please add a comment describing what this attachment is for.')
-            return
-        }
         // Add to attachment groups
         setAttachmentGroups(prev => [...prev, { files: files, comment: attachmentComment.trim() }])
         setShowCommentBox(false)
@@ -357,10 +353,12 @@ export default function Dashboard({ user }) {
                                                     <p className="text-[10px] text-slate-500 mb-1">
                                                         {commentObj.fileCount} previous file(s) attached
                                                     </p>
-                                                    <div className="flex items-start gap-1.5">
-                                                        <MessageSquare size={12} className="text-slate-500 mt-0.5 shrink-0" />
-                                                        <p className="text-xs text-slate-400 leading-relaxed italic">"{commentObj.comment}"</p>
-                                                    </div>
+                                                    {commentObj.comment && (
+                                                        <div className="flex items-start gap-1.5">
+                                                            <MessageSquare size={12} className="text-slate-500 mt-0.5 shrink-0" />
+                                                            <p className="text-xs text-slate-400 leading-relaxed italic">"{commentObj.comment}"</p>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         ))}
@@ -426,15 +424,14 @@ export default function Dashboard({ user }) {
                                     <div className="p-4 bg-[#1a1a22] rounded-xl border border-[#8b5cf6]/30 animate-in slide-in-from-top fade-in duration-300">
                                         <div className="flex items-center gap-2 mb-3">
                                             <MessageSquare size={16} className="text-[#8b5cf6]" />
-                                            <label className="text-sm font-bold text-white">What is this for?</label>
-                                            <span className="text-[10px] text-red-400 font-bold uppercase tracking-wider">Required</span>
+                                            <label className="text-sm font-bold text-white">Any notes for these files?</label>
+                                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Optional</span>
                                         </div>
                                         <textarea
                                             value={attachmentComment}
                                             onChange={(e) => setAttachmentComment(e.target.value)}
-                                            placeholder="Describe the purpose of this attachment..."
-                                            rows={3}
-                                            className="w-full bg-[#141419] text-white text-sm px-4 py-3 rounded-lg border border-slate-700 focus:outline-none focus:border-[#8b5cf6] focus:ring-1 focus:ring-[#8b5cf6]/30 resize-none placeholder:text-slate-600 transition-all"
+                                            placeholder="Example: Medical Certificate for 03/04 (Optional)..."
+                                            className="w-full h-20 px-3 py-2 bg-black/50 border border-slate-700/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#8b5cf6] focus:ring-1 focus:ring-[#8b5cf6] resize-none mb-3"
                                         />
                                         <div className="flex justify-end gap-2 mt-3">
                                             <button
