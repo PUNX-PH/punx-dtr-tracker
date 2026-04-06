@@ -167,10 +167,16 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
             // 1. Identify distinct dates being edited
             const editKeys = Object.keys(edits)
             const datesToProcess = new Set()
+            const knownTypes = ['OT_IN', 'OT_OUT', 'IN', 'OUT', 'REASON']
             editKeys.forEach(key => {
-                const separatorIndex = key.lastIndexOf('_')
-                const dateStr = key.substring(0, separatorIndex)
-                datesToProcess.add(dateStr)
+                // Find which known type suffix matches this key
+                for (const type of knownTypes) {
+                    if (key.endsWith('_' + type)) {
+                        const dateStr = key.substring(0, key.length - type.length - 1)
+                        datesToProcess.add(dateStr)
+                        break
+                    }
+                }
             })
 
             for (const dateStr of datesToProcess) {
@@ -439,7 +445,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                             onChange={(e) => handleEditChange(date, 'REASON', e.target.value)}
                                         />
                                     ) : (
-                                        <div className="py-3 px-2 text-xs truncate max-w-[150px]" title={getDisplayValue(date, 'REASON')}>{getDisplayValue(date, 'REASON') || ''}</div>
+                                        <div className="py-3 px-2 text-xs truncate max-w-[150px] text-white" title={getDisplayValue(date, 'REASON')}>{getDisplayValue(date, 'REASON') || ''}</div>
                                     )}
                                 </td>
                             </tr>
