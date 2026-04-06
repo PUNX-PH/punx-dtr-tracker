@@ -3,6 +3,7 @@ import { Search, User as UserIcon, Loader2, FileSpreadsheet } from 'lucide-react
 import * as XLSX from 'xlsx'
 import { api } from '../services/api'
 import DTRTable from './DTRTable'
+import RecentActivityTable from './RecentActivityTable'
 
 export default function AdminDashboard({ currentUser }) {
     const [users, setUsers] = useState([])
@@ -540,13 +541,16 @@ export default function AdminDashboard({ currentUser }) {
                                     <Loader2 className="animate-spin text-[#8b5cf6]" size={32} />
                                 </div>
                             ) : (
-                                <DTRTable
-                                    user={selectedUser} // Pass selected user so table saves to THEIR log
-                                    history={userHistory}
-                                    onRefresh={() => loadHistory(selectedUser.id)}
-                                    initialDate={cutoff ? cutoff.startDate.toDate() : null}
-                                    periodEnd={cutoff ? cutoff.endDate.toDate() : null}
-                                />
+                                <div className="space-y-6">
+                                    <DTRTable
+                                        user={selectedUser} // Pass selected user so table saves to THEIR log
+                                        history={userHistory}
+                                        onRefresh={() => loadHistory(selectedUser.id)}
+                                        initialDate={cutoff ? cutoff.startDate.toDate() : null}
+                                        periodEnd={cutoff ? cutoff.endDate.toDate() : null}
+                                    />
+                                    <RecentActivityTable history={userHistory} />
+                                </div>
                             )}
                         </div>
                     ) : (
