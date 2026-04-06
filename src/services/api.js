@@ -357,7 +357,7 @@ export const api = {
     },
 
     // DTR Submission
-    submitDTR: async (userId, cutoffId, attachments) => {
+    submitDTR: async (userId, cutoffId, attachments, attachmentComment = '') => {
         try {
             // Use composite ID to prevent duplicates per cutoff
             const submissionId = `${userId}_${cutoffId}`;
@@ -367,6 +367,7 @@ export const api = {
                 userId,
                 cutoffId,
                 attachments: attachments, // Array of Base64 strings
+                attachmentComment: attachmentComment, // User's description of what the attachment is for
                 status: 'pending',
                 submittedAt: Timestamp.now()
             };

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { CheckCircle2, Clock, CheckCircle, XCircle, Send, Upload } from 'lucide-react'
+import { CheckCircle2, Clock, CheckCircle, XCircle, Send, Upload, MessageSquare, X, Save } from 'lucide-react'
 import { api } from '../services/api'
 import ClockComp from './Clock'
 import DTRTable from './DTRTable'
@@ -13,6 +13,9 @@ export default function Dashboard({ user }) {
     const [showCutoffAlert, setShowCutoffAlert] = useState(false)
     const [files, setFiles] = useState([])
     const [uploading, setUploading] = useState(false)
+    const [attachmentComment, setAttachmentComment] = useState('')
+    const [showCommentBox, setShowCommentBox] = useState(false)
+    const [commentSaved, setCommentSaved] = useState(false)
 
     // Stats for the cards (calculated from history)
     const todayLogs = history.filter(h => new Date(h.timestamp).toDateString() === new Date().toDateString());
@@ -64,15 +67,36 @@ export default function Dashboard({ user }) {
     }
 
     const handleFileChange = (e) => {
-        if (e.target.files) {
+        if (e.target.files && e.target.files.length > 0) {
             setFiles(Array.from(e.target.files))
+            setShowCommentBox(true)
+            setCommentSaved(false)
+            setAttachmentComment('')
         }
     }
 
+    const handleSaveComment = () => {
+        if (!attachmentComment.trim()) {
+            alert('Please add a comment describing what this attachment is for.')
+            return
+        }
+        setCommentSaved(true)
+        setShowCommentBox(false)
+    }
+
+    const handleCancelComment = () => {
+        setShowCommentBox(false)
+        setAttachmentComment('')
+        setCommentSaved(false)
+        setFiles([])
+    }
+
     const handleSubmitDTR = async () => {
-        // if (files.length === 0) return alert("Please select at least one image") // Optional now
         if (submission) return alert("You have already submitted your DTR. Please click 'Resubmit / Update' first to make changes.")
         if (!activeCutoff) return alert("No active cutoff period")
+        if (files.length > 0 && !commentSaved) {
+            return alert("Please save your attachment comment first.")
+        }
 
         setUploading(true)
         try {
@@ -88,9 +112,12 @@ export default function Dashboard({ user }) {
 
             const base64Array = await Promise.all(promises)
 
-            const res = await api.submitDTR(user.id, activeCutoff.id, base64Array)
+            const res = await api.submitDTR(user.id, activeCutoff.id, base64Array, attachmentComment)
             if (res.success) {
                 alert("DTR Submitted Successfully!")
+                setAttachmentComment('')
+                setCommentSaved(false)
+                setShowCommentBox(false)
                 window.location.reload()
             } else {
                 alert("Failed to submit: " + res.message)
@@ -289,11 +316,71 @@ export default function Dashboard({ user }) {
                                         </div>
                                     )}
                                 </div>
+
+                                {/* Comment Box - appears after file selection */}
+                                {showCommentBox && (
+                                    <div className="p-4 bg-[#1a1a22] rounded-xl border border-[#8b5cf6]/30 animate-in slide-in-from-top fade-in duration-300">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <MessageSquare size={16} className="text-[#8b5cf6]" />
+                                            <label className="text-sm font-bold text-white">What is this for?</label>
+                                            <span className="text-[10px] text-red-400 font-bold uppercase tracking-wider">Required</span>
+                                        </div>
+                                        <textarea
+                                            value={attachmentComment}
+                                            onChange={(e) => setAttachmentComment(e.target.value)}
+                                            placeholder="Describe the purpose of this attachment..."
+                                            rows={3}
+                                            className="w-full bg-[#141419] text-white text-sm px-4 py-3 rounded-lg border border-slate-700 focus:outline-none focus:border-[#8b5cf6] focus:ring-1 focus:ring-[#8b5cf6]/30 resize-none placeholder:text-slate-600 transition-all"
+                                        />
+                                        <div className="flex justify-end gap-2 mt-3">
+                                            <button
+                                                onClick={handleCancelComment}
+                                                className="flex items-center gap-1.5 px-4 py-2 bg-[#1f1f23] hover:bg-[#2d2d35] text-slate-400 hover:text-white text-xs font-bold rounded-lg border border-slate-700 transition-all"
+                                            >
+                                                <X size={14} />
+                                                Cancel
+                                            </button>
+                                            <button
+                                                onClick={handleSaveComment}
+                                                className="flex items-center gap-1.5 px-4 py-2 bg-[#8b5cf6] hover:bg-[#7c3aed] text-white text-xs font-bold rounded-lg transition-all shadow-lg shadow-purple-900/20"
+                                            >
+                                                <Save size={14} />
+                                                Save Comment
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Saved Comment Preview */}
+                                {commentSaved && attachmentComment && (
+                                    <div className="p-3 bg-[#22c55e]/10 border border-[#22c55e]/20 rounded-xl flex items-start gap-3 animate-in fade-in duration-300">
+                                        <CheckCircle size={16} className="text-[#22c55e] mt-0.5 shrink-0" />
+                                        <div className="flex-1">
+                                            <p className="text-[10px] text-[#22c55e] font-bold uppercase tracking-wider mb-1">Attachment Comment Saved</p>
+                                            <p className="text-xs text-slate-300 leading-relaxed">{attachmentComment}</p>
+                                        </div>
+                                        <button
+                                            onClick={() => { setShowCommentBox(true); setCommentSaved(false); }}
+                                            className="text-[10px] text-slate-500 hover:text-white font-bold uppercase tracking-wider transition-colors shrink-0"
+                                        >
+                                            Edit
+                                        </button>
+                                    </div>
+                                )}
+
                                 {uploading && (
                                     <div className="mt-4 p-3 bg-[#8b5cf6]/20 text-[#8b5cf6] text-center rounded-xl text-xs font-bold animate-pulse">
                                         Uploading and sending... please wait.
                                     </div>
                                 )}
+
+                                <button
+                                    onClick={handleSubmitDTR}
+                                    disabled={uploading || (files.length > 0 && !commentSaved)}
+                                    className="w-full py-3 bg-[#8b5cf6] hover:bg-[#7c3aed] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-lg shadow-purple-900/20"
+                                >
+                                    {uploading ? "Sending..." : "Send to Admin"}
+                                </button>
                             </div>
                         )}
                     </div>

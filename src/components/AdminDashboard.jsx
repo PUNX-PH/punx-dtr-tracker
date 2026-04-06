@@ -490,6 +490,22 @@ export default function AdminDashboard({ currentUser }) {
                                             })()}
                                         </div>
 
+                                        {/* Attachment Comment */}
+                                        {(() => {
+                                            const sub = getSubmissionStatus(selectedUser.id);
+                                            if (sub.attachmentComment) {
+                                                return (
+                                                    <div className="mt-3 p-3 bg-[#1f1f23] rounded-lg border border-slate-700 max-w-sm">
+                                                        <p className="text-[10px] text-[#8b5cf6] font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
+                                                            <span>💬</span> Attachment Comment
+                                                        </p>
+                                                        <p className="text-xs text-slate-300 leading-relaxed">{sub.attachmentComment}</p>
+                                                    </div>
+                                                )
+                                            }
+                                            return null;
+                                        })()}
+
                                         <p className="text-[10px] text-slate-500 mt-1">
                                             {new Date(getSubmissionStatus(selectedUser.id).submittedAt.toDate()).toLocaleString()}
                                         </p>
