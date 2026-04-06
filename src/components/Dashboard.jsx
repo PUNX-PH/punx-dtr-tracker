@@ -473,7 +473,7 @@ export default function Dashboard({ user }) {
                                             </td>
                                             <td className="px-6 py-4 text-xs text-slate-400 max-w-[200px]">
                                                 {log.reason ? (
-                                                    <span className="text-white">{log.reason}</span>
+                                                    <span className="text-white truncate block" title={log.reason}>{log.reason}</span>
                                                 ) : (
                                                     <span className="text-slate-600">—</span>
                                                 )}
@@ -603,10 +603,32 @@ export default function Dashboard({ user }) {
                                 ))
                             ) : (
                                 /* Fallback: parse from reason string for older logs */
-                                <div className="p-4 bg-[#1a1a22] rounded-xl border border-[#1f1f23]">
-                                    <p className="text-sm text-slate-300 leading-relaxed">
-                                        {selectedEditLog.reason || 'No details available.'}
-                                    </p>
+                                <div className="space-y-3">
+                                    {(selectedEditLog.reason || 'No details available.').split(' | ').map((part, i) => {
+                                        const [dateLabel, ...rest] = part.split(': ');
+                                        const changes = rest.join(': ') || 'No details';
+                                        
+                                        return (
+                                            <div key={i} className="p-4 bg-[#1a1a22] rounded-xl border border-[#1f1f23]">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-[#f59e0b]" />
+                                                    <span className="text-sm font-bold text-white">{dateLabel}</span>
+                                                </div>
+                                                {changes !== 'No details' ? (
+                                                    <div className="pl-4 space-y-1">
+                                                        {changes.split(', ').map((change, j) => (
+                                                            <div key={j} className="flex items-center gap-2 text-xs">
+                                                                <span className="text-slate-600">→</span>
+                                                                <span className="text-slate-300">{change}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="pl-4 text-xs text-slate-400">No further details.</div>
+                                                )}
+                                            </div>
+                                        )
+                                    })}
                                 </div>
                             )}
                         </div>
