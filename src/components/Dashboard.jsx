@@ -15,7 +15,7 @@ export default function Dashboard({ user }) {
     const [uploading, setUploading] = useState(false)
     const [attachmentComment, setAttachmentComment] = useState('')
     const [showCommentBox, setShowCommentBox] = useState(false)
-    const [commentSaved, setCommentSaved] = useState(false)
+    const [attachmentGroups, setAttachmentGroups] = useState([]) // Array of { files: File[], comment: string }
 
     // Stats for the cards (calculated from history)
     const todayLogs = history.filter(h => new Date(h.timestamp).toDateString() === new Date().toDateString());
@@ -70,7 +70,6 @@ export default function Dashboard({ user }) {
         if (e.target.files && e.target.files.length > 0) {
             setFiles(Array.from(e.target.files))
             setShowCommentBox(true)
-            setCommentSaved(false)
             setAttachmentComment('')
         }
     }
@@ -80,44 +79,58 @@ export default function Dashboard({ user }) {
             alert('Please add a comment describing what this attachment is for.')
             return
         }
-        setCommentSaved(true)
+        // Add to attachment groups
+        setAttachmentGroups(prev => [...prev, { files: files, comment: attachmentComment.trim() }])
         setShowCommentBox(false)
+        setAttachmentComment('')
+        setFiles([])
     }
 
     const handleCancelComment = () => {
         setShowCommentBox(false)
         setAttachmentComment('')
-        setCommentSaved(false)
         setFiles([])
+    }
+
+    const handleRemoveGroup = (index) => {
+        setAttachmentGroups(prev => prev.filter((_, i) => i !== index))
     }
 
     const handleSubmitDTR = async () => {
         if (submission) return alert("You have already submitted your DTR. Please click 'Resubmit / Update' first to make changes.")
         if (!activeCutoff) return alert("No active cutoff period")
-        if (files.length > 0 && !commentSaved) {
-            return alert("Please save your attachment comment first.")
+        if (showCommentBox) {
+            return alert("Please save or cancel your current attachment comment first.")
         }
 
         setUploading(true)
         try {
-            // Convert ALL files to Base64 (if any)
-            const promises = files.map(file => {
-                return new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.readAsDataURL(file);
-                    reader.onload = () => resolve(reader.result);
-                    reader.onerror = reject;
+            // Convert ALL files from ALL groups to Base64
+            const allBase64 = []
+            const allComments = []
+
+            for (const group of attachmentGroups) {
+                const promises = group.files.map(file => {
+                    return new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.readAsDataURL(file);
+                        reader.onload = () => resolve(reader.result);
+                        reader.onerror = reject;
+                    })
                 })
-            })
+                const base64Files = await Promise.all(promises)
+                allBase64.push(...base64Files)
+                // Store each group's comment with its file count for admin reference
+                allComments.push({ comment: group.comment, fileCount: group.files.length })
+            }
 
-            const base64Array = await Promise.all(promises)
-
-            const res = await api.submitDTR(user.id, activeCutoff.id, base64Array, attachmentComment)
+            const res = await api.submitDTR(user.id, activeCutoff.id, allBase64, allComments)
             if (res.success) {
                 alert("DTR Submitted Successfully!")
+                setAttachmentGroups([])
                 setAttachmentComment('')
-                setCommentSaved(false)
                 setShowCommentBox(false)
+                setFiles([])
                 window.location.reload()
             } else {
                 alert("Failed to submit: " + res.message)
@@ -300,9 +313,47 @@ export default function Dashboard({ user }) {
                             </div>
                         ) : (
                             <div className="space-y-4">
+                                {/* Saved Attachment Groups List */}
+                                {attachmentGroups.length > 0 && (
+                                    <div className="space-y-3">
+                                        <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">
+                                            Attachments ({attachmentGroups.length})
+                                        </p>
+                                        {attachmentGroups.map((group, idx) => (
+                                            <div key={idx} className="p-3 bg-[#1a1a22] border border-[#22c55e]/20 rounded-xl flex items-start gap-3 animate-in fade-in duration-300">
+                                                <div className="p-2 bg-[#8b5cf6]/10 rounded-lg shrink-0">
+                                                    <Upload size={14} className="text-[#8b5cf6]" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-xs text-white font-bold mb-0.5">
+                                                        {group.files.map(f => f.name).join(', ')}
+                                                    </p>
+                                                    <p className="text-[10px] text-slate-500 mb-1">
+                                                        {group.files.length} file(s)
+                                                    </p>
+                                                    <div className="flex items-start gap-1.5">
+                                                        <MessageSquare size={12} className="text-[#8b5cf6] mt-0.5 shrink-0" />
+                                                        <p className="text-xs text-slate-300 leading-relaxed">{group.comment}</p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleRemoveGroup(idx)}
+                                                    className="p-1.5 hover:bg-red-500/10 rounded-lg text-slate-600 hover:text-red-400 transition-all shrink-0"
+                                                    title="Remove attachment"
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Upload Area */}
                                 <div className="p-4 bg-[#1f1f23] rounded-xl border border-dashed border-slate-700 flex flex-col items-center justify-center text-center gap-2 mt-4">
                                     <Upload className="text-slate-500" />
-                                    <p className="text-sm text-slate-400">Upload image/ attachments (Optional)</p>
+                                    <p className="text-sm text-slate-400">
+                                        {attachmentGroups.length > 0 ? 'Add another attachment' : 'Upload image/ attachments (Optional)'}
+                                    </p>
                                     <input
                                         type="file"
                                         accept="image/*"
@@ -351,13 +402,6 @@ export default function Dashboard({ user }) {
                                     </div>
                                 )}
 
-                                {/* Saved Comment Preview */}
-                                {commentSaved && attachmentComment && (
-                                    <div className="p-3 bg-[#22c55e]/10 border border-[#22c55e]/20 rounded-xl flex items-start gap-3 animate-in fade-in duration-300">
-                                        <CheckCircle size={16} className="text-[#22c55e] mt-0.5 shrink-0" />
-                                        <div className="flex-1">
-                                            <p className="text-[10px] text-[#22c55e] font-bold uppercase tracking-wider mb-1">Attachment Comment Saved</p>
-                                            <p className="text-xs text-slate-300 leading-relaxed">{attachmentComment}</p>
                                         </div>
                                         <button
                                             onClick={() => { setShowCommentBox(true); setCommentSaved(false); }}
