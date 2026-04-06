@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { CheckCircle2, Clock, CheckCircle, XCircle, Send, Upload, MessageSquare, X, Save } from 'lucide-react'
+import { CheckCircle2, Clock, CheckCircle, XCircle, Send, Upload, MessageSquare, X, Save, Pencil } from 'lucide-react'
 import { api } from '../services/api'
 import ClockComp from './Clock'
 import DTRTable from './DTRTable'
@@ -421,51 +421,74 @@ export default function Dashboard({ user }) {
                         <h3 className="text-lg font-bold text-white">Recent Activity</h3>
                         <p className="text-xs text-slate-500">Latest logs</p>
                     </div>
-                    <button className="text-xs font-medium text-slate-400 hover:text-white px-3 py-1 bg-[#1f1f23] rounded-lg transition-colors">
-                        Manage Requests &rarr;
-                    </button>
                 </div>
 
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
                         <thead className="bg-[#1a1a20] text-xs font-semibold text-slate-500 uppercase tracking-wider">
                             <tr>
-                                <th className="px-6 py-4">Status</th>
+                                <th className="px-6 py-4">Type</th>
                                 <th className="px-6 py-4">Date</th>
                                 <th className="px-6 py-4">Time</th>
-                                <th className="px-6 py-4 text-right">Verification</th>
+                                <th className="px-6 py-4">Notes</th>
+                                <th className="px-6 py-4 text-right">Source</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-[#1f1f23]">
                             {history.length === 0 ? (
                                 <tr>
-                                    <td colSpan={4} className="px-6 py-8 text-center text-slate-500">
+                                    <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
                                         No activity found.
                                     </td>
                                 </tr>
                             ) : (
-                                history.map((log) => (
-                                    <tr key={log.id} className="hover:bg-white/5 transition-colors">
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-2 h-2 rounded-full ${log.type === 'IN' ? 'bg-[#22c55e]' : 'bg-red-500'}`} />
-                                                <span className="font-bold text-sm text-white">{log.type === 'IN' ? 'TIME IN' : 'TIME OUT'}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-sm text-slate-400 font-medium">
-                                            {new Date(log.timestamp).toLocaleDateString('en-GB')}
-                                        </td>
-                                        <td className="px-6 py-4 text-sm text-slate-400 font-mono">
-                                            {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-[#22c55e]/10 text-[#22c55e] text-[10px] font-bold uppercase tracking-wider">
-                                                <CheckCircle2 size={12} />
-                                                Approved
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
+                                history.map((log) => {
+                                    const typeConfig = {
+                                        'IN':     { label: 'TIME IN',  color: '#22c55e', dot: 'bg-[#22c55e]' },
+                                        'OUT':    { label: 'TIME OUT', color: '#ef4444', dot: 'bg-red-500' },
+                                        'OT_IN':  { label: 'OT IN',   color: '#8b5cf6', dot: 'bg-[#8b5cf6]' },
+                                        'OT_OUT': { label: 'OT OUT',  color: '#a78bfa', dot: 'bg-[#a78bfa]' },
+                                    }
+                                    const config = typeConfig[log.type] || { label: log.type, color: '#64748b', dot: 'bg-slate-500' }
+                                    const isManual = !!log.reason || log.type === 'OT_IN' || log.type === 'OT_OUT'
+
+                                    return (
+                                        <tr key={log.id} className="hover:bg-white/5 transition-colors">
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-2 h-2 rounded-full ${config.dot}`} />
+                                                    <span className="font-bold text-sm" style={{ color: config.color }}>{config.label}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-sm text-slate-400 font-medium">
+                                                {new Date(log.timestamp).toLocaleDateString('en-GB')}
+                                            </td>
+                                            <td className="px-6 py-4 text-sm text-slate-400 font-mono">
+                                                {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </td>
+                                            <td className="px-6 py-4 text-xs text-slate-400 max-w-[200px]">
+                                                {log.reason ? (
+                                                    <span className="text-white">{log.reason}</span>
+                                                ) : (
+                                                    <span className="text-slate-600">—</span>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                {isManual ? (
+                                                    <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-[#8b5cf6]/10 text-[#8b5cf6] text-[10px] font-bold uppercase tracking-wider">
+                                                        <Pencil size={10} />
+                                                        Manual Edit
+                                                    </div>
+                                                ) : (
+                                                    <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-[#22c55e]/10 text-[#22c55e] text-[10px] font-bold uppercase tracking-wider">
+                                                        <CheckCircle2 size={12} />
+                                                        Auto-Logged
+                                                    </div>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    )
+                                })
                             )}
                         </tbody>
                     </table>
