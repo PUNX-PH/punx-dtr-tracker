@@ -163,6 +163,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
             // We need to process time edits first, then attach reasons if needed
 
             const promises = []
+            const editSummaryParts = [] // Track what was changed for activity log
 
             // 1. Identify distinct dates being edited
             const editKeys = Object.keys(edits)
@@ -181,6 +182,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
 
             for (const dateStr of datesToProcess) {
                 const dateObj = new Date(dateStr)
+                const dateLabel = dateObj.toLocaleDateString('en-GB')
 
                 // Get all edits for this date
                 const inTime = edits[`${dateStr}_IN`]
@@ -188,6 +190,8 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                 const otInTime = edits[`${dateStr}_OT_IN`]
                 const otOutTime = edits[`${dateStr}_OT_OUT`]
                 const reason = edits[`${dateStr}_REASON`]
+
+                const changedFields = []
 
                 // Process Times
                 const timeTypes = ['IN', 'OUT', 'OT_IN', 'OT_OUT']
@@ -200,6 +204,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                         if (timeStr === '') {
                             if (existingLog) {
                                 promises.push(api.deleteLog(existingLog.id))
+                                changedFields.push(`${type} cleared`)
                             }
                             continue; // Skip creating/updating with empty value
                         }
@@ -215,9 +220,11 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                             const newDate = new Date(existingLog.timestamp)
                             newDate.setHours(parseInt(h), parseInt(m))
                             promises.push(api.updateLog(existingLog.id, newDate, reasonToSave))
+                            changedFields.push(`${type} → ${timeStr}`)
                         } else {
                             // Create
                             promises.push(api.createLog(user.id, type, dateObj, timeStr, reasonToSave || ''))
+                            changedFields.push(`${type} set to ${timeStr}`)
                         }
                     }
                 }
@@ -230,15 +237,28 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                         const anyLog = findAnyLogForDate(dateObj)
                         if (anyLog) {
                             promises.push(api.updateLog(anyLog.id, new Date(anyLog.timestamp), reason))
+                            changedFields.push(`Notes updated`)
                         } else {
                             // No log exists to attach reason to. 
                             console.warn(`Cannot save reason for ${dateStr} without a time entry.`)
                         }
                     }
                 }
+
+                if (changedFields.length > 0) {
+                    editSummaryParts.push(`${dateLabel}: ${changedFields.join(', ')}`)
+                }
             }
 
             await Promise.all(promises)
+
+            // Log the edit activity to Recent Activity
+            if (editSummaryParts.length > 0) {
+                const summary = editSummaryParts.length <= 3
+                    ? editSummaryParts.join(' | ')
+                    : `${editSummaryParts.slice(0, 3).join(' | ')} (+${editSummaryParts.length - 3} more)`
+                await api.logEditActivity(user.id, summary)
+            }
 
             alert("Changes saved successfully!")
             setEdits({})

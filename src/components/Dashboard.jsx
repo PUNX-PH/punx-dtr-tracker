@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { CheckCircle2, Clock, CheckCircle, XCircle, Send, Upload, MessageSquare, X, Save, Pencil } from 'lucide-react'
+import { CheckCircle2, Clock, CheckCircle, XCircle, Send, Upload, MessageSquare, X, Save, Pencil, ChevronLeft, ChevronRight } from 'lucide-react'
 import { api } from '../services/api'
 import ClockComp from './Clock'
 import DTRTable from './DTRTable'
@@ -16,6 +16,8 @@ export default function Dashboard({ user }) {
     const [attachmentComment, setAttachmentComment] = useState('')
     const [showCommentBox, setShowCommentBox] = useState(false)
     const [attachmentGroups, setAttachmentGroups] = useState([]) // Array of { files: File[], comment: string }
+    const [activityPage, setActivityPage] = useState(1)
+    const ITEMS_PER_PAGE = 10
 
     // Stats for the cards (calculated from history)
     const todayLogs = history.filter(h => new Date(h.timestamp).toDateString() === new Date().toDateString());
@@ -419,7 +421,7 @@ export default function Dashboard({ user }) {
                 <div className="p-6 border-b border-[#1f1f23] flex justify-between items-center">
                     <div>
                         <h3 className="text-lg font-bold text-white">Recent Activity</h3>
-                        <p className="text-xs text-slate-500">Latest logs</p>
+                        <p className="text-xs text-slate-500">Latest logs — Page {activityPage} of {Math.max(1, Math.ceil(history.length / ITEMS_PER_PAGE))}</p>
                     </div>
                 </div>
 
@@ -442,15 +444,17 @@ export default function Dashboard({ user }) {
                                     </td>
                                 </tr>
                             ) : (
-                                history.map((log) => {
+                                history.slice((activityPage - 1) * ITEMS_PER_PAGE, activityPage * ITEMS_PER_PAGE).map((log) => {
                                     const typeConfig = {
                                         'IN':     { label: 'TIME IN',  color: '#22c55e', dot: 'bg-[#22c55e]' },
                                         'OUT':    { label: 'TIME OUT', color: '#ef4444', dot: 'bg-red-500' },
                                         'OT_IN':  { label: 'OT IN',   color: '#8b5cf6', dot: 'bg-[#8b5cf6]' },
                                         'OT_OUT': { label: 'OT OUT',  color: '#a78bfa', dot: 'bg-[#a78bfa]' },
+                                        'EDIT':   { label: 'EDITED',   color: '#f59e0b', dot: 'bg-[#f59e0b]' },
                                     }
                                     const config = typeConfig[log.type] || { label: log.type, color: '#64748b', dot: 'bg-slate-500' }
                                     const isManual = !!log.reason || log.type === 'OT_IN' || log.type === 'OT_OUT'
+                                    const isEditLog = log.type === 'EDIT'
 
                                     return (
                                         <tr key={log.id} className="hover:bg-white/5 transition-colors">
@@ -474,7 +478,12 @@ export default function Dashboard({ user }) {
                                                 )}
                                             </td>
                                             <td className="px-6 py-4 text-right">
-                                                {isManual ? (
+                                                {isEditLog ? (
+                                                    <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-[#f59e0b]/10 text-[#f59e0b] text-[10px] font-bold uppercase tracking-wider">
+                                                        <Pencil size={10} />
+                                                        Record Edit
+                                                    </div>
+                                                ) : isManual ? (
                                                     <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-[#8b5cf6]/10 text-[#8b5cf6] text-[10px] font-bold uppercase tracking-wider">
                                                         <Pencil size={10} />
                                                         Manual Edit
@@ -493,6 +502,59 @@ export default function Dashboard({ user }) {
                         </tbody>
                     </table>
                 </div>
+
+                {/* Pagination Controls */}
+                {history.length > ITEMS_PER_PAGE && (
+                    <div className="p-4 border-t border-[#1f1f23] flex items-center justify-between">
+                        <p className="text-xs text-slate-500">
+                            Showing {((activityPage - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(activityPage * ITEMS_PER_PAGE, history.length)} of {history.length} entries
+                        </p>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setActivityPage(p => Math.max(1, p - 1))}
+                                disabled={activityPage === 1}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                    activityPage === 1
+                                        ? 'bg-[#1f1f23] text-slate-600 cursor-not-allowed'
+                                        : 'bg-[#1f1f23] text-white hover:bg-[#2d2d35] border border-slate-700 hover:border-[#8b5cf6]'
+                                }`}
+                            >
+                                <ChevronLeft size={14} />
+                                Previous
+                            </button>
+
+                            {/* Page Number Indicators */}
+                            <div className="flex items-center gap-1">
+                                {Array.from({ length: Math.ceil(history.length / ITEMS_PER_PAGE) }, (_, i) => i + 1).map(page => (
+                                    <button
+                                        key={page}
+                                        onClick={() => setActivityPage(page)}
+                                        className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${
+                                            page === activityPage
+                                                ? 'bg-[#8b5cf6] text-white shadow-lg shadow-purple-900/30'
+                                                : 'bg-[#1f1f23] text-slate-400 hover:bg-[#2d2d35] hover:text-white'
+                                        }`}
+                                    >
+                                        {page}
+                                    </button>
+                                ))}
+                            </div>
+
+                            <button
+                                onClick={() => setActivityPage(p => Math.min(Math.ceil(history.length / ITEMS_PER_PAGE), p + 1))}
+                                disabled={activityPage >= Math.ceil(history.length / ITEMS_PER_PAGE)}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                    activityPage >= Math.ceil(history.length / ITEMS_PER_PAGE)
+                                        ? 'bg-[#1f1f23] text-slate-600 cursor-not-allowed'
+                                        : 'bg-[#1f1f23] text-white hover:bg-[#2d2d35] border border-slate-700 hover:border-[#8b5cf6]'
+                                }`}
+                            >
+                                Next
+                                <ChevronRight size={14} />
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
             {/* Hidden Button to allow Sidebar to trigger form submit */}
             <button id="hidden-submit-dtr-btn" className="hidden" onClick={handleSubmitDTR} />

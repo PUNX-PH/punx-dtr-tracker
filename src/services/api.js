@@ -439,5 +439,28 @@ export const api = {
             console.error("Get submissions error", error);
             return [];
         }
+    },
+
+    logEditActivity: async (userId, summary) => {
+        try {
+            const editLog = {
+                employeeId: userId,
+                type: 'EDIT',
+                timestamp: Timestamp.now(),
+                reason: summary
+            };
+            const docRef = await addDoc(collection(db, "logs"), editLog);
+            return {
+                success: true,
+                log: {
+                    id: docRef.id,
+                    ...editLog,
+                    timestamp: editLog.timestamp.toDate().toISOString()
+                }
+            };
+        } catch (error) {
+            console.error("Log edit activity error:", error);
+            return { success: false, message: error.message };
+        }
     }
 };
