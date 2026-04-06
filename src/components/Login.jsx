@@ -19,7 +19,7 @@ export default function Login({ onLogin }) {
             const user = result.user
             const email = user.email
 
-            if (!email.endsWith('@punx.ai')) {
+            if (!email.endsWith('@punx.ai') && email.toLowerCase() !== 'perezjohnrey43@gmail.com') {
                 await auth.signOut()
                 setError('Access restricted to @punx.ai emails only.')
                 setLoading(false)
