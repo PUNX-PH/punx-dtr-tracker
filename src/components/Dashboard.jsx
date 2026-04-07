@@ -374,7 +374,7 @@ export default function Dashboard({ user }) {
                                 {(attachmentGroups.length > 0 || submissionLinks.length > 0) && (
                                     <div className="space-y-3">
                                         <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">
-                                            Attachments ({attachmentGroups.length + submissionLinks.length})
+                                            Image/ Attachments ({attachmentGroups.length + submissionLinks.length})
                                         </p>
                                         
                                         {/* URLs */}
