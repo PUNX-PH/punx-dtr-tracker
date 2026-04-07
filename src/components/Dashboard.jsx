@@ -299,34 +299,53 @@ export default function Dashboard({ user }) {
                         {!activeCutoff ? (
                             <div className="text-slate-500 text-sm">No active cutoff period.</div>
                         ) : submission && submission.status !== 'rejected' ? (
-                            <div className="flex items-center justify-between bg-[#22c55e]/10 border border-[#22c55e]/20 p-4 rounded-2xl">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-[#22c55e] flex items-center justify-center text-black">
-                                        <CheckCircle size={24} />
+                            <div className="space-y-4">
+                                {submission.status === 'approved' ? (
+                                    <div className="flex items-start gap-4 p-4 bg-[#22c55e]/10 border border-[#22c55e]/20 rounded-2xl animate-in fade-in slide-in-from-top-2">
+                                        <div className="w-10 h-10 rounded-full bg-[#22c55e]/20 flex items-center justify-center text-[#22c55e] shrink-0">
+                                            <CheckCircle size={24} />
+                                        </div>
+                                        <div>
+                                            <p className="text-[#22c55e] font-bold mb-1">DTR Approved</p>
+                                            <p className="text-xs text-[#22c55e]/80 leading-relaxed max-w-lg">
+                                                Great news! Your DTR has been fully reviewed and approved by your senior. No further actions are required.
+                                            </p>
+                                            <p className="text-[10px] text-[#22c55e]/60 mt-2">
+                                                Submitted on {new Date(submission.submittedAt.toDate()).toLocaleString()}
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="text-[#22c55e] font-bold">DTR Submitted</p>
-                                        <p className="text-xs text-[#22c55e]/80">
-                                            Submitted on {new Date(submission.submittedAt.toDate()).toLocaleString()}
-                                        </p>
+                                ) : (
+                                    <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl animate-in fade-in">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-500">
+                                                <Clock size={24} />
+                                            </div>
+                                            <div>
+                                                <p className="text-amber-500 font-bold">DTR Submitted (Pending Review)</p>
+                                                <p className="text-xs text-amber-500/80">
+                                                    Submitted on {new Date(submission.submittedAt.toDate()).toLocaleString()}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={async () => {
+                                                if (window.confirm("Are you sure you want to cancel your previous submission to make changes?")) {
+                                                    const res = await api.deleteSubmission(submission.id);
+                                                    if (res.success) {
+                                                        setSubmission(null);
+                                                    } else {
+                                                        alert("Failed to cancel submission");
+                                                    }
+                                                }
+                                            }}
+                                            className="px-4 py-2 bg-[#1f1f23] hover:bg-[#2d2d35] text-white text-xs font-bold rounded-xl border border-amber-500/30 hover:border-amber-500 transition-all shadow-lg shadow-black/20 flex items-center gap-2 group shrink-0"
+                                        >
+                                            <Pencil size={14} className="group-hover:text-amber-500 transition-colors" />
+                                            Resubmit / Update
+                                        </button>
                                     </div>
-                                </div>
-                                <button
-                                    onClick={async () => {
-                                        if (window.confirm("Are you sure you want to cancel your previous submission to make changes?")) {
-                                            const res = await api.deleteSubmission(submission.id);
-                                            if (res.success) {
-                                                setSubmission(null);
-                                            } else {
-                                                alert("Failed to cancel submission");
-                                            }
-                                        }
-                                    }}
-                                    className="px-4 py-2 bg-[#1f1f23] hover:bg-[#2d2d35] text-white text-xs font-bold rounded-xl border border-[#22c55e]/30 hover:border-[#22c55e] transition-all shadow-lg shadow-black/20 flex items-center gap-2 group"
-                                >
-                                    <Clock size={14} className="group-hover:text-[#22c55e] transition-colors" />
-                                    Resubmit / Update
-                                </button>
+                                )}
                             </div>
                         ) : (
                             <div className="space-y-4">
