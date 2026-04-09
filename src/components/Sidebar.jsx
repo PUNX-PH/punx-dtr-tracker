@@ -4,7 +4,7 @@ export default function Sidebar({ activeTab, onTabChange, onLogout, user, onClos
     const menuItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
 
-        { id: 'admin', label: 'Admin Dashboard', icon: Users, disabled: user.role !== 'admin' },
+        { id: 'admin', label: 'Admin Dashboard', icon: Users, disabled: !['admin', 'super_admin'].includes(user.role) },
     ]
 
     return (
@@ -71,6 +71,9 @@ export default function Sidebar({ activeTab, onTabChange, onLogout, user, onClos
                             </p>
                             {user.role === 'admin' && (
                                 <span className="text-[10px] bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded font-bold uppercase">ADMIN</span>
+                            )}
+                            {user.role === 'super_admin' && (
+                                <span className="text-[10px] bg-purple-500/10 text-purple-500 px-1.5 py-0.5 rounded font-bold uppercase">S.ADM</span>
                             )}
                         </div>
                     </div>

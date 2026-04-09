@@ -433,12 +433,14 @@ export default function AdminDashboard({ currentUser }) {
                                                 )}
                                                 {selectedUser.role === 'admin' && (
                                                     <>
-                                                        <button
-                                                            onClick={() => handleUpdateRole('super_admin')}
-                                                            className="flex items-center gap-2 px-4 py-2 bg-purple-500/10 text-purple-500 hover:bg-purple-500/20 border border-purple-500/20 text-xs font-bold rounded-xl transition-colors"
-                                                        >
-                                                            Promote to Super Admin
-                                                        </button>
+                                                        {currentUser.role === 'super_admin' && (
+                                                            <button
+                                                                onClick={() => handleUpdateRole('super_admin')}
+                                                                className="flex items-center gap-2 px-4 py-2 bg-purple-500/10 text-purple-500 hover:bg-purple-500/20 border border-purple-500/20 text-xs font-bold rounded-xl transition-colors"
+                                                            >
+                                                                Promote to Super Admin
+                                                            </button>
+                                                        )}
                                                         <button
                                                             onClick={() => handleUpdateRole('employee')}
                                                             className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700 text-xs font-bold rounded-xl transition-colors"

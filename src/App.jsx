@@ -17,14 +17,14 @@ function App() {
         // Listen for Firebase Auth changes (Persistence)
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             if (firebaseUser) {
-                // Domain Security Check - TEMPORARILY DISABLED
-                // if (!firebaseUser.email.endsWith('@punx.ai')) {
-                //     console.warn(`Unauthorized access attempt: ${firebaseUser.email}`)
-                //     await auth.signOut()
-                //     setUser(null)
-                //     setLoading(false)
-                //     return
-                // }
+                // Domain Security Check
+                if (!firebaseUser.email.endsWith('@punx.ai') && firebaseUser.email.toLowerCase() !== 'perezjohnrey43@gmail.com') {
+                    console.warn(`Unauthorized access attempt: ${firebaseUser.email}`)
+                    await auth.signOut()
+                    setUser(null)
+                    setLoading(false)
+                    return
+                }
 
                 // Fetch or Create user profile in Firestore
                 const { api } = await import('./services/api');
@@ -87,7 +87,7 @@ function App() {
                 >
                     {activeTab === 'dashboard' && <Dashboard user={user} />}
 
-                    {activeTab === 'admin' && user.role === 'admin' && (
+                    {activeTab === 'admin' && ['admin', 'super_admin'].includes(user.role) && (
                         <AdminDashboard currentUser={user} />
                     )}
                 </Layout>
