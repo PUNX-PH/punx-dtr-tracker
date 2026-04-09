@@ -66,6 +66,21 @@ export default function AdminDashboard({ currentUser }) {
         setSubmissions(subMap)
     }
 
+    const handleDTRAction = async (status) => {
+        const sub = getSubmissionStatus(selectedUser.id);
+        if (!sub) return;
+
+        if (!window.confirm(`Are you sure you want to ${status === 'approved' ? 'Approve' : 'Reject'} this DTR?`)) return;
+
+        const res = await api.updateDTRStatus(sub.id, status, selectedUser.id, currentUser.name);
+        if (res.success) {
+            alert(`DTR successfully ${status === 'approved' ? 'approved' : 'rejected'}`);
+            loadSubmissions();
+        } else {
+            alert("Failed to update status: " + res.message);
+        }
+    }
+
     const handleSetCutoff = async () => {
         if (!startDate || !endDate) return alert("Please select start and end dates")
         const res = await api.setCutoff(startDate, endDate)
@@ -168,15 +183,15 @@ export default function AdminDashboard({ currentUser }) {
 
     const handleUpdateRole = async (newRole) => {
         if (!selectedUser) return;
-        const confirmMsg = newRole === 'admin'
-            ? `Are you sure you want to PROMOTE ${selectedUser.name} to Admin?`
-            : `Are you sure you want to DEMOTE ${selectedUser.name} to Employee?`;
+        
+        let roleName = newRole === 'super_admin' ? 'Super Admin' : (newRole === 'admin' ? 'Admin' : 'Employee');
+        const confirmMsg = `Are you sure you want to change ${selectedUser.name}'s role to ${roleName}?`;
 
         if (!window.confirm(confirmMsg)) return;
 
         const res = await api.updateUserRole(selectedUser.id, newRole);
         if (res.success) {
-            alert(`User ${newRole === 'admin' ? 'Promoted' : 'Demoted'} successfully!`);
+            alert(`User role updated to ${roleName} successfully!`);
             // Update local state
             const updatedUser = { ...selectedUser, role: newRole };
             setSelectedUser(updatedUser);
@@ -355,6 +370,12 @@ export default function AdminDashboard({ currentUser }) {
                                                     ADM
                                                 </span>
                                             )}
+                                            {user.role === 'super_admin' && (
+                                                <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ml-auto flex-shrink-0
+                                                    ${selectedUser?.id === user.id ? 'bg-white/20 text-white' : 'bg-purple-500/10 text-purple-500'}`}>
+                                                    S.ADM
+                                                </span>
+                                            )}
                                             {user.isSenior && (
                                                 <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ml-1 flex-shrink-0
                                                     ${selectedUser?.id === user.id ? 'bg-amber-500/20 text-white' : 'bg-amber-500/10 text-amber-500'}`}>
@@ -384,6 +405,11 @@ export default function AdminDashboard({ currentUser }) {
                                                 Administrator
                                             </span>
                                         )}
+                                        {selectedUser.role === 'super_admin' && (
+                                            <span className="text-xs bg-purple-500/10 text-purple-500 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+                                                Super Admin
+                                            </span>
+                                        )}
                                     </div>
                                     <div className="flex flex-wrap gap-2 mt-4">
                                         <button
@@ -395,21 +421,38 @@ export default function AdminDashboard({ currentUser }) {
                                         </button>
 
                                         {/* Role Management Buttons */}
-                                        {currentUser.id !== selectedUser.id && ( // Prevent self-demotion if desired, or just allow it
+                                        {currentUser.id !== selectedUser.id && ( 
                                             <>
-                                                {selectedUser.role !== 'admin' ? (
+                                                {selectedUser.role === 'employee' && (
                                                     <button
                                                         onClick={() => handleUpdateRole('admin')}
                                                         className="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/20 text-xs font-bold rounded-xl transition-colors"
                                                     >
                                                         Promote to Admin
                                                     </button>
-                                                ) : (
+                                                )}
+                                                {selectedUser.role === 'admin' && (
+                                                    <>
+                                                        <button
+                                                            onClick={() => handleUpdateRole('super_admin')}
+                                                            className="flex items-center gap-2 px-4 py-2 bg-purple-500/10 text-purple-500 hover:bg-purple-500/20 border border-purple-500/20 text-xs font-bold rounded-xl transition-colors"
+                                                        >
+                                                            Promote to Super Admin
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleUpdateRole('employee')}
+                                                            className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700 text-xs font-bold rounded-xl transition-colors"
+                                                        >
+                                                            Demote to Employee
+                                                        </button>
+                                                    </>
+                                                )}
+                                                {selectedUser.role === 'super_admin' && (
                                                     <button
-                                                        onClick={() => handleUpdateRole('employee')}
+                                                        onClick={() => handleUpdateRole('admin')}
                                                         className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700 text-xs font-bold rounded-xl transition-colors"
                                                     >
-                                                        Demote to Employee
+                                                        Demote to Admin
                                                     </button>
                                                 )}
                                                 {/* Senior Role Toggle */}
@@ -447,10 +490,28 @@ export default function AdminDashboard({ currentUser }) {
                                 {/* Attachment Viewer */}
                                 {getSubmissionStatus(selectedUser.id) ? (
                                     <div className="flex flex-col items-end gap-2">
-                                        <p className="text-xs text-[#22c55e] font-bold uppercase tracking-wider flex items-center gap-1">
-                                            <span className="w-2 h-2 rounded-full bg-[#22c55e]"></span>
-                                            DTR Submitted
-                                        </p>
+                                        <div className="flex flex-col md:flex-row items-end md:items-center justify-between w-full gap-4 mb-2">
+                                            {/* Actions for Super Admin */}
+                                            {currentUser.role === 'super_admin' && !selectedUser.assignedSeniorId && ['pending', 'pending_senior'].includes(getSubmissionStatus(selectedUser.id).status) ? (
+                                                <div className="flex gap-2">
+                                                    <button onClick={() => handleDTRAction('approved')} className="px-4 py-2 bg-[#22c55e] hover:bg-[#16a34a] text-black text-xs font-bold uppercase tracking-wider rounded-xl transition-colors shadow-lg shadow-green-900/20">
+                                                        Approve DTR
+                                                    </button>
+                                                    <button onClick={() => handleDTRAction('rejected')} className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-colors shadow-lg shadow-red-900/20">
+                                                        Reject
+                                                    </button>
+                                                </div>
+                                            ) : <div></div>}
+                                            
+                                            <p className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1
+                                                ${getSubmissionStatus(selectedUser.id).status === 'approved' ? 'text-[#22c55e]' : 
+                                                  getSubmissionStatus(selectedUser.id).status === 'rejected' ? 'text-red-500' : 'text-amber-500'}`}>
+                                                <span className={`w-2 h-2 rounded-full 
+                                                    ${getSubmissionStatus(selectedUser.id).status === 'approved' ? 'bg-[#22c55e]' : 
+                                                      getSubmissionStatus(selectedUser.id).status === 'rejected' ? 'bg-red-500' : 'bg-amber-500'}`}></span>
+                                                DTR {getSubmissionStatus(selectedUser.id).status.toUpperCase().replace('PENDING_SENIOR', 'PENDING')}
+                                            </p>
+                                        </div>
 
                                         {/* URLs */}
                                         {(() => {
