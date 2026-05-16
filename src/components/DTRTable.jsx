@@ -159,18 +159,14 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
         console.log("Saving edits:", edits)
 
         try {
-            // Group edits by date to handle "Reason" correctly
-            // We need to process time edits first, then attach reasons if needed
-
             const promises = []
-            const editSummaryParts = [] // Track what was changed for activity log
+            const editSummaryParts = []
 
             // 1. Identify distinct dates being edited
             const editKeys = Object.keys(edits)
             const datesToProcess = new Set()
             const knownTypes = ['OT_IN', 'OT_OUT', 'IN', 'OUT', 'REASON']
             editKeys.forEach(key => {
-                // Find which known type suffix matches this key
                 for (const type of knownTypes) {
                     if (key.endsWith('_' + type)) {
                         const dateStr = key.substring(0, key.length - type.length - 1)
@@ -180,75 +176,114 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                 }
             })
 
+            const timeTypes = ['IN', 'OUT', 'OT_IN', 'OT_OUT']
+
+            // 2. Build a plan: one entry per affected log/new log/delete
+            const logUpdates = new Map() // logId -> { logId, log, newTimestamp?, newReason? }
+            const newLogs = []           // { type, dateObj, timeStr, dateStr, reason }
+            const deletes = new Set()    // log ids
+            const changedByDate = new Map() // dateStr -> changedFields[]
+
+            const addChange = (dateStr, change) => {
+                if (!changedByDate.has(dateStr)) changedByDate.set(dateStr, [])
+                changedByDate.get(dateStr).push(change)
+            }
+
+            // Find ALL logs for (date, type) so duplicates get updated together
+            const findAllLogs = (date, type) => history.filter(h =>
+                new Date(h.timestamp).toDateString() === date.toDateString() &&
+                h.type === type
+            )
+
             for (const dateStr of datesToProcess) {
                 const dateObj = new Date(dateStr)
-                const dateLabel = dateObj.toLocaleDateString('en-GB')
-
-                // Get all edits for this date
-                const inTime = edits[`${dateStr}_IN`]
-                const outTime = edits[`${dateStr}_OUT`]
-                const otInTime = edits[`${dateStr}_OT_IN`]
-                const otOutTime = edits[`${dateStr}_OT_OUT`]
                 const reason = edits[`${dateStr}_REASON`]
+                const reasonEdited = reason !== undefined
 
-                const changedFields = []
-
-                // Process Times
-                const timeTypes = ['IN', 'OUT', 'OT_IN', 'OT_OUT']
+                // Time edits
                 for (const type of timeTypes) {
                     const timeStr = edits[`${dateStr}_${type}`]
-                    if (timeStr !== undefined) { // Explicitly checked for presence in edits
-                        const existingLog = findLog(dateObj, type)
+                    if (timeStr === undefined) continue
 
-                        // Case 1: Cleared value (delete)
-                        if (timeStr === '') {
-                            if (existingLog) {
-                                promises.push(api.deleteLog(existingLog.id))
-                                changedFields.push(`${type} cleared`)
-                            }
-                            continue; // Skip creating/updating with empty value
+                    const matchingLogs = findAllLogs(dateObj, type)
+
+                    if (timeStr === '') {
+                        if (matchingLogs.length > 0) {
+                            matchingLogs.forEach(log => deletes.add(log.id))
+                            addChange(dateStr, `${type} cleared`)
                         }
+                        continue
+                    }
 
-                        // Case 2: Update or Create
-                        // Use the edited reason, or preserve existing reason if not edited
-                        let reasonToSave = undefined
-                        if (reason !== undefined) reasonToSave = reason
-
-                        if (existingLog) {
-                            // Update
+                    if (matchingLogs.length > 0) {
+                        matchingLogs.forEach(log => {
                             const [h, m] = timeStr.split(':')
-                            const newDate = new Date(existingLog.timestamp)
+                            const newDate = new Date(log.timestamp)
                             newDate.setHours(parseInt(h), parseInt(m))
-                            promises.push(api.updateLog(existingLog.id, newDate, reasonToSave))
-                            changedFields.push(`${type} → ${timeStr}`)
-                        } else {
-                            // Create
-                            promises.push(api.createLog(user.id, type, dateObj, timeStr, reasonToSave || ''))
-                            changedFields.push(`${type} set to ${timeStr}`)
-                        }
+                            const u = logUpdates.get(log.id) || { logId: log.id, log }
+                            u.newTimestamp = newDate
+                            logUpdates.set(log.id, u)
+                        })
+                        addChange(dateStr, `${type} → ${timeStr}`)
+                    } else {
+                        newLogs.push({ type, dateObj, timeStr, dateStr, reason: undefined })
+                        addChange(dateStr, `${type} set to ${timeStr}`)
                     }
                 }
 
-                // Process Reason ONLY (if no times were edited/added but reason was changed)
-                // We need to find an existing log to update its reason
-                if (reason !== undefined) {
-                    const timeEditsForDate = timeTypes.some(t => edits[`${dateStr}_${t}`] !== undefined)
-                    if (!timeEditsForDate) {
-                        const anyLog = findAnyLogForDate(dateObj)
-                        if (anyLog) {
-                            promises.push(api.updateLog(anyLog.id, new Date(anyLog.timestamp), reason))
-                            changedFields.push(`Notes updated`)
-                        } else {
-                            // No log exists to attach reason to. Create a standalone note log.
-                            promises.push(api.createLog(user.id, 'NOTE', dateObj, '12:00', reason))
-                            changedFields.push(`Notes added`)
-                        }
+                // Propagate reason to every surviving log on this day
+                if (reasonEdited) {
+                    const dayLogs = history.filter(h =>
+                        h.type !== 'EDIT' &&
+                        new Date(h.timestamp).toDateString() === dateObj.toDateString()
+                    )
+                    const survivingLogs = dayLogs.filter(log => !deletes.has(log.id))
+
+                    if (survivingLogs.length > 0) {
+                        survivingLogs.forEach(log => {
+                            const u = logUpdates.get(log.id) || { logId: log.id, log }
+                            u.newReason = reason
+                            logUpdates.set(log.id, u)
+                        })
+                        addChange(dateStr, `Notes updated`)
+                    }
+
+                    const newOnThisDay = newLogs.filter(nl => nl.dateStr === dateStr)
+                    newOnThisDay.forEach(nl => { nl.reason = reason })
+
+                    if (survivingLogs.length === 0 && newOnThisDay.length === 0) {
+                        newLogs.push({ type: 'NOTE', dateObj, timeStr: '12:00', dateStr, reason })
+                        addChange(dateStr, `Notes added`)
                     }
                 }
+            }
 
-                if (changedFields.length > 0) {
-                    editSummaryParts.push(`${dateLabel}: ${changedFields.join(', ')}`)
+            // 3. New logs without an explicit reason inherit the day's existing reason
+            //    (prevents Smart Fill / blank-cell fills from displacing pre-existing notes)
+            for (const nl of newLogs) {
+                if (nl.reason === undefined) {
+                    const existing = findAnyLogForDate(nl.dateObj)
+                    nl.reason = existing?.reason || ''
                 }
+            }
+
+            // 4. Emit promises
+            for (const u of logUpdates.values()) {
+                if (deletes.has(u.logId)) continue
+                const newDate = u.newTimestamp || new Date(u.log.timestamp)
+                promises.push(api.updateLog(u.logId, newDate, u.newReason))
+            }
+            for (const id of deletes) {
+                promises.push(api.deleteLog(id))
+            }
+            for (const nl of newLogs) {
+                promises.push(api.createLog(user.id, nl.type, nl.dateObj, nl.timeStr, nl.reason || ''))
+            }
+
+            // 5. Build edit summary for activity log
+            for (const [dateStr, changes] of changedByDate.entries()) {
+                const dateLabel = new Date(dateStr).toLocaleDateString('en-GB')
+                editSummaryParts.push(`${dateLabel}: ${changes.join(', ')}`)
             }
 
             await Promise.all(promises)
