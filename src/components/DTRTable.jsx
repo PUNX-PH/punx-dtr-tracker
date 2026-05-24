@@ -162,7 +162,6 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
         console.log("Saving edits:", edits)
 
         try {
-            const promises = []
             const editSummaryParts = []
 
             // 1. Identify distinct dates being edited
@@ -274,17 +273,16 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                 }
             }
 
-            // 4. Emit promises
+            // 4. Build atomic batch (single Firestore commit — either everything
+            //    applies or nothing does, so we can't end up with a fragmented day).
+            const batchUpdates = []
             for (const u of logUpdates.values()) {
                 if (deletes.has(u.logId)) continue
-                const newDate = u.newTimestamp || new Date(u.log.timestamp)
-                promises.push(api.updateLog(u.logId, newDate, u.newReason))
-            }
-            for (const id of deletes) {
-                promises.push(api.deleteLog(id))
-            }
-            for (const nl of newLogs) {
-                promises.push(api.createLog(user.id, nl.type, nl.dateObj, nl.timeStr, nl.reason || ''))
+                batchUpdates.push({
+                    logId: u.logId,
+                    newTimestamp: u.newTimestamp || new Date(u.log.timestamp),
+                    newReason: u.newReason
+                })
             }
 
             // 5. Build edit summary for activity log
@@ -293,7 +291,16 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                 editSummaryParts.push(`${dateLabel}: ${changes.join(', ')}`)
             }
 
-            await Promise.all(promises)
+            await api.saveDTRBatch(user.id, {
+                updates: batchUpdates,
+                creates: newLogs.map(nl => ({
+                    type: nl.type,
+                    dateObj: nl.dateObj,
+                    timeStr: nl.timeStr,
+                    reason: nl.reason || ''
+                })),
+                deletes: [...deletes]
+            })
 
             // Log the edit activity to Recent Activity
             if (editSummaryParts.length > 0) {

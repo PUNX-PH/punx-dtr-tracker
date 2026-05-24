@@ -116,6 +116,45 @@ export const api = {
         }
     },
 
+    // Atomic DTR save. All updates/creates/deletes commit together — if any fail,
+    // the whole thing rolls back and the error is thrown to the caller. This
+    // replaces the prior fire-and-pray Promise.all of individual writes, which
+    // could silently leave a day half-written (fragmented).
+    //
+    // updates: [{ logId, newTimestamp?: Date, newReason?: string }]
+    // creates: [{ type, dateObj: Date, timeStr: "HH:MM", reason?: string }]
+    // deletes: iterable of logId strings
+    saveDTRBatch: async (userId, { updates = [], creates = [], deletes = [] }) => {
+        const batch = writeBatch(db);
+
+        for (const u of updates) {
+            const logRef = doc(db, "logs", u.logId);
+            const fields = {};
+            if (u.newTimestamp) fields.timestamp = Timestamp.fromDate(u.newTimestamp);
+            if (u.newReason !== undefined) fields.reason = u.newReason;
+            if (Object.keys(fields).length > 0) batch.update(logRef, fields);
+        }
+
+        for (const id of deletes) {
+            batch.delete(doc(db, "logs", id));
+        }
+
+        for (const c of creates) {
+            const [hours, minutes] = c.timeStr.split(':');
+            const newDate = new Date(c.dateObj);
+            newDate.setHours(parseInt(hours), parseInt(minutes));
+            const newRef = doc(collection(db, "logs"));
+            batch.set(newRef, {
+                employeeId: userId,
+                type: c.type,
+                timestamp: Timestamp.fromDate(newDate),
+                reason: c.reason || ''
+            });
+        }
+
+        await batch.commit();
+    },
+
     getUserProfile: async (uid) => {
         try {
             // First try to find by uid field (if stored that way) or document ID
