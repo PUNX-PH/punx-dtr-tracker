@@ -99,10 +99,12 @@ export default function AdminDashboard({ currentUser }) {
         setLoadingHistory(false)
     }
 
-    const filteredUsers = users.filter(u =>
-        u.name?.toLowerCase().includes(search.toLowerCase()) ||
-        u.email?.toLowerCase().includes(search.toLowerCase())
-    )
+    const filteredUsers = users
+        .filter(u =>
+            u.name?.toLowerCase().includes(search.toLowerCase()) ||
+            u.email?.toLowerCase().includes(search.toLowerCase())
+        )
+        .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
 
     const getSubmissionStatus = (userId) => {
         return submissions[userId]

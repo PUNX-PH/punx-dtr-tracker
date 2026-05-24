@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { Pencil, Save, X, Loader2, Zap, Trash2 } from 'lucide-react'
 import { api } from '../services/api'
 
-export default function DTRTable({ user, history, onRefresh, initialDate, periodEnd }) {
+export default function DTRTable({ user, history, onRefresh, initialDate, periodEnd, canEdit = true }) {
     const [editMode, setEditMode] = useState(false)
     const [edits, setEdits] = useState({}) // Key: "YYYY-MM-DD_TYPE", Value: "HH:MM" or "REASON_TEXT"
     const [saving, setSaving] = useState(false)
@@ -400,7 +400,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                 Save Changes
                             </button>
                         </>
-                    ) : (
+                    ) : canEdit ? (
                         <button
                             onClick={() => setEditMode(true)}
                             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#8b5cf6]/10 text-[#8b5cf6] hover:bg-[#8b5cf6]/20 border border-[#8b5cf6]/50 text-sm font-bold transition-colors"
@@ -408,7 +408,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                             <Pencil size={16} />
                             Edit Records
                         </button>
-                    )}
+                    ) : null}
                 </div>
             </div>
 

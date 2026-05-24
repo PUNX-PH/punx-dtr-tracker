@@ -6,6 +6,7 @@ import Dashboard from './components/Dashboard'
 
 import Layout from './components/Layout'
 import AdminDashboard from './components/AdminDashboard'
+import SeniorDashboard from './components/SeniorDashboard'
 
 function App() {
     const [user, setUser] = useState(null)
@@ -36,7 +37,8 @@ function App() {
                     name: firebaseUser.displayName,
                     email: firebaseUser.email,
                     photoURL: firebaseUser.photoURL,
-                    role: profile?.role || 'employee'
+                    role: profile?.role || 'employee',
+                    isSenior: profile?.isSenior === true
                 })
             } else {
                 setUser(null)
@@ -89,6 +91,10 @@ function App() {
 
                     {activeTab === 'admin' && ['admin', 'super_admin'].includes(user.role) && (
                         <AdminDashboard currentUser={user} />
+                    )}
+
+                    {activeTab === 'senior' && (user.isSenior || user.role === 'super_admin') && (
+                        <SeniorDashboard currentUser={user} />
                     )}
                 </Layout>
             ) : (
