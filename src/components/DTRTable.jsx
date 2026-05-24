@@ -61,7 +61,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
 
     const getInputValue = (date, type) => {
         const key = getCellKey(date, type)
-        if (edits[key] !== undefined) return edits[key]
+        if (edits[key] !== undefined) return edits[key] ?? ''
 
         if (type === 'REASON') {
             // Find reason from any log on this day
@@ -122,8 +122,10 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                 const hasInHistory = findLog(date, 'IN')
                 const hasOutHistory = findLog(date, 'OUT')
 
-                const hasInEdit = edits[keyIn] !== undefined
-                const hasOutEdit = edits[keyOut] !== undefined
+                // Truthy check: treat blank ("") and null as fillable so Smart Fill
+                // rescues cells the user (or a flaky time-picker) accidentally cleared.
+                const hasInEdit = !!edits[keyIn]
+                const hasOutEdit = !!edits[keyOut]
 
                 if (!hasInHistory && !hasInEdit) newEdits[keyIn] = "09:00"
                 if (!hasOutHistory && !hasOutEdit) newEdits[keyOut] = "18:00"
@@ -144,7 +146,8 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
             const types = ['IN', 'OUT', 'OT_IN', 'OT_OUT']
             types.forEach(type => {
                 const key = getCellKey(date, type)
-                newEdits[key] = ""
+                // null = explicit clear (vs "" which the time input can emit accidentally).
+                newEdits[key] = null
             })
             // Optionally clear reasons too?
             // const keyReason = getCellKey(date, 'REASON')
@@ -204,10 +207,14 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                 for (const type of timeTypes) {
                     const timeStr = edits[`${dateStr}_${type}`]
                     if (timeStr === undefined) continue
+                    // "" is what <input type="time"> emits on partial/cleared input — treat
+                    // as no-change to avoid silently deleting the user's existing log.
+                    // null is the explicit "Clear" sentinel (see handleClearRecords).
+                    if (timeStr === '') continue
 
                     const matchingLogs = findAllLogs(dateObj, type)
 
-                    if (timeStr === '') {
+                    if (timeStr === null) {
                         if (matchingLogs.length > 0) {
                             matchingLogs.forEach(log => deletes.add(log.id))
                             addChange(dateStr, `${type} cleared`)
