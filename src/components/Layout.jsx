@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react'
 import { Menu, X } from 'lucide-react'
 import Sidebar from './Sidebar'
 import NotificationToast from './NotificationToast'
+import NotificationBell from './NotificationBell'
 import { api } from '../services/api'
 
 export default function Layout({ children, user, onLogout, activeTab, onTabChange }) {
     const [isSidebarOpen, setSidebarOpen] = useState(true)
     const [isMobile, setIsMobile] = useState(false)
     const [notification, setNotification] = useState(null)
+    const [notifications, setNotifications] = useState([])
 
     useEffect(() => {
         const checkMobile = () => {
@@ -27,15 +29,11 @@ export default function Layout({ children, user, onLogout, activeTab, onTabChang
         if (!user) return;
 
         const unsubscribe = api.getNotifications(user.id, (notifs) => {
-            // Filter for unread and pick the latest one
-            // In a real app we might show a list or queue, here we show the latest unread pop-up
+            setNotifications(notifs);
+            // Auto-pop toast for the most recent unread; the bell holds the
+            // full list so users can re-access any closed toast.
             const unread = notifs.filter(n => !n.read);
-            if (unread.length > 0) {
-                // Play notification sound?
-                setNotification(unread[0]);
-            } else {
-                setNotification(null);
-            }
+            setNotification(unread.length > 0 ? unread[0] : null);
         });
 
         return () => unsubscribe();
@@ -77,9 +75,28 @@ export default function Layout({ children, user, onLogout, activeTab, onTabChang
         }
     }
 
+    const handleMarkRead = async (notif) => {
+        await api.markNotificationRead(notif.id);
+    }
+
+    const handleMarkAllRead = async () => {
+        const unread = notifications.filter(n => !n.read);
+        if (unread.length === 0) return;
+        await api.markNotificationsRead(unread.map(n => n.id));
+    }
+
     return (
         <div className="flex h-screen bg-[#0f0f12] overflow-hidden relative">
-            {/* Notification Toast */}
+            {/* Persistent bell — always visible across every dashboard */}
+            <NotificationBell
+                notifications={notifications}
+                onApprove={handleApprove}
+                onDecline={handleDecline}
+                onMarkRead={handleMarkRead}
+                onMarkAllRead={handleMarkAllRead}
+            />
+
+            {/* Notification Toast (auto-pop for latest unread) */}
             {notification && (
                 <NotificationToast
                     notification={notification}

@@ -342,20 +342,53 @@ export const api = {
     },
 
     getNotifications: (userId, callback) => {
-        // Query by recipientId only to prevent composite index requirements
-        const q = query(
-            collection(db, "notifications"),
-            where("recipientId", "==", userId),
-            limit(50)
+        // Same shape as getHistory's index-fallback pattern. Original used
+        // limit(50) with no orderBy, which returned the OLDEST 50 by doc ID —
+        // new notifications never appeared once a user accumulated >50 lifetime.
+        // Try ordered query first (needs composite index recipientId+createdAt);
+        // fall back to single-field query + client-side sort on failed-precondition.
+        let activeUnsub = null;
+
+        const subscribeWithOrder = () => onSnapshot(
+            query(
+                collection(db, "notifications"),
+                where("recipientId", "==", userId),
+                orderBy("createdAt", "desc"),
+                limit(100)
+            ),
+            (snapshot) => {
+                callback(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+            },
+            (error) => {
+                const isIndexError = error.code === 'failed-precondition' ||
+                    /index/i.test(error.message || '');
+                if (isIndexError) {
+                    console.warn("Composite index missing on notifications(recipientId, createdAt). Falling back to client-side sort.");
+                    if (activeUnsub) activeUnsub();
+                    activeUnsub = subscribeWithoutOrder();
+                } else {
+                    console.error("Firebase getNotifications error:", error);
+                }
+            }
         );
-        return onSnapshot(q, (snapshot) => {
-            const notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            // Sort manually client-side (descending by createdAt)
-            notifications.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
-            callback(notifications);
-        }, (error) => {
-            console.error("Firebase getNotifications error:", error);
-        });
+
+        const subscribeWithoutOrder = () => onSnapshot(
+            query(
+                collection(db, "notifications"),
+                where("recipientId", "==", userId)
+            ),
+            (snapshot) => {
+                const notifs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                notifs.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
+                callback(notifs);
+            },
+            (error) => {
+                console.error("Firebase getNotifications fallback error:", error);
+            }
+        );
+
+        activeUnsub = subscribeWithOrder();
+        return () => { if (activeUnsub) activeUnsub(); };
     },
 
     markNotificationRead: async (id) => {
@@ -364,6 +397,19 @@ export const api = {
             await updateDoc(notifRef, { read: true });
         } catch (error) {
             console.error("Mark read error", error);
+        }
+    },
+
+    markNotificationsRead: async (ids) => {
+        if (!ids || ids.length === 0) return { success: true };
+        try {
+            const batch = writeBatch(db);
+            ids.forEach(id => batch.update(doc(db, "notifications", id), { read: true }));
+            await batch.commit();
+            return { success: true };
+        } catch (error) {
+            console.error("Mark notifications read batch error", error);
+            return { success: false, message: error.message };
         }
     },
 
