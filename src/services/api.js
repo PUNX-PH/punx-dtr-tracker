@@ -43,32 +43,50 @@ export const api = {
     },
 
     getHistory: async (userId) => {
+        // Fast path: order by timestamp descending, capped at 1000. Requires a
+        // composite index on (employeeId ASC, timestamp DESC).
         try {
-            // Order by timestamp descending so the newest logs come back first.
-            // Without an explicit orderBy, Firestore defaults to document-ID
-            // ascending, which returns the OLDEST N — newly-saved entries from
-            // Smart Fill / clock-in never made it into the result and the table
-            // looked fragmented even though Firestore had the data.
-            // Requires a composite index on (employeeId ASC, timestamp DESC) —
-            // Firestore will surface a one-click setup link on first failure.
             const q = query(
                 collection(db, "logs"),
                 where("employeeId", "==", userId),
                 orderBy("timestamp", "desc"),
                 limit(1000)
             );
-
-            const querySnapshot = await getDocs(q);
-            const logs = querySnapshot.docs.map(doc => ({
+            const snap = await getDocs(q);
+            return snap.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data(),
                 timestamp: doc.data().timestamp.toDate().toISOString()
             }));
-
-            return logs;
         } catch (error) {
-            console.error("Get history error:", error);
-            return [];
+            // If the composite index doesn't exist yet, Firestore throws
+            // failed-precondition. Fall back to fetching all of this user's
+            // logs (single-field index on employeeId is auto-provisioned) and
+            // sorting client-side. Previously this catch returned [] which made
+            // the table render fully blank after a save.
+            const isIndexError = error.code === 'failed-precondition' ||
+                /index/i.test(error.message || '');
+            if (!isIndexError) {
+                console.error("Get history error:", error);
+                return [];
+            }
+            try {
+                console.warn("Composite index missing on logs(employeeId, timestamp). Falling back to client-side sort. Create the index in Firebase console to remove this fallback.");
+                const fallbackQ = query(
+                    collection(db, "logs"),
+                    where("employeeId", "==", userId)
+                );
+                const snap = await getDocs(fallbackQ);
+                const logs = snap.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data(),
+                    timestamp: doc.data().timestamp.toDate().toISOString()
+                }));
+                return logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            } catch (fallbackErr) {
+                console.error("Get history fallback error:", fallbackErr);
+                return [];
+            }
         }
     },
 
