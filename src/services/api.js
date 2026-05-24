@@ -44,10 +44,18 @@ export const api = {
 
     getHistory: async (userId) => {
         try {
+            // Order by timestamp descending so the newest logs come back first.
+            // Without an explicit orderBy, Firestore defaults to document-ID
+            // ascending, which returns the OLDEST N — newly-saved entries from
+            // Smart Fill / clock-in never made it into the result and the table
+            // looked fragmented even though Firestore had the data.
+            // Requires a composite index on (employeeId ASC, timestamp DESC) —
+            // Firestore will surface a one-click setup link on first failure.
             const q = query(
                 collection(db, "logs"),
                 where("employeeId", "==", userId),
-                limit(100)
+                orderBy("timestamp", "desc"),
+                limit(1000)
             );
 
             const querySnapshot = await getDocs(q);
@@ -57,8 +65,7 @@ export const api = {
                 timestamp: doc.data().timestamp.toDate().toISOString()
             }));
 
-            // Sort client-side to avoid needing a composite index in Firestore
-            return logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            return logs;
         } catch (error) {
             console.error("Get history error:", error);
             return [];
