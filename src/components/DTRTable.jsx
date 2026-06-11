@@ -456,11 +456,10 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                 {/* Regular IN */}
                                 <td className="p-0 border-r border-[#1f1f23] border-dashed border-white/10 bg-[#22c55e]/5 font-mono h-12">
                                     {editMode ? (
-                                        <input
-                                            type="time"
-                                            className="w-full h-full bg-black/50 text-white text-center focus:outline-none focus:bg-black focus:ring-1 ring-[#22c55e]"
+                                        <TimeCellEditor
                                             value={getInputValue(date, 'IN')}
-                                            onChange={(e) => handleEditChange(date, 'IN', e.target.value)}
+                                            onChange={(v) => handleEditChange(date, 'IN', v)}
+                                            ringColor="#22c55e"
                                         />
                                     ) : (
                                         <div className="py-3 text-white">{getDisplayValue(date, 'IN') || '-'}</div>
@@ -470,11 +469,10 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                 {/* Regular OUT */}
                                 <td className="p-0 border-r border-[#1f1f23] bg-[#22c55e]/5 font-mono">
                                     {editMode ? (
-                                        <input
-                                            type="time"
-                                            className="w-full h-full bg-black/50 text-white text-center focus:outline-none focus:bg-black focus:ring-1 ring-[#22c55e]"
+                                        <TimeCellEditor
                                             value={getInputValue(date, 'OUT')}
-                                            onChange={(e) => handleEditChange(date, 'OUT', e.target.value)}
+                                            onChange={(v) => handleEditChange(date, 'OUT', v)}
+                                            ringColor="#22c55e"
                                         />
                                     ) : (
                                         <div className="py-3 text-white">{getDisplayValue(date, 'OUT') || '-'}</div>
@@ -484,11 +482,10 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                 {/* Overtime IN */}
                                 <td className="p-0 border-r border-[#1f1f23] border-dashed border-white/10 bg-[#8b5cf6]/5 font-mono">
                                     {editMode ? (
-                                        <input
-                                            type="time"
-                                            className="w-full h-full bg-black/50 text-white text-center focus:outline-none focus:bg-black focus:ring-1 ring-[#8b5cf6]"
+                                        <TimeCellEditor
                                             value={getInputValue(date, 'OT_IN')}
-                                            onChange={(e) => handleEditChange(date, 'OT_IN', e.target.value)}
+                                            onChange={(v) => handleEditChange(date, 'OT_IN', v)}
+                                            ringColor="#8b5cf6"
                                         />
                                     ) : (
                                         <div className="py-3 text-white">{getDisplayValue(date, 'OT_IN') || '-'}</div>
@@ -498,11 +495,10 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                 {/* Overtime OUT */}
                                 <td className="p-0 border-r border-[#1f1f23] bg-[#8b5cf6]/5 font-mono">
                                     {editMode ? (
-                                        <input
-                                            type="time"
-                                            className="w-full h-full bg-black/50 text-white text-center focus:outline-none focus:bg-black focus:ring-1 ring-[#8b5cf6]"
+                                        <TimeCellEditor
                                             value={getInputValue(date, 'OT_OUT')}
-                                            onChange={(e) => handleEditChange(date, 'OT_OUT', e.target.value)}
+                                            onChange={(v) => handleEditChange(date, 'OT_OUT', v)}
+                                            ringColor="#8b5cf6"
                                         />
                                     ) : (
                                         <div className="py-3 text-white">{getDisplayValue(date, 'OT_OUT') || '-'}</div>
@@ -528,6 +524,33 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                     </tbody>
                 </table>
             </div>
+        </div>
+    )
+}
+
+// Time input with an explicit clear button so a user can wipe a single
+// IN/OUT cell. Passing null up triggers the delete sentinel in handleSave.
+function TimeCellEditor({ value, onChange, ringColor }) {
+    const hasValue = value !== '' && value != null
+    return (
+        <div className="relative w-full h-full group/cell">
+            <input
+                type="time"
+                className="w-full h-full bg-black/50 text-white text-center focus:outline-none focus:bg-black focus:ring-1 pr-6"
+                style={{ '--tw-ring-color': ringColor }}
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+            />
+            {hasValue && (
+                <button
+                    type="button"
+                    onClick={() => onChange(null)}
+                    title="Clear this entry"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded-full bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white text-[10px] leading-none transition-colors"
+                >
+                    <X size={10} strokeWidth={3} />
+                </button>
+            )}
         </div>
     )
 }
