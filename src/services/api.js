@@ -150,7 +150,6 @@ export const api = {
     // creates: [{ type, dateObj: Date, timeStr: "HH:MM", reason?: string }]
     // deletes: iterable of logId strings
     saveDTRBatch: async (userId, { updates = [], creates = [], deletes = [] }) => {
-        console.log('[saveDTRBatch] userId:', userId, 'updates:', updates.length, 'creates:', creates.length, 'deletes:', deletes.length, deletes);
         const batch = writeBatch(db);
 
         for (const u of updates) {
@@ -162,7 +161,6 @@ export const api = {
         }
 
         for (const id of deletes) {
-            console.log('[saveDTRBatch] queuing delete for log id:', id);
             batch.delete(doc(db, "logs", id));
         }
 
@@ -180,7 +178,6 @@ export const api = {
         }
 
         await batch.commit();
-        console.log('[saveDTRBatch] batch.commit() resolved');
     },
 
     getUserProfile: async (uid) => {

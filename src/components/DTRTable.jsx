@@ -96,6 +96,34 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
         }))
     }
 
+    // Immediate delete: removes the matching Firestore log right away. The table
+    // re-reads history afterwards, so the cell instantly reflects the deletion.
+    const handleCellDelete = async (date, type) => {
+        const log = findLog(date, type)
+        const key = getCellKey(date, type)
+        if (!log) {
+            // Nothing saved yet — just clear the pending edit
+            setEdits(prev => {
+                const next = { ...prev }
+                delete next[key]
+                return next
+            })
+            return
+        }
+        const res = await api.deleteLog(log.id)
+        if (!res.success) {
+            alert("Failed to delete entry: " + (res.message || 'unknown error'))
+            return
+        }
+        // Drop any pending edit for this cell so it doesn't re-create on Save
+        setEdits(prev => {
+            const next = { ...prev }
+            delete next[key]
+            return next
+        })
+        if (onRefresh) await onRefresh()
+    }
+
     const handleSmartFill = () => {
         if (!window.confirm("Auto-fill Regular Time (9:00 AM - 6:00 PM) for Mon-Fri?\n\nThis will fill entries for the displayed period (excluding weekends). Existing entries won't be overwritten.")) return;
 
@@ -289,7 +317,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                 editSummaryParts.push(`${dateLabel}: ${changes.join(', ')}`)
             }
 
-            const payload = {
+            await api.saveDTRBatch(user.id, {
                 updates: batchUpdates,
                 creates: newLogs.map(nl => ({
                     type: nl.type,
@@ -298,11 +326,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                     reason: nl.reason || ''
                 })),
                 deletes: [...deletes]
-            }
-            console.log('[DTR save] edits:', edits)
-            console.log('[DTR save] payload:', payload)
-            await api.saveDTRBatch(user.id, payload)
-            console.log('[DTR save] commit OK; refreshing history')
+            })
 
             // Log the edit activity to Recent Activity
             if (editSummaryParts.length > 0) {
@@ -463,6 +487,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                         <TimeCellEditor
                                             value={getInputValue(date, 'IN')}
                                             onChange={(v) => handleEditChange(date, 'IN', v)}
+                                            onDelete={() => handleCellDelete(date, 'IN')}
                                             ringColor="#22c55e"
                                         />
                                     ) : (
@@ -476,6 +501,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                         <TimeCellEditor
                                             value={getInputValue(date, 'OUT')}
                                             onChange={(v) => handleEditChange(date, 'OUT', v)}
+                                            onDelete={() => handleCellDelete(date, 'OUT')}
                                             ringColor="#22c55e"
                                         />
                                     ) : (
@@ -489,6 +515,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                         <TimeCellEditor
                                             value={getInputValue(date, 'OT_IN')}
                                             onChange={(v) => handleEditChange(date, 'OT_IN', v)}
+                                            onDelete={() => handleCellDelete(date, 'OT_IN')}
                                             ringColor="#8b5cf6"
                                         />
                                     ) : (
@@ -502,6 +529,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                         <TimeCellEditor
                                             value={getInputValue(date, 'OT_OUT')}
                                             onChange={(v) => handleEditChange(date, 'OT_OUT', v)}
+                                            onDelete={() => handleCellDelete(date, 'OT_OUT')}
                                             ringColor="#8b5cf6"
                                         />
                                     ) : (
@@ -532,12 +560,24 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
     )
 }
 
-// Time input with an explicit clear button so a user can wipe a single
-// IN/OUT cell. Passing null up triggers the delete sentinel in handleSave.
-function TimeCellEditor({ value, onChange, ringColor }) {
+// Time input with an explicit delete button. Clicking × calls onDelete which
+// removes the matching Firestore log immediately (no batched-save dance).
+function TimeCellEditor({ value, onChange, onDelete, ringColor }) {
     const hasValue = value !== '' && value != null
+    const [deleting, setDeleting] = useState(false)
+
+    const handleDeleteClick = async () => {
+        if (deleting) return
+        setDeleting(true)
+        try {
+            await onDelete()
+        } finally {
+            setDeleting(false)
+        }
+    }
+
     return (
-        <div className="relative w-full h-full group/cell">
+        <div className="relative w-full h-full">
             <input
                 type="time"
                 className="w-full h-full bg-black/50 text-white text-center focus:outline-none focus:bg-black focus:ring-1 pr-6"
@@ -548,11 +588,12 @@ function TimeCellEditor({ value, onChange, ringColor }) {
             {hasValue && (
                 <button
                     type="button"
-                    onClick={() => onChange(null)}
-                    title="Clear this entry"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded-full bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white text-[10px] leading-none transition-colors"
+                    onClick={handleDeleteClick}
+                    disabled={deleting}
+                    title="Delete this entry"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded-full bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white text-[10px] leading-none transition-colors disabled:opacity-50"
                 >
-                    <X size={10} strokeWidth={3} />
+                    {deleting ? <Loader2 size={10} className="animate-spin" /> : <X size={10} strokeWidth={3} />}
                 </button>
             )}
         </div>
