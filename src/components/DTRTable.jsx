@@ -289,7 +289,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                 editSummaryParts.push(`${dateLabel}: ${changes.join(', ')}`)
             }
 
-            await api.saveDTRBatch(user.id, {
+            const payload = {
                 updates: batchUpdates,
                 creates: newLogs.map(nl => ({
                     type: nl.type,
@@ -298,7 +298,11 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                     reason: nl.reason || ''
                 })),
                 deletes: [...deletes]
-            })
+            }
+            console.log('[DTR save] edits:', edits)
+            console.log('[DTR save] payload:', payload)
+            await api.saveDTRBatch(user.id, payload)
+            console.log('[DTR save] commit OK; refreshing history')
 
             // Log the edit activity to Recent Activity
             if (editSummaryParts.length > 0) {
