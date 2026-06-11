@@ -206,14 +206,12 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                 for (const type of timeTypes) {
                     const timeStr = edits[`${dateStr}_${type}`]
                     if (timeStr === undefined) continue
-                    // "" is what <input type="time"> emits on partial/cleared input — treat
-                    // as no-change to avoid silently deleting the user's existing log.
-                    // null is the explicit "Clear" sentinel (see handleClearRecords).
-                    if (timeStr === '') continue
 
                     const matchingLogs = findAllLogs(dateObj, type)
 
-                    if (timeStr === null) {
+                    // null = explicit "Clear" button sentinel. "" = user actively cleared
+                    // this individual time input. Both mean: delete the log.
+                    if (timeStr === null || timeStr === '') {
                         if (matchingLogs.length > 0) {
                             matchingLogs.forEach(log => deletes.add(log.id))
                             addChange(dateStr, `${type} cleared`)
