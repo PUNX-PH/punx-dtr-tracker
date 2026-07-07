@@ -1,12 +1,15 @@
-import { LayoutDashboard, FileSpreadsheet, LogOut, Settings, Users, UserCheck, ChevronLeft, Send } from 'lucide-react'
+import { LayoutDashboard, FileSpreadsheet, LogOut, Settings, Users, UserCheck, ChevronLeft, Send, Folder } from 'lucide-react'
 
 export default function Sidebar({ activeTab, onTabChange, onLogout, user, onClose }) {
     const canSeeSenior = user.isSenior || user.role === 'super_admin'
+    const isAdmin = ['admin', 'super_admin'].includes(user.role)
 
     const menuItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
 
-        { id: 'admin', label: 'Admin Dashboard', icon: Users, disabled: !['admin', 'super_admin'].includes(user.role) },
+        { id: 'admin', label: 'Admin Dashboard', icon: Users, disabled: !isAdmin },
+
+        { id: 'cutoffs', label: 'Cutoffs', icon: Folder, disabled: !isAdmin },
 
         ...(canSeeSenior ? [{ id: 'senior', label: 'Senior Dashboard', icon: UserCheck }] : []),
     ]

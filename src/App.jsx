@@ -7,6 +7,7 @@ import Dashboard from './components/Dashboard'
 import Layout from './components/Layout'
 import AdminDashboard from './components/AdminDashboard'
 import SeniorDashboard from './components/SeniorDashboard'
+import CutoffsView from './components/CutoffsView'
 
 function App() {
     const [user, setUser] = useState(null)
@@ -91,6 +92,10 @@ function App() {
 
                     {activeTab === 'admin' && ['admin', 'super_admin'].includes(user.role) && (
                         <AdminDashboard currentUser={user} />
+                    )}
+
+                    {activeTab === 'cutoffs' && ['admin', 'super_admin'].includes(user.role) && (
+                        <CutoffsView />
                     )}
 
                     {activeTab === 'senior' && (user.isSenior || user.role === 'super_admin') && (
