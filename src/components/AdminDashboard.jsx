@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react'
-import { Search, User as UserIcon, Loader2, FileSpreadsheet } from 'lucide-react'
+import { Search, User as UserIcon, Loader2, FileSpreadsheet, Users, Folder } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { api } from '../services/api'
 import DTRTable from './DTRTable'
 import RecentActivityTable from './RecentActivityTable'
+import CutoffsView from './CutoffsView'
 
 export default function AdminDashboard({ currentUser }) {
+    const isSuperAdmin = currentUser.role === 'super_admin'
+    const [view, setView] = useState('employees') // 'employees' | 'cutoffs' (cutoffs is super_admin only)
     const [users, setUsers] = useState([])
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState('')
@@ -288,6 +291,31 @@ export default function AdminDashboard({ currentUser }) {
                 </div>
             </div>
 
+            {/* View Switcher: only super admins can see the Cutoffs folder view */}
+            {isSuperAdmin && (
+                <div className="flex items-center gap-2 bg-[#141419] rounded-2xl border border-[#1f1f23] p-1.5 w-fit">
+                    <button
+                        onClick={() => setView('employees')}
+                        className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-colors
+                            ${view === 'employees' ? 'bg-[#8b5cf6] text-white' : 'text-slate-500 hover:text-white'}`}
+                    >
+                        <Users size={14} />
+                        Employees
+                    </button>
+                    <button
+                        onClick={() => setView('cutoffs')}
+                        className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-colors
+                            ${view === 'cutoffs' ? 'bg-[#8b5cf6] text-white' : 'text-slate-500 hover:text-white'}`}
+                    >
+                        <Folder size={14} />
+                        Cutoffs
+                    </button>
+                </div>
+            )}
+
+            {view === 'cutoffs' && isSuperAdmin ? (
+                <CutoffsView />
+            ) : (
             <div className="flex flex-1 gap-6 overflow-hidden">
                 {/* User List Panel */}
                 <div className="w-80 flex flex-col gap-4">
@@ -652,6 +680,7 @@ export default function AdminDashboard({ currentUser }) {
                     )}
                 </div>
             </div>
+            )}
         </div>
     )
 }

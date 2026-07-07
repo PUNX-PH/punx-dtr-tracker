@@ -169,7 +169,7 @@ export default function CutoffsView() {
                     <div className="h-full flex flex-col items-center justify-center bg-[#141419] rounded-3xl border border-[#1f1f23] text-slate-500 py-16">
                         <Folder size={48} className="mb-4 opacity-20" />
                         <p className="text-lg font-medium">No cutoff periods found</p>
-                        <p className="text-sm text-slate-600 mt-1">Create one from the Admin Dashboard</p>
+                        <p className="text-sm text-slate-600 mt-1">Create one using the Active Cutoff panel above</p>
                     </div>
                 ) : (
                     sortedCutoffs.map(cutoff => {
