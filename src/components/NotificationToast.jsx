@@ -6,7 +6,8 @@ export default function NotificationToast({
     notification,
     onDismiss,
     onApprove,
-    onDecline
+    onDecline,
+    onNotificationClick
 }) {
     const [visible, setVisible] = useState(false)
 
@@ -26,6 +27,13 @@ export default function NotificationToast({
 
     if (!notification) return null
 
+    const isNavigable = !!notification.data?.employeeId
+    const handleBodyClick = () => {
+        if (!isNavigable) return
+        onNotificationClick?.(notification)
+        setVisible(false)
+    }
+
     return (
         <div className={`fixed top-[260px] right-4 md:right-8 z-[9999] transition-all duration-500 transform ${visible ? 'translate-y-0 opacity-100' : '-translate-y-10 opacity-0 pointer-events-none'}`}>
             <div className="bg-[#141419] border border-[#f6e05e]/50 p-6 rounded-2xl shadow-2xl relative bg-opacity-95 backdrop-blur-md w-96 max-w-[calc(100vw-2rem)]">
@@ -36,7 +44,10 @@ export default function NotificationToast({
                     <XCircle size={20} />
                 </button>
 
-                <div className="flex items-start gap-4">
+                <div
+                    className={`flex items-start gap-4 ${isNavigable ? 'cursor-pointer' : ''}`}
+                    onClick={handleBodyClick}
+                >
                     <div className={`p-3 rounded-xl shrink-0 ${notification.type === 'DTR_REJECTED' ? 'bg-red-500/10 text-red-500' : 'bg-[#f6e05e]/10 text-[#f6e05e]'}`}>
                         {notification.type === 'DTR_REJECTED' ? <XCircle size={24} /> : <Clock size={24} />}
                     </div>
@@ -49,13 +60,13 @@ export default function NotificationToast({
                         {(notification.type === 'OT_APPROVAL' || notification.type === 'DTR_APPROVAL') ? (
                             <div className="flex gap-3 w-full mt-1">
                                 <button
-                                    onClick={() => onApprove(notification)}
+                                    onClick={(e) => { e.stopPropagation(); onApprove(notification) }}
                                     className="text-xs font-bold text-[#22c55e] hover:text-[#16a34a] transition-colors uppercase tracking-wider"
                                 >
                                     Approve
                                 </button>
                                 <button
-                                    onClick={() => onDecline(notification)}
+                                    onClick={(e) => { e.stopPropagation(); onDecline(notification) }}
                                     className="text-xs font-bold text-red-500 hover:text-red-400 transition-colors uppercase tracking-wider ml-2"
                                 >
                                     Reject
@@ -63,7 +74,7 @@ export default function NotificationToast({
                             </div>
                         ) : (
                             <button
-                                onClick={handleClose}
+                                onClick={(e) => { e.stopPropagation(); handleClose() }}
                                 className={`text-xs font-bold transition-colors uppercase tracking-wider ${notification.type === 'DTR_REJECTED' ? 'text-red-500 hover:text-red-400' : 'text-[#f6e05e] hover:text-white'}`}
                             >
                                 Dismiss

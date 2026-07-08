@@ -5,7 +5,7 @@ import NotificationToast from './NotificationToast'
 import NotificationBell from './NotificationBell'
 import { api } from '../services/api'
 
-export default function Layout({ children, user, onLogout, activeTab, onTabChange }) {
+export default function Layout({ children, user, onLogout, activeTab, onTabChange, onNotificationNavigate }) {
     const [isSidebarOpen, setSidebarOpen] = useState(true)
     const [isMobile, setIsMobile] = useState(false)
     const [notification, setNotification] = useState(null)
@@ -85,6 +85,25 @@ export default function Layout({ children, user, onLogout, activeTab, onTabChang
         await api.markNotificationsRead(unread.map(n => n.id));
     }
 
+    // DTR-related notifications carry { submissionId, employeeId }, where
+    // submissionId is the `${employeeId}_${cutoffId}` composite doc id — pull
+    // the cutoffId back out so the target dashboard can pre-select it.
+    const getNotificationFocus = (notif) => {
+        const employeeId = notif?.data?.employeeId
+        if (!employeeId) return null
+        const submissionId = notif?.data?.submissionId
+        const prefix = `${employeeId}_`
+        const cutoffId = submissionId?.startsWith(prefix) ? submissionId.slice(prefix.length) : null
+        return { employeeId, cutoffId }
+    }
+
+    const handleNotificationClick = (notif) => {
+        const focus = getNotificationFocus(notif)
+        if (!focus) return
+        if (!notif.read) api.markNotificationRead(notif.id)
+        onNotificationNavigate?.(focus)
+    }
+
     return (
         <div className="flex h-screen bg-[#0f0f12] overflow-hidden relative">
             {/* Persistent bell — always visible across every dashboard */}
@@ -94,6 +113,7 @@ export default function Layout({ children, user, onLogout, activeTab, onTabChang
                 onDecline={handleDecline}
                 onMarkRead={handleMarkRead}
                 onMarkAllRead={handleMarkAllRead}
+                onNotificationClick={handleNotificationClick}
             />
 
             {/* Notification Toast (auto-pop for latest unread) */}
@@ -103,6 +123,7 @@ export default function Layout({ children, user, onLogout, activeTab, onTabChang
                     onDismiss={handleDismiss}
                     onApprove={handleApprove}
                     onDecline={handleDecline}
+                    onNotificationClick={handleNotificationClick}
                 />
             )}
 

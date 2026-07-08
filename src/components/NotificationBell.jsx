@@ -20,7 +20,8 @@ export default function NotificationBell({
     onApprove,
     onDecline,
     onMarkRead,
-    onMarkAllRead
+    onMarkAllRead,
+    onNotificationClick
 }) {
     const [open, setOpen] = useState(false)
     const wrapRef = useRef(null)
@@ -73,50 +74,55 @@ export default function NotificationBell({
                             </div>
                         ) : (
                             <div className="divide-y divide-[#1f1f23]">
-                                {notifications.map(n => (
-                                    <div
-                                        key={n.id}
-                                        className={`p-4 ${!n.read ? 'bg-[#1a1a22]' : ''}`}
-                                    >
-                                        <div className="flex items-start gap-3">
-                                            <div className="mt-0.5 shrink-0">{typeIcon(n.type)}</div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-start justify-between gap-2">
-                                                    <p className="text-sm font-bold text-white">{n.title}</p>
-                                                    {!n.read && <span className="w-2 h-2 bg-[#8b5cf6] rounded-full mt-1 shrink-0" />}
-                                                </div>
-                                                <p className="text-xs text-slate-400 mt-1 leading-relaxed break-words">
-                                                    {n.message}
-                                                </p>
-                                                <p className="text-[10px] text-slate-600 mt-2">{formatTime(n.createdAt)}</p>
+                                {notifications.map(n => {
+                                    const isNavigable = !!n.data?.employeeId
 
-                                                {ACTIONABLE_TYPES.has(n.type) && !n.read ? (
-                                                    <div className="flex gap-4 mt-3">
-                                                        <button
-                                                            onClick={() => onApprove(n)}
-                                                            className="text-xs font-bold text-[#22c55e] hover:text-[#16a34a] uppercase tracking-wider transition-colors"
-                                                        >
-                                                            Approve
-                                                        </button>
-                                                        <button
-                                                            onClick={() => onDecline(n)}
-                                                            className="text-xs font-bold text-red-500 hover:text-red-400 uppercase tracking-wider transition-colors"
-                                                        >
-                                                            Reject
-                                                        </button>
+                                    return (
+                                        <div
+                                            key={n.id}
+                                            onClick={isNavigable ? () => { onNotificationClick?.(n); setOpen(false) } : undefined}
+                                            className={`p-4 ${!n.read ? 'bg-[#1a1a22]' : ''} ${isNavigable ? 'cursor-pointer hover:bg-white/5' : ''}`}
+                                        >
+                                            <div className="flex items-start gap-3">
+                                                <div className="mt-0.5 shrink-0">{typeIcon(n.type)}</div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <p className="text-sm font-bold text-white">{n.title}</p>
+                                                        {!n.read && <span className="w-2 h-2 bg-[#8b5cf6] rounded-full mt-1 shrink-0" />}
                                                     </div>
-                                                ) : !n.read ? (
-                                                    <button
-                                                        onClick={() => onMarkRead(n)}
-                                                        className="text-xs font-bold text-slate-500 hover:text-white transition-colors mt-2 uppercase tracking-wider"
-                                                    >
-                                                        Mark as read
-                                                    </button>
-                                                ) : null}
+                                                    <p className="text-xs text-slate-400 mt-1 leading-relaxed break-words">
+                                                        {n.message}
+                                                    </p>
+                                                    <p className="text-[10px] text-slate-600 mt-2">{formatTime(n.createdAt)}</p>
+
+                                                    {ACTIONABLE_TYPES.has(n.type) && !n.read ? (
+                                                        <div className="flex gap-4 mt-3">
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); onApprove(n) }}
+                                                                className="text-xs font-bold text-[#22c55e] hover:text-[#16a34a] uppercase tracking-wider transition-colors"
+                                                            >
+                                                                Approve
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); onDecline(n) }}
+                                                                className="text-xs font-bold text-red-500 hover:text-red-400 uppercase tracking-wider transition-colors"
+                                                            >
+                                                                Reject
+                                                            </button>
+                                                        </div>
+                                                    ) : !n.read ? (
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); onMarkRead(n) }}
+                                                            className="text-xs font-bold text-slate-500 hover:text-white transition-colors mt-2 uppercase tracking-wider"
+                                                        >
+                                                            Mark as read
+                                                        </button>
+                                                    ) : null}
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    )
+                                })}
                             </div>
                         )}
                     </div>

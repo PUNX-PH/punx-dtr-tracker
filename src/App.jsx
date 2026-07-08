@@ -12,6 +12,7 @@ function App() {
     const [user, setUser] = useState(null)
     const [activeTab, setActiveTab] = useState('dashboard')
     const [loading, setLoading] = useState(true)
+    const [notificationFocus, setNotificationFocus] = useState(null) // { employeeId, cutoffId }
 
     useEffect(() => {
         // Listen for Firebase Auth changes (Persistence)
@@ -69,6 +70,16 @@ function App() {
         setActiveTab('dashboard')
     }
 
+    const handleNotificationNavigate = (focus) => {
+        if (!user || !focus?.employeeId) return
+        const targetTab = ['admin', 'super_admin'].includes(user.role)
+            ? 'admin'
+            : (user.isSenior ? 'senior' : null)
+        if (!targetTab) return
+        setActiveTab(targetTab)
+        setNotificationFocus(focus)
+    }
+
     if (loading) {
         return (
             <div className="min-h-screen bg-[#0f0f12] flex items-center justify-center">
@@ -86,15 +97,24 @@ function App() {
                     onLogout={handleLogout}
                     activeTab={activeTab}
                     onTabChange={setActiveTab}
+                    onNotificationNavigate={handleNotificationNavigate}
                 >
                     {activeTab === 'dashboard' && <Dashboard user={user} />}
 
                     {activeTab === 'admin' && ['admin', 'super_admin'].includes(user.role) && (
-                        <AdminDashboard currentUser={user} />
+                        <AdminDashboard
+                            currentUser={user}
+                            focusRequest={notificationFocus}
+                            onFocusHandled={() => setNotificationFocus(null)}
+                        />
                     )}
 
                     {activeTab === 'senior' && (user.isSenior || user.role === 'super_admin') && (
-                        <SeniorDashboard currentUser={user} />
+                        <SeniorDashboard
+                            currentUser={user}
+                            focusRequest={notificationFocus}
+                            onFocusHandled={() => setNotificationFocus(null)}
+                        />
                     )}
                 </Layout>
             ) : (

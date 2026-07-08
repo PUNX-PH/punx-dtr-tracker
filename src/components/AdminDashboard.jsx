@@ -6,7 +6,7 @@ import DTRTable from './DTRTable'
 import RecentActivityTable from './RecentActivityTable'
 import CutoffsView from './CutoffsView'
 
-export default function AdminDashboard({ currentUser }) {
+export default function AdminDashboard({ currentUser, focusRequest, onFocusHandled }) {
     const isSuperAdmin = currentUser.role === 'super_admin'
     const [view, setView] = useState('employees') // 'employees' | 'cutoffs' (cutoffs is super_admin only)
     const [users, setUsers] = useState([])
@@ -37,6 +37,23 @@ export default function AdminDashboard({ currentUser }) {
             loadHistory(selectedUser.id)
         }
     }, [selectedUser])
+
+    // Jump here from a notification click (e.g. "DTR Approval Required") —
+    // wait for the employee list to finish loading, then auto-select the
+    // employee (and their cutoff, if it still exists) named in the notification.
+    useEffect(() => {
+        if (!focusRequest?.employeeId || loading) return
+        const target = users.find(u => u.id === focusRequest.employeeId)
+        if (target) {
+            setView('employees')
+            setSelectedUser(target)
+            if (focusRequest.cutoffId) {
+                const targetCutoff = cutoffs.find(c => c.id === focusRequest.cutoffId)
+                if (targetCutoff) setCutoff(targetCutoff)
+            }
+        }
+        onFocusHandled?.()
+    }, [focusRequest, loading])
 
     const loadUsers = async () => {
         setLoading(true)

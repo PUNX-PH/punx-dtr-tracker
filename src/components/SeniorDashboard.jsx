@@ -4,7 +4,7 @@ import { api } from '../services/api'
 import DTRTable from './DTRTable'
 import RecentActivityTable from './RecentActivityTable'
 
-export default function SeniorDashboard({ currentUser }) {
+export default function SeniorDashboard({ currentUser, focusRequest, onFocusHandled }) {
     const [users, setUsers] = useState([])
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState('')
@@ -27,6 +27,22 @@ export default function SeniorDashboard({ currentUser }) {
     useEffect(() => {
         if (selectedUser) loadHistory(selectedUser.id)
     }, [selectedUser])
+
+    // Jump here from a notification click (e.g. "DTR Approval Required") —
+    // wait for the assigned-employee list to finish loading, then auto-select
+    // the employee (and their cutoff, if it still exists) named in the notification.
+    useEffect(() => {
+        if (!focusRequest?.employeeId || loading) return
+        const target = users.find(u => u.id === focusRequest.employeeId)
+        if (target) {
+            setSelectedUser(target)
+            if (focusRequest.cutoffId) {
+                const targetCutoff = cutoffs.find(c => c.id === focusRequest.cutoffId)
+                if (targetCutoff) setCutoff(targetCutoff)
+            }
+        }
+        onFocusHandled?.()
+    }, [focusRequest, loading])
 
     const loadUsers = async () => {
         setLoading(true)
