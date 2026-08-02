@@ -147,7 +147,7 @@ export const api = {
     // could silently leave a day half-written (fragmented).
     //
     // updates: [{ logId, newTimestamp?: Date, newReason?: string }]
-    // creates: [{ type, dateObj: Date, timeStr: "HH:MM", reason?: string }]
+    // creates: [{ type, dateObj: Date, timeStr: "HH:MM", reason?: string, session?: number }]
     // deletes: iterable of logId strings
     saveDTRBatch: async (userId, { updates = [], creates = [], deletes = [] }) => {
         const batch = writeBatch(db);
@@ -169,12 +169,16 @@ export const api = {
             const newDate = new Date(c.dateObj);
             newDate.setHours(parseInt(hours), parseInt(minutes));
             const newRef = doc(collection(db, "logs"));
-            batch.set(newRef, {
+            const newLog = {
                 employeeId: userId,
                 type: c.type,
                 timestamp: Timestamp.fromDate(newDate),
                 reason: c.reason || ''
-            });
+            };
+            // session distinguishes multiple OT_IN/OT_OUT pairs on the same day
+            // (split overtime). Omitted for IN/OUT/NOTE, which only ever have one.
+            if (c.session !== undefined) newLog.session = c.session;
+            batch.set(newRef, newLog);
         }
 
         await batch.commit();

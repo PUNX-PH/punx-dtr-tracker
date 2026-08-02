@@ -44,6 +44,8 @@ export default function RecentActivityTable({ history }) {
                                         'EDIT':   { label: 'EDITED',   color: '#f59e0b', dot: 'bg-[#f59e0b]' },
                                     }
                                     const config = typeConfig[log.type] || { label: log.type, color: '#64748b', dot: 'bg-slate-500' }
+                                    // Split OT: label the session number when it's not the first one
+                                    const sessionSuffix = (log.type === 'OT_IN' || log.type === 'OT_OUT') && log.session ? ` #${log.session + 1}` : ''
                                     const isManual = !!log.reason || log.type === 'OT_IN' || log.type === 'OT_OUT'
                                     const isEditLog = log.type === 'EDIT'
 
@@ -52,7 +54,7 @@ export default function RecentActivityTable({ history }) {
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
                                                     <div className={`w-2 h-2 rounded-full ${config.dot}`} />
-                                                    <span className="font-bold text-sm" style={{ color: config.color }}>{config.label}</span>
+                                                    <span className="font-bold text-sm" style={{ color: config.color }}>{config.label}{sessionSuffix}</span>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 text-sm text-slate-400 font-medium">

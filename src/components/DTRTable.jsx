@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Pencil, Save, X, Loader2, Zap, Trash2 } from 'lucide-react'
+import { Pencil, Save, X, Loader2, Zap, Trash2, Plus } from 'lucide-react'
 import { api } from '../services/api'
 
 export default function DTRTable({ user, history, onRefresh, initialDate, periodEnd, canEdit = true }) {
@@ -44,23 +44,59 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
         return dates
     }, [anchorDate, periodEnd])
 
-    const getCellKey = (date, type) => `${date.toDateString()}_${type}`
+    // session is only meaningful for OT_IN/OT_OUT (multiple OT sessions per day).
+    // Omit it for IN/OUT/REASON to keep their keys unchanged.
+    const getCellKey = (date, type, session) =>
+        session !== undefined ? `${date.toDateString()}_${type}_${session}` : `${date.toDateString()}_${type}`
 
-    // Helper to find existing log in history
-    const findLog = (date, type) => {
+    // Helper to find existing log in history. When session is omitted, matches
+    // any log of that type/date (used for IN/OUT, which never carry a session).
+    const findLog = (date, type, session) => {
         return history.find(h =>
             new Date(h.timestamp).toDateString() === date.toDateString() &&
-            h.type === type
+            h.type === type &&
+            (session === undefined || (h.session || 0) === session)
         )
     }
+
+    // Same as findLog but returns every match — used when saving to catch
+    // duplicate logs on the same (date, type, session) so they stay in sync.
+    const findAllLogs = (date, type, session) => history.filter(h =>
+        new Date(h.timestamp).toDateString() === date.toDateString() &&
+        h.type === type &&
+        (session === undefined || (h.session || 0) === session)
+    )
+
+    // Every OT session index that exists for this date, from saved history AND
+    // pending edits, always including session 0 so there's a blank slot to type
+    // into even when the day has no overtime yet.
+    const getOTSessionsForDate = (date) => {
+        const dateStr = date.toDateString()
+        const sessions = new Set([0])
+        history.forEach(h => {
+            if ((h.type === 'OT_IN' || h.type === 'OT_OUT') && new Date(h.timestamp).toDateString() === dateStr) {
+                sessions.add(h.session || 0)
+            }
+        })
+        Object.keys(edits).forEach(key => {
+            const m = key.match(/^(.+)_OT_(?:IN|OUT)_(\d+)$/)
+            if (m && m[1] === dateStr) sessions.add(parseInt(m[2]))
+        })
+        return [...sessions].sort((a, b) => a - b)
+    }
+
+    // Sessions that actually have a value to show (view mode skips empty slots)
+    const getVisibleOTSessions = (date) => getOTSessionsForDate(date).filter(session =>
+        getDisplayValue(date, 'OT_IN', session) || getDisplayValue(date, 'OT_OUT', session)
+    )
 
     // Helper to find ANY log for a specific date (to get/set reason), ignoring EDIT logs which are for activity tracking
     const findAnyLogForDate = (date) => {
         return history.find(h => h.type !== 'EDIT' && new Date(h.timestamp).toDateString() === date.toDateString())
     }
 
-    const getInputValue = (date, type) => {
-        const key = getCellKey(date, type)
+    const getInputValue = (date, type, session) => {
+        const key = getCellKey(date, type, session)
         if (edits[key] !== undefined) return edits[key] ?? ''
 
         if (type === 'REASON') {
@@ -69,38 +105,38 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
             return log?.reason || ''
         }
 
-        const log = findLog(date, type)
+        const log = findLog(date, type, session)
         if (log) {
             return new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
         }
         return ''
     }
 
-    const getDisplayValue = (date, type) => {
+    const getDisplayValue = (date, type, session) => {
         if (type === 'REASON') {
             const log = findAnyLogForDate(date)
             return log?.reason || ''
         }
 
-        const log = findLog(date, type)
+        const log = findLog(date, type, session)
         if (log) {
             return new Date(log.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })
         }
         return ''
     }
 
-    const handleEditChange = (date, type, value) => {
+    const handleEditChange = (date, type, value, session) => {
         setEdits(prev => ({
             ...prev,
-            [getCellKey(date, type)]: value
+            [getCellKey(date, type, session)]: value
         }))
     }
 
     // Immediate delete: removes the matching Firestore log right away. The table
     // re-reads history afterwards, so the cell instantly reflects the deletion.
-    const handleCellDelete = async (date, type) => {
-        const log = findLog(date, type)
-        const key = getCellKey(date, type)
+    const handleCellDelete = async (date, type, session) => {
+        const log = findLog(date, type, session)
+        const key = getCellKey(date, type, session)
         if (!log) {
             // Nothing saved yet — just clear the pending edit
             setEdits(prev => {
@@ -122,6 +158,46 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
             return next
         })
         if (onRefresh) await onRefresh()
+    }
+
+    // Removes an entire OT session (both its IN and OUT log, if present) in one go.
+    const handleSessionDelete = async (date, session) => {
+        const logIn = findLog(date, 'OT_IN', session)
+        const logOut = findLog(date, 'OT_OUT', session)
+
+        if (logIn) {
+            const res = await api.deleteLog(logIn.id)
+            if (!res.success) {
+                alert("Failed to delete entry: " + (res.message || 'unknown error'))
+                return
+            }
+        }
+        if (logOut) {
+            const res = await api.deleteLog(logOut.id)
+            if (!res.success) {
+                alert("Failed to delete entry: " + (res.message || 'unknown error'))
+                return
+            }
+        }
+
+        setEdits(prev => {
+            const next = { ...prev }
+            delete next[getCellKey(date, 'OT_IN', session)]
+            delete next[getCellKey(date, 'OT_OUT', session)]
+            return next
+        })
+        if (onRefresh) await onRefresh()
+    }
+
+    // Adds a fresh, empty OT session slot for this date (next available index).
+    const handleAddSession = (date) => {
+        const sessions = getOTSessionsForDate(date)
+        const nextSession = Math.max(...sessions) + 1
+        setEdits(prev => ({
+            ...prev,
+            [getCellKey(date, 'OT_IN', nextSession)]: '',
+            [getCellKey(date, 'OT_OUT', nextSession)]: ''
+        }))
     }
 
     const handleSmartFill = () => {
@@ -171,15 +247,16 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
         rows.forEach(date => {
             // For every row in the current view, set all time fields to empty string
             // This triggers the delete logic in handleSave
-            const types = ['IN', 'OUT', 'OT_IN', 'OT_OUT']
-            types.forEach(type => {
-                const key = getCellKey(date, type)
-                // null = explicit clear (vs "" which the time input can emit accidentally).
-                newEdits[key] = null
+            // null = explicit clear (vs "" which the time input can emit accidentally).
+            newEdits[getCellKey(date, 'IN')] = null
+            newEdits[getCellKey(date, 'OUT')] = null
+            getOTSessionsForDate(date).forEach(session => {
+                newEdits[getCellKey(date, 'OT_IN', session)] = null
+                newEdits[getCellKey(date, 'OT_OUT', session)] = null
             })
             // Optionally clear reasons too?
             // const keyReason = getCellKey(date, 'REASON')
-            // newEdits[keyReason] = "" 
+            // newEdits[keyReason] = ""
         })
 
         setEdits(newEdits)
@@ -192,25 +269,25 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
         try {
             const editSummaryParts = []
 
-            // 1. Identify distinct dates being edited
-            const editKeys = Object.keys(edits)
-            const datesToProcess = new Set()
-            const knownTypes = ['OT_IN', 'OT_OUT', 'IN', 'OUT', 'REASON']
-            editKeys.forEach(key => {
-                for (const type of knownTypes) {
-                    if (key.endsWith('_' + type)) {
-                        const dateStr = key.substring(0, key.length - type.length - 1)
-                        datesToProcess.add(dateStr)
-                        break
-                    }
-                }
-            })
+            // 1. Parse edit keys into { dateStr, type, session }. OT keys carry a
+            //    session index (`..._OT_IN_2`); IN/OUT/REASON never do.
+            const parseEditKey = (key) => {
+                let m = key.match(/^(.+)_(OT_IN|OT_OUT)_(\d+)$/)
+                if (m) return { dateStr: m[1], type: m[2], session: parseInt(m[3]) }
+                m = key.match(/^(.+)_(IN|OUT|REASON)$/)
+                if (m) return { dateStr: m[1], type: m[2], session: undefined }
+                return null
+            }
 
-            const timeTypes = ['IN', 'OUT', 'OT_IN', 'OT_OUT']
+            const parsedEntries = Object.keys(edits)
+                .map(key => ({ key, ...parseEditKey(key) }))
+                .filter(p => p.dateStr)
+
+            const datesToProcess = new Set(parsedEntries.map(p => p.dateStr))
 
             // 2. Build a plan: one entry per affected log/new log/delete
             const logUpdates = new Map() // logId -> { logId, log, newTimestamp?, newReason? }
-            const newLogs = []           // { type, dateObj, timeStr, dateStr, reason }
+            const newLogs = []           // { type, dateObj, timeStr, dateStr, reason, session? }
             const deletes = new Set()    // log ids
             const changedByDate = new Map() // dateStr -> changedFields[]
 
@@ -219,30 +296,26 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                 changedByDate.get(dateStr).push(change)
             }
 
-            // Find ALL logs for (date, type) so duplicates get updated together
-            const findAllLogs = (date, type) => history.filter(h =>
-                new Date(h.timestamp).toDateString() === date.toDateString() &&
-                h.type === type
-            )
-
             for (const dateStr of datesToProcess) {
                 const dateObj = new Date(dateStr)
                 const reason = edits[`${dateStr}_REASON`]
                 const reasonEdited = reason !== undefined
 
                 // Time edits
-                for (const type of timeTypes) {
-                    const timeStr = edits[`${dateStr}_${type}`]
+                const timeEntries = parsedEntries.filter(p => p.dateStr === dateStr && p.type !== 'REASON')
+                for (const { key, type, session } of timeEntries) {
+                    const timeStr = edits[key]
                     if (timeStr === undefined) continue
 
-                    const matchingLogs = findAllLogs(dateObj, type)
+                    const matchingLogs = findAllLogs(dateObj, type, session)
+                    const label = session !== undefined ? `OT session ${session + 1} ${type === 'OT_IN' ? 'IN' : 'OUT'}` : type
 
                     // null = explicit "Clear" button sentinel. "" = user actively cleared
                     // this individual time input. Both mean: delete the log.
                     if (timeStr === null || timeStr === '') {
                         if (matchingLogs.length > 0) {
                             matchingLogs.forEach(log => deletes.add(log.id))
-                            addChange(dateStr, `${type} cleared`)
+                            addChange(dateStr, `${label} cleared`)
                         }
                         continue
                     }
@@ -256,10 +329,10 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                             u.newTimestamp = newDate
                             logUpdates.set(log.id, u)
                         })
-                        addChange(dateStr, `${type} → ${timeStr}`)
+                        addChange(dateStr, `${label} → ${timeStr}`)
                     } else {
-                        newLogs.push({ type, dateObj, timeStr, dateStr, reason: undefined })
-                        addChange(dateStr, `${type} set to ${timeStr}`)
+                        newLogs.push({ type, dateObj, timeStr, dateStr, reason: undefined, session })
+                        addChange(dateStr, `${label} set to ${timeStr}`)
                     }
                 }
 
@@ -323,7 +396,8 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                     type: nl.type,
                     dateObj: nl.dateObj,
                     timeStr: nl.timeStr,
-                    reason: nl.reason || ''
+                    reason: nl.reason || '',
+                    session: nl.session
                 })),
                 deletes: [...deletes]
             })
@@ -464,8 +538,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                             <th className="py-2 text-[#22c55e] bg-[#22c55e]/5 border-r border-[#1f1f23] border-dashed border-white/10 w-32">IN</th>
                             <th className="py-2 text-[#22c55e] bg-[#22c55e]/5 border-r border-[#1f1f23] w-32">OUT</th>
 
-                            <th className="py-2 text-[#8b5cf6] bg-[#8b5cf6]/5 border-r border-[#1f1f23] border-dashed border-white/10 w-32">IN</th>
-                            <th className="py-2 text-[#8b5cf6] bg-[#8b5cf6]/5 border-r border-[#1f1f23] w-32">OUT</th>
+                            <th colSpan={2} className="py-2 text-[#8b5cf6] bg-[#8b5cf6]/5 border-r border-[#1f1f23] w-32">SESSIONS</th>
                             <th className="bg-[#141419]"></th>
                         </tr>
                     </thead>
@@ -509,31 +582,58 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                     )}
                                 </td>
 
-                                {/* Overtime IN */}
-                                <td className="p-0 border-r border-[#1f1f23] border-dashed border-white/10 bg-[#8b5cf6]/5 font-mono">
+                                {/* Overtime — one or more sessions per day */}
+                                <td colSpan={2} className="p-2 border-r border-[#1f1f23] bg-[#8b5cf6]/5 font-mono align-top">
                                     {editMode ? (
-                                        <TimeCellEditor
-                                            value={getInputValue(date, 'OT_IN')}
-                                            onChange={(v) => handleEditChange(date, 'OT_IN', v)}
-                                            onDelete={() => handleCellDelete(date, 'OT_IN')}
-                                            ringColor="#8b5cf6"
-                                        />
+                                        <div className="flex flex-col gap-1.5 items-start">
+                                            {getOTSessionsForDate(date).map(session => (
+                                                <div key={session} className="flex items-center gap-1">
+                                                    <div className="w-24 h-8">
+                                                        <TimeCellEditor
+                                                            value={getInputValue(date, 'OT_IN', session)}
+                                                            onChange={(v) => handleEditChange(date, 'OT_IN', v, session)}
+                                                            onDelete={() => handleCellDelete(date, 'OT_IN', session)}
+                                                            ringColor="#8b5cf6"
+                                                        />
+                                                    </div>
+                                                    <span className="text-slate-600 text-xs">-</span>
+                                                    <div className="w-24 h-8">
+                                                        <TimeCellEditor
+                                                            value={getInputValue(date, 'OT_OUT', session)}
+                                                            onChange={(v) => handleEditChange(date, 'OT_OUT', v, session)}
+                                                            onDelete={() => handleCellDelete(date, 'OT_OUT', session)}
+                                                            ringColor="#8b5cf6"
+                                                        />
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleSessionDelete(date, session)}
+                                                        title="Remove this OT session"
+                                                        className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-slate-600 hover:bg-red-500/20 hover:text-red-400 transition-colors"
+                                                    >
+                                                        <Trash2 size={11} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleAddSession(date)}
+                                                className="text-[10px] text-[#8b5cf6] hover:text-white flex items-center gap-1 mt-0.5"
+                                            >
+                                                <Plus size={11} />
+                                                Add session
+                                            </button>
+                                        </div>
+                                    ) : getVisibleOTSessions(date).length > 0 ? (
+                                        <div className="flex flex-col gap-1">
+                                            {getVisibleOTSessions(date).map(session => (
+                                                <div key={session} className="text-white">
+                                                    {getDisplayValue(date, 'OT_IN', session) || '–'} – {getDisplayValue(date, 'OT_OUT', session) || '–'}
+                                                </div>
+                                            ))}
+                                        </div>
                                     ) : (
-                                        <div className="py-3 text-white">{getDisplayValue(date, 'OT_IN') || '-'}</div>
-                                    )}
-                                </td>
-
-                                {/* Overtime OUT */}
-                                <td className="p-0 border-r border-[#1f1f23] bg-[#8b5cf6]/5 font-mono">
-                                    {editMode ? (
-                                        <TimeCellEditor
-                                            value={getInputValue(date, 'OT_OUT')}
-                                            onChange={(v) => handleEditChange(date, 'OT_OUT', v)}
-                                            onDelete={() => handleCellDelete(date, 'OT_OUT')}
-                                            ringColor="#8b5cf6"
-                                        />
-                                    ) : (
-                                        <div className="py-3 text-white">{getDisplayValue(date, 'OT_OUT') || '-'}</div>
+                                        <div className="text-white py-1">-</div>
                                     )}
                                 </td>
 

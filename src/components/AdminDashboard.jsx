@@ -170,13 +170,29 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
 
             const formatTime = (log) => log ? new Date(log.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : '';
 
+            // Split OT: a day can have multiple OT_IN/OT_OUT pairs, distinguished
+            // by a `session` index. Join them into one "9:00 AM-10:00 AM, 3:00 PM-6:00 PM" cell.
+            const otLogs = userHistory.filter(h =>
+                (h.type === 'OT_IN' || h.type === 'OT_OUT') &&
+                new Date(h.timestamp).toDateString() === date.toDateString()
+            );
+            const otBySession = {};
+            otLogs.forEach(l => {
+                const s = l.session || 0;
+                otBySession[s] = otBySession[s] || {};
+                otBySession[s][l.type] = l;
+            });
+            const otSessions = Object.keys(otBySession)
+                .sort((a, b) => a - b)
+                .map(s => `${formatTime(otBySession[s].OT_IN) || '—'}-${formatTime(otBySession[s].OT_OUT) || '—'}`)
+                .join(', ');
+
             return {
                 Date: dateStr,
                 Day: dayStr,
                 "Time In": formatTime(findLog('IN')),
                 "Time Out": formatTime(findLog('OUT')),
-                "OT In": formatTime(findLog('OT_IN')),
-                "OT Out": formatTime(findLog('OT_OUT')),
+                "Overtime": otSessions,
                 "Notes": findAnyLog()?.reason || ''
             };
         });
@@ -190,8 +206,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
             { wch: 15 }, // Day
             { wch: 15 }, // In
             { wch: 15 }, // Out
-            { wch: 15 }, // OT In
-            { wch: 15 }, // OT Out
+            { wch: 30 }, // Overtime
             { wch: 30 }  // Notes
         ];
         ws['!cols'] = wscols;
