@@ -582,13 +582,14 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                     )}
                                 </td>
 
-                                {/* Overtime — one or more sessions per day */}
-                                <td colSpan={2} className="p-2 border-r border-[#1f1f23] bg-[#8b5cf6]/5 font-mono align-top">
+                                {/* Overtime — one or more sessions per day, each row matching the
+                                    h-12 height/flush edges of the Regular Time cells beside it */}
+                                <td colSpan={2} className="p-0 border-r border-[#1f1f23] bg-[#8b5cf6]/5 font-mono align-top">
                                     {editMode ? (
-                                        <div className="flex flex-col gap-1.5 items-start">
+                                        <div className="flex flex-col divide-y divide-[#1f1f23]/60">
                                             {getOTSessionsForDate(date).map(session => (
-                                                <div key={session} className="flex items-center gap-1">
-                                                    <div className="w-24 h-8">
+                                                <div key={session} className="h-12 flex items-center gap-2 px-2">
+                                                    <div className="w-24 h-8 shrink-0">
                                                         <TimeCellEditor
                                                             value={getInputValue(date, 'OT_IN', session)}
                                                             onChange={(v) => handleEditChange(date, 'OT_IN', v, session)}
@@ -596,8 +597,8 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                                             ringColor="#8b5cf6"
                                                         />
                                                     </div>
-                                                    <span className="text-slate-600 text-xs">-</span>
-                                                    <div className="w-24 h-8">
+                                                    <span className="text-slate-600 text-xs shrink-0">-</span>
+                                                    <div className="w-24 h-8 shrink-0">
                                                         <TimeCellEditor
                                                             value={getInputValue(date, 'OT_OUT', session)}
                                                             onChange={(v) => handleEditChange(date, 'OT_OUT', v, session)}
@@ -615,25 +616,27 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                                     </button>
                                                 </div>
                                             ))}
-                                            <button
-                                                type="button"
-                                                onClick={() => handleAddSession(date)}
-                                                className="text-[10px] text-[#8b5cf6] hover:text-white flex items-center gap-1 mt-0.5"
-                                            >
-                                                <Plus size={11} />
-                                                Add session
-                                            </button>
+                                            <div className="px-2 py-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleAddSession(date)}
+                                                    className="text-[10px] text-[#8b5cf6] hover:text-white flex items-center gap-1"
+                                                >
+                                                    <Plus size={11} />
+                                                    Add session
+                                                </button>
+                                            </div>
                                         </div>
                                     ) : getVisibleOTSessions(date).length > 0 ? (
-                                        <div className="flex flex-col gap-1">
+                                        <div className="flex flex-col divide-y divide-[#1f1f23]/60">
                                             {getVisibleOTSessions(date).map(session => (
-                                                <div key={session} className="text-white">
+                                                <div key={session} className="h-12 flex items-center px-2 text-white">
                                                     {getDisplayValue(date, 'OT_IN', session) || '–'} – {getDisplayValue(date, 'OT_OUT', session) || '–'}
                                                 </div>
                                             ))}
                                         </div>
                                     ) : (
-                                        <div className="text-white py-1">-</div>
+                                        <div className="h-12 flex items-center justify-center text-white">-</div>
                                     )}
                                 </td>
 

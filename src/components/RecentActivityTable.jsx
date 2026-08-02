@@ -1,5 +1,16 @@
 import { useState } from 'react'
-import { CheckCircle2, Pencil, ChevronLeft, ChevronRight, Eye, X } from 'lucide-react'
+import { CheckCircle2, Pencil, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Eye, X } from 'lucide-react'
+
+// Windowed page numbers around `current` (e.g. 7 8 [9] 10 11), so the control
+// stays a fixed width regardless of how many pages of history exist.
+const getPageWindow = (current, total, windowSize = 5) => {
+    let start = Math.max(1, current - Math.floor(windowSize / 2))
+    let end = Math.min(total, start + windowSize - 1)
+    start = Math.max(1, end - windowSize + 1)
+    const pages = []
+    for (let p = start; p <= end; p++) pages.push(p)
+    return pages
+}
 
 export default function RecentActivityTable({ history }) {
     const [activityPage, setActivityPage] = useState(1)
@@ -97,57 +108,75 @@ export default function RecentActivityTable({ history }) {
                 </div>
 
                 {/* Pagination Controls */}
-                {history.length > ITEMS_PER_PAGE && (
-                    <div className="p-4 border-t border-[#1f1f23] flex items-center justify-between">
-                        <p className="text-xs text-slate-500">
-                            Showing {((activityPage - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(activityPage * ITEMS_PER_PAGE, history.length)} of {history.length} entries
-                        </p>
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => setActivityPage(p => Math.max(1, p - 1))}
-                                disabled={activityPage === 1}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                                    activityPage === 1
-                                        ? 'bg-[#1f1f23] text-slate-600 cursor-not-allowed'
-                                        : 'bg-[#1f1f23] text-white hover:bg-[#2d2d35] border border-slate-700 hover:border-[#8b5cf6]'
-                                }`}
-                            >
-                                <ChevronLeft size={14} />
-                                Previous
-                            </button>
+                {history.length > ITEMS_PER_PAGE && (() => {
+                    const totalPages = Math.ceil(history.length / ITEMS_PER_PAGE)
+                    const isFirst = activityPage === 1
+                    const isLast = activityPage >= totalPages
+                    const navBtn = "flex items-center justify-center w-8 h-8 rounded-lg text-xs font-bold transition-all"
+                    const navBtnState = (disabled) => disabled
+                        ? 'bg-[#1f1f23] text-slate-600 cursor-not-allowed'
+                        : 'bg-[#1f1f23] text-white hover:bg-[#2d2d35] border border-slate-700 hover:border-[#8b5cf6]'
 
-                            {/* Page Number Indicators */}
+                    return (
+                        <div className="p-4 border-t border-[#1f1f23] flex items-center justify-between">
+                            <p className="text-xs text-slate-500">
+                                Showing {((activityPage - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(activityPage * ITEMS_PER_PAGE, history.length)} of {history.length} entries
+                            </p>
                             <div className="flex items-center gap-1">
-                                {Array.from({ length: Math.ceil(history.length / ITEMS_PER_PAGE) }, (_, i) => i + 1).map(page => (
-                                    <button
-                                        key={page}
-                                        onClick={() => setActivityPage(page)}
-                                        className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${
-                                            page === activityPage
-                                                ? 'bg-[#8b5cf6] text-white shadow-lg shadow-purple-900/30'
-                                                : 'bg-[#1f1f23] text-slate-400 hover:bg-[#2d2d35] hover:text-white'
-                                        }`}
-                                    >
-                                        {page}
-                                    </button>
-                                ))}
-                            </div>
+                                <button
+                                    onClick={() => setActivityPage(1)}
+                                    disabled={isFirst}
+                                    title="First page"
+                                    className={`${navBtn} ${navBtnState(isFirst)}`}
+                                >
+                                    <ChevronsLeft size={14} />
+                                </button>
+                                <button
+                                    onClick={() => setActivityPage(p => Math.max(1, p - 1))}
+                                    disabled={isFirst}
+                                    title="Previous page"
+                                    className={`${navBtn} ${navBtnState(isFirst)}`}
+                                >
+                                    <ChevronLeft size={14} />
+                                </button>
 
-                            <button
-                                onClick={() => setActivityPage(p => Math.min(Math.ceil(history.length / ITEMS_PER_PAGE), p + 1))}
-                                disabled={activityPage >= Math.ceil(history.length / ITEMS_PER_PAGE)}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                                    activityPage >= Math.ceil(history.length / ITEMS_PER_PAGE)
-                                        ? 'bg-[#1f1f23] text-slate-600 cursor-not-allowed'
-                                        : 'bg-[#1f1f23] text-white hover:bg-[#2d2d35] border border-slate-700 hover:border-[#8b5cf6]'
-                                }`}
-                            >
-                                Next
-                                <ChevronRight size={14} />
-                            </button>
+                                {/* Windowed page number indicators (fixed-width, doesn't grow with page count) */}
+                                <div className="flex items-center gap-1 mx-1">
+                                    {getPageWindow(activityPage, totalPages).map(page => (
+                                        <button
+                                            key={page}
+                                            onClick={() => setActivityPage(page)}
+                                            className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${
+                                                page === activityPage
+                                                    ? 'bg-[#8b5cf6] text-white shadow-lg shadow-purple-900/30'
+                                                    : 'bg-[#1f1f23] text-slate-400 hover:bg-[#2d2d35] hover:text-white'
+                                            }`}
+                                        >
+                                            {page}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <button
+                                    onClick={() => setActivityPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={isLast}
+                                    title="Next page"
+                                    className={`${navBtn} ${navBtnState(isLast)}`}
+                                >
+                                    <ChevronRight size={14} />
+                                </button>
+                                <button
+                                    onClick={() => setActivityPage(totalPages)}
+                                    disabled={isLast}
+                                    title="Last page"
+                                    className={`${navBtn} ${navBtnState(isLast)}`}
+                                >
+                                    <ChevronsRight size={14} />
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )
+                })()}
             </div>
 
             {/* Edit Detail Modal */}
