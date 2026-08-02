@@ -165,28 +165,28 @@ export default function Dashboard({ user }) {
             {/* Cutoff Alert - Compact Popup */}
             {showCutoffAlert && activeCutoff && (
                 <div className="fixed top-24 right-4 md:right-8 z-50 animate-in slide-in-from-right fade-in duration-500 max-w-sm w-full">
-                    <div className="bg-[#141419] border border-[#f6e05e]/50 p-6 rounded-2xl shadow-2xl relative bg-opacity-95 backdrop-blur-md">
+                    <div className="bg-[var(--surface-1)] border border-[var(--accent-yellow)]/50 p-6 rounded-2xl shadow-2xl relative bg-opacity-95 backdrop-blur-md">
                         <button
                             onClick={() => setShowCutoffAlert(false)}
-                            className="absolute top-3 right-3 text-slate-500 hover:text-white transition-colors"
+                            className="absolute top-3 right-3 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
                         >
                             <XCircle size={20} />
                         </button>
 
                         <div className="flex items-start gap-4">
-                            <div className="p-3 bg-[#f6e05e]/10 text-[#f6e05e] rounded-xl shrink-0">
+                            <div className="p-3 bg-[var(--accent-yellow)]/10 text-[var(--accent-yellow)] rounded-xl shrink-0">
                                 <Clock size={24} />
                             </div>
                             <div>
-                                <h3 className="text-lg font-bold text-white mb-1">DTR Cutoff Active!</h3>
-                                <p className="text-slate-400 text-xs mb-3 leading-relaxed">
-                                    Period: <span className="text-[#f6e05e] font-mono font-bold">
+                                <h3 className="text-lg font-bold text-[var(--text-primary)] mb-1">DTR Cutoff Active!</h3>
+                                <p className="text-[var(--text-secondary)] text-xs mb-3 leading-relaxed">
+                                    Period: <span className="text-[var(--accent-yellow)] font-mono font-bold">
                                         {new Date(activeCutoff.startDate.toDate()).toLocaleDateString('en-GB')} - {new Date(activeCutoff.endDate.toDate()).toLocaleDateString('en-GB')}
                                     </span>
                                 </p>
                                 <button
                                     onClick={() => setShowCutoffAlert(false)}
-                                    className="text-xs font-bold text-[#f6e05e] hover:text-white transition-colors uppercase tracking-wider"
+                                    className="text-xs font-bold text-[var(--accent-yellow)] hover:text-[var(--text-primary)] transition-colors uppercase tracking-wider"
                                 >
                                     Dismiss
                                 </button>
@@ -199,20 +199,20 @@ export default function Dashboard({ user }) {
             {/* Success Overlay */}
             {showSuccess && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm pointer-events-none">
-                    <div className="bg-[#141419] border border-[#22c55e] px-8 py-6 rounded-2xl flex flex-col items-center shadow-xl shadow-green-900/20 animate-in zoom-in">
-                        <CheckCircle2 size={48} className="text-[#22c55e] mb-2" />
-                        <span className="text-[#22c55e] font-bold text-lg">Request Successful</span>
+                    <div className="bg-[var(--surface-1)] border border-[var(--accent-green)] px-8 py-6 rounded-2xl flex flex-col items-center shadow-xl shadow-green-900/20 animate-in zoom-in">
+                        <CheckCircle2 size={48} className="text-[var(--accent-green)] mb-2" />
+                        <span className="text-[var(--accent-green)] font-bold text-lg">Request Successful</span>
                     </div>
                 </div>
             )}
 
             {/* Header Section */}
             <div className="flex flex-col gap-1">
-                <h2 className="text-3xl font-bold text-white">Dashboard</h2>
+                <h2 className="text-3xl font-bold text-[var(--text-primary)]">Dashboard</h2>
                 <div className="flex items-center gap-2">
-                    <p className="text-slate-500">System overview and activity log</p>
+                    <p className="text-[var(--text-muted)]">System overview and activity log</p>
                     {activeCutoff && (
-                        <span className="px-2 py-0.5 bg-[#f6e05e]/10 text-[#f6e05e] text-[10px] font-bold uppercase rounded">
+                        <span className="px-2 py-0.5 bg-[var(--accent-yellow)]/10 text-[var(--accent-yellow)] text-[10px] font-bold uppercase rounded">
                             Cutoff: {new Date(activeCutoff.startDate.toDate()).toLocaleDateString('en-GB')} - {new Date(activeCutoff.endDate.toDate()).toLocaleDateString('en-GB')}
                         </span>
                     )}
@@ -223,12 +223,12 @@ export default function Dashboard({ user }) {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 
                 {/* Clock Card */}
-                <div className="bg-[#141419] p-6 rounded-3xl border border-[#1f1f23] hover:border-[#8b5cf6]/50 transition-colors shadow-lg shadow-black/50 lg:col-span-2">
+                <div className="bg-[var(--surface-1)] p-6 rounded-3xl border border-[var(--border)] hover:border-[var(--accent-purple)]/50 transition-colors shadow-lg shadow-black/50 lg:col-span-2">
                     <div className="flex items-center gap-4 mb-4">
-                        <div className="p-3 bg-[#8b5cf6]/10 rounded-xl text-[#8b5cf6]">
+                        <div className="p-3 bg-[var(--accent-purple)]/10 rounded-xl text-[var(--accent-purple)]">
                             <Clock size={24} />
                         </div>
-                        <span className="text-slate-400 font-medium tracking-wide text-xs uppercase">Current Time</span>
+                        <span className="text-[var(--text-secondary)] font-medium tracking-wide text-xs uppercase">Current Time</span>
                     </div>
                     <div className="mt-2 text-center md:text-left">
                         <ClockComp />
@@ -239,42 +239,42 @@ export default function Dashboard({ user }) {
                 <button
                     onClick={() => handleLog('IN')}
                     disabled={processing || hasTimeIn}
-                    className={`bg-[#141419] p-6 rounded-3xl border border-[#1f1f23] text-left transition-all duration-300 group relative overflow-hidden
-                    ${hasTimeIn ? 'opacity-50 cursor-not-allowed' : 'hover:border-[#22c55e] hover:-translate-y-1 hover:shadow-lg hover:shadow-[#22c55e]/10'}
+                    className={`bg-[var(--surface-1)] p-6 rounded-3xl border border-[var(--border)] text-left transition-all duration-300 group relative overflow-hidden
+                    ${hasTimeIn ? 'opacity-50 cursor-not-allowed' : 'hover:border-[var(--accent-green)] hover:-translate-y-1 hover:shadow-lg hover:shadow-[var(--accent-green)]/10'}
                 `}
                 >
                     <div className="relative z-10">
-                        <div className="p-3 bg-[#22c55e]/10 w-fit rounded-xl text-[#22c55e] mb-6">
+                        <div className="p-3 bg-[var(--accent-green)]/10 w-fit rounded-xl text-[var(--accent-green)] mb-6">
                             <CheckCircle size={24} />
                         </div>
-                        <h3 className="text-4xl font-bold text-white mb-1">TIME IN</h3>
-                        <p className="text-xs font-semibold tracking-widest text-[#22c55e] uppercase">
+                        <h3 className="text-4xl font-bold text-[var(--text-primary)] mb-1">TIME IN</h3>
+                        <p className="text-xs font-semibold tracking-widest text-[var(--accent-green)] uppercase">
                             {hasTimeIn ? 'ALREADY LOGGED' : 'START SHIFT'}
                         </p>
                     </div>
                     {/* Glow Effect */}
-                    <div className="absolute -right-10 -bottom-10 w-32 h-32 bg-[#22c55e]/10 blur-3xl rounded-full group-hover:bg-[#22c55e]/20 transition-all" />
+                    <div className="absolute -right-10 -bottom-10 w-32 h-32 bg-[var(--accent-green)]/10 blur-3xl rounded-full group-hover:bg-[var(--accent-green)]/20 transition-all" />
                 </button>
 
                 {/* Time Out Card */}
                 <button
                     onClick={() => handleLog('OUT')}
                     disabled={processing || hasTimeOut}
-                    className={`bg-[#141419] p-6 rounded-3xl border border-[#1f1f23] text-left transition-all duration-300 group relative overflow-hidden
-                    ${hasTimeOut ? 'opacity-50 cursor-not-allowed' : 'hover:border-red-500 hover:-translate-y-1 hover:shadow-lg hover:shadow-red-500/10'}
+                    className={`bg-[var(--surface-1)] p-6 rounded-3xl border border-[var(--border)] text-left transition-all duration-300 group relative overflow-hidden
+                    ${hasTimeOut ? 'opacity-50 cursor-not-allowed' : 'hover:border-[var(--accent-red)] hover:-translate-y-1 hover:shadow-lg hover:shadow-red-500/10'}
                 `}
                 >
                     <div className="relative z-10">
-                        <div className="p-3 bg-red-500/10 w-fit rounded-xl text-red-500 mb-6">
+                        <div className="p-3 bg-[var(--accent-red)]/10 w-fit rounded-xl text-[var(--accent-red)] mb-6">
                             <XCircle size={24} />
                         </div>
-                        <h3 className="text-4xl font-bold text-white mb-1">TIME OUT</h3>
-                        <p className="text-xs font-semibold tracking-widest text-red-500 uppercase">
+                        <h3 className="text-4xl font-bold text-[var(--text-primary)] mb-1">TIME OUT</h3>
+                        <p className="text-xs font-semibold tracking-widest text-[var(--accent-red)] uppercase">
                             {hasTimeOut ? 'ALREADY LOGGED' : 'END SHIFT'}
                         </p>
                     </div>
                     {/* Glow Effect */}
-                    <div className="absolute -right-10 -bottom-10 w-32 h-32 bg-red-500/10 blur-3xl rounded-full group-hover:bg-red-500/20 transition-all" />
+                    <div className="absolute -right-10 -bottom-10 w-32 h-32 bg-[var(--accent-red)]/10 blur-3xl rounded-full group-hover:bg-[var(--accent-red)]/20 transition-all" />
                 </button>
             </div>
 
@@ -290,40 +290,40 @@ export default function Dashboard({ user }) {
                     />
 
                     {/* Submission Panel */}
-                    <div className="bg-[#141419] rounded-3xl border border-[#1f1f23] p-6 mt-8">
-                        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                            <Send size={20} className="text-[#8b5cf6]" />
+                    <div className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] p-6 mt-8">
+                        <h3 className="text-xl font-bold text-[var(--text-primary)] mb-4 flex items-center gap-2">
+                            <Send size={20} className="text-[var(--accent-purple)]" />
                             Submit DTR
                         </h3>
 
                         {!activeCutoff ? (
-                            <div className="text-slate-500 text-sm">No active cutoff period.</div>
+                            <div className="text-[var(--text-muted)] text-sm">No active cutoff period.</div>
                         ) : submission && submission.status !== 'rejected' ? (
                             <div className="space-y-4">
                                 {submission.status === 'approved' ? (
-                                    <div className="flex items-start gap-4 p-4 bg-[#22c55e]/10 border border-[#22c55e]/20 rounded-2xl animate-in fade-in slide-in-from-top-2">
-                                        <div className="w-10 h-10 rounded-full bg-[#22c55e]/20 flex items-center justify-center text-[#22c55e] shrink-0">
+                                    <div className="flex items-start gap-4 p-4 bg-[var(--accent-green)]/10 border border-[var(--accent-green)]/20 rounded-2xl animate-in fade-in slide-in-from-top-2">
+                                        <div className="w-10 h-10 rounded-full bg-[var(--accent-green)]/20 flex items-center justify-center text-[var(--accent-green)] shrink-0">
                                             <CheckCircle size={24} />
                                         </div>
                                         <div>
-                                            <p className="text-[#22c55e] font-bold mb-1">DTR Approved</p>
-                                            <p className="text-xs text-[#22c55e]/80 leading-relaxed max-w-lg">
+                                            <p className="text-[var(--accent-green)] font-bold mb-1">DTR Approved</p>
+                                            <p className="text-xs text-[var(--accent-green)]/80 leading-relaxed max-w-lg">
                                                 Great news! Your DTR has been fully reviewed and approved by your senior. No further actions are required.
                                             </p>
-                                            <p className="text-[10px] text-[#22c55e]/60 mt-2">
+                                            <p className="text-[10px] text-[var(--accent-green)]/60 mt-2">
                                                 Submitted on {new Date(submission.submittedAt.toDate()).toLocaleString()}
                                             </p>
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl animate-in fade-in">
+                                    <div className="flex items-center justify-between bg-[var(--accent-amber)]/10 border border-[var(--accent-amber)]/20 p-4 rounded-2xl animate-in fade-in">
                                         <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-500">
+                                            <div className="w-10 h-10 rounded-full bg-[var(--accent-amber)]/20 flex items-center justify-center text-[var(--accent-amber)]">
                                                 <Clock size={24} />
                                             </div>
                                             <div>
-                                                <p className="text-amber-500 font-bold">DTR Submitted (Pending Review)</p>
-                                                <p className="text-xs text-amber-500/80">
+                                                <p className="text-[var(--accent-amber)] font-bold">DTR Submitted (Pending Review)</p>
+                                                <p className="text-xs text-[var(--accent-amber)]/80">
                                                     Submitted on {new Date(submission.submittedAt.toDate()).toLocaleString()}
                                                 </p>
                                             </div>
@@ -339,9 +339,9 @@ export default function Dashboard({ user }) {
                                                     }
                                                 }
                                             }}
-                                            className="px-4 py-2 bg-[#1f1f23] hover:bg-[#2d2d35] text-white text-xs font-bold rounded-xl border border-amber-500/30 hover:border-amber-500 transition-all shadow-lg shadow-black/20 flex items-center gap-2 group shrink-0"
+                                            className="px-4 py-2 bg-[var(--surface-3)] hover:bg-[var(--surface-3-hover)] text-[var(--text-primary)] text-xs font-bold rounded-xl border border-[var(--accent-amber)]/30 hover:border-[var(--accent-amber)] transition-all shadow-lg shadow-black/20 flex items-center gap-2 group shrink-0"
                                         >
-                                            <Pencil size={14} className="group-hover:text-amber-500 transition-colors" />
+                                            <Pencil size={14} className="group-hover:text-[var(--accent-amber)] transition-colors" />
                                             Resubmit / Update
                                         </button>
                                     </div>
@@ -350,13 +350,13 @@ export default function Dashboard({ user }) {
                         ) : (
                             <div className="space-y-4">
                                 {submission && submission.status === 'rejected' && (
-                                    <div className="flex items-start gap-4 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl animate-in fade-in slide-in-from-top-2">
-                                        <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center text-red-500 shrink-0">
+                                    <div className="flex items-start gap-4 p-4 bg-[var(--accent-red)]/10 border border-[var(--accent-red)]/20 rounded-2xl animate-in fade-in slide-in-from-top-2">
+                                        <div className="w-10 h-10 rounded-full bg-[var(--accent-red)]/20 flex items-center justify-center text-[var(--accent-red)] shrink-0">
                                             <XCircle size={24} />
                                         </div>
                                         <div>
-                                            <p className="text-red-500 font-bold mb-1">DTR Rejected</p>
-                                            <p className="text-xs text-red-400/80 leading-relaxed max-w-lg">
+                                            <p className="text-[var(--accent-red)] font-bold mb-1">DTR Rejected</p>
+                                            <p className="text-xs text-[var(--accent-red)]/80 leading-relaxed max-w-lg">
                                                 Your submission was rejected by your assigned senior. Please update your time records or upload any missing attachments below before resubmitting.
                                             </p>
                                         </div>
@@ -366,22 +366,22 @@ export default function Dashboard({ user }) {
                                 {/* Render previous attachments if rejected */}
                                 {submission && submission.attachments && submission.attachments.length > 0 && (
                                     <div className="space-y-3">
-                                        <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">
+                                        <p className="text-xs text-[var(--text-muted)] font-bold uppercase tracking-wider">
                                             Previously Uploaded Attachments
                                         </p>
                                         {submission.attachmentComments?.map((commentObj, idx) => (
-                                            <div key={idx} className="p-3 bg-slate-800/30 border border-slate-700/50 rounded-xl flex items-start gap-3">
-                                                <div className="p-2 bg-slate-700/50 rounded-lg shrink-0">
-                                                    <Upload size={14} className="text-slate-400" />
+                                            <div key={idx} className="p-3 bg-[var(--surface-2)] border border-[var(--border-strong)]/50 rounded-xl flex items-start gap-3">
+                                                <div className="p-2 bg-[var(--surface-3)] rounded-lg shrink-0">
+                                                    <Upload size={14} className="text-[var(--text-secondary)]" />
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <p className="text-[10px] text-slate-500 mb-1">
+                                                    <p className="text-[10px] text-[var(--text-muted)] mb-1">
                                                         {commentObj.fileCount} previous file(s) attached
                                                     </p>
                                                     {commentObj.comment && (
                                                         <div className="flex items-start gap-1.5">
-                                                            <MessageSquare size={12} className="text-slate-500 mt-0.5 shrink-0" />
-                                                            <p className="text-xs text-slate-400 leading-relaxed italic">"{commentObj.comment}"</p>
+                                                            <MessageSquare size={12} className="text-[var(--text-muted)] mt-0.5 shrink-0" />
+                                                            <p className="text-xs text-[var(--text-secondary)] leading-relaxed italic">"{commentObj.comment}"</p>
                                                         </div>
                                                     )}
                                                 </div>
@@ -392,22 +392,22 @@ export default function Dashboard({ user }) {
                                 {/* Saved Attachment Groups and Links List */}
                                 {(attachmentGroups.length > 0 || submissionLinks.length > 0) && (
                                     <div className="space-y-3">
-                                        <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">
+                                        <p className="text-xs text-[var(--text-muted)] font-bold uppercase tracking-wider">
                                             Image/ Attachments ({attachmentGroups.length + submissionLinks.length})
                                         </p>
-                                        
+
                                         {/* URLs */}
                                         {submissionLinks.map((url, idx) => (
-                                            <div key={`link-${idx}`} className="p-3 bg-[#1a1a22] border border-[#3b82f6]/20 rounded-xl flex items-start gap-3 animate-in fade-in duration-300">
-                                                <div className="p-2 bg-[#3b82f6]/10 rounded-lg shrink-0">
-                                                    <LinkIcon size={14} className="text-[#3b82f6]" />
+                                            <div key={`link-${idx}`} className="p-3 bg-[var(--surface-2)] border border-[var(--accent-blue)]/20 rounded-xl flex items-start gap-3 animate-in fade-in duration-300">
+                                                <div className="p-2 bg-[var(--accent-blue)]/10 rounded-lg shrink-0">
+                                                    <LinkIcon size={14} className="text-[var(--accent-blue)]" />
                                                 </div>
                                                 <div className="flex-1 min-w-0 flex items-center h-full">
-                                                    <a href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-slate-300 hover:text-white underline break-all">{url}</a>
+                                                    <a href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] underline break-all">{url}</a>
                                                 </div>
                                                 <button
                                                     onClick={() => setSubmissionLinks(prev => prev.filter((_, i) => i !== idx))}
-                                                    className="p-1.5 hover:bg-red-500/10 rounded-lg text-slate-600 hover:text-red-400 transition-all shrink-0"
+                                                    className="p-1.5 hover:bg-[var(--accent-red)]/10 rounded-lg text-[var(--text-muted)] hover:text-[var(--accent-red)] transition-all shrink-0"
                                                     title="Remove link"
                                                 >
                                                     <X size={14} />
@@ -417,25 +417,25 @@ export default function Dashboard({ user }) {
 
                                         {/* Files */}
                                         {attachmentGroups.map((group, idx) => (
-                                            <div key={idx} className="p-3 bg-[#1a1a22] border border-[#22c55e]/20 rounded-xl flex items-start gap-3 animate-in fade-in duration-300">
-                                                <div className="p-2 bg-[#8b5cf6]/10 rounded-lg shrink-0">
-                                                    <Upload size={14} className="text-[#8b5cf6]" />
+                                            <div key={idx} className="p-3 bg-[var(--surface-2)] border border-[var(--accent-green)]/20 rounded-xl flex items-start gap-3 animate-in fade-in duration-300">
+                                                <div className="p-2 bg-[var(--accent-purple)]/10 rounded-lg shrink-0">
+                                                    <Upload size={14} className="text-[var(--accent-purple)]" />
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <p className="text-xs text-white font-bold mb-0.5">
+                                                    <p className="text-xs text-[var(--text-primary)] font-bold mb-0.5">
                                                         {group.files.map(f => f.name).join(', ')}
                                                     </p>
-                                                    <p className="text-[10px] text-slate-500 mb-1">
+                                                    <p className="text-[10px] text-[var(--text-muted)] mb-1">
                                                         {group.files.length} file(s)
                                                     </p>
                                                     <div className="flex items-start gap-1.5">
-                                                        <MessageSquare size={12} className="text-[#8b5cf6] mt-0.5 shrink-0" />
-                                                        <p className="text-xs text-slate-300 leading-relaxed">{group.comment}</p>
+                                                        <MessageSquare size={12} className="text-[var(--accent-purple)] mt-0.5 shrink-0" />
+                                                        <p className="text-xs text-[var(--text-secondary)] leading-relaxed">{group.comment}</p>
                                                     </div>
                                                 </div>
                                                 <button
                                                     onClick={() => handleRemoveGroup(idx)}
-                                                    className="p-1.5 hover:bg-red-500/10 rounded-lg text-slate-600 hover:text-red-400 transition-all shrink-0"
+                                                    className="p-1.5 hover:bg-[var(--accent-red)]/10 rounded-lg text-[var(--text-muted)] hover:text-[var(--accent-red)] transition-all shrink-0"
                                                     title="Remove attachment"
                                                 >
                                                     <X size={14} />
@@ -446,9 +446,9 @@ export default function Dashboard({ user }) {
                                 )}
 
                                 {/* Upload Area */}
-                                <div className="p-4 bg-[#1f1f23] rounded-xl border border-dashed border-slate-700 flex flex-col items-center justify-center text-center gap-2 mt-4">
-                                    <Upload className="text-slate-500" />
-                                    <p className="text-sm text-slate-400">
+                                <div className="p-4 bg-[var(--surface-3)] rounded-xl border border-dashed border-[var(--border-strong)] flex flex-col items-center justify-center text-center gap-2 mt-4">
+                                    <Upload className="text-[var(--text-muted)]" />
+                                    <p className="text-sm text-[var(--text-secondary)]">
                                         {attachmentGroups.length > 0 || submissionLinks.length > 0 ? 'Add another attachment' : 'Upload image/ attachments (Optional)'}
                                     </p>
                                     <input
@@ -456,10 +456,10 @@ export default function Dashboard({ user }) {
                                         accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.ppt,.pptx,.zip,.rar"
                                         multiple
                                         onChange={handleFileChange}
-                                        className="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-[#8b5cf6] file:text-white hover:file:bg-[#7c3aed]"
+                                        className="text-xs text-[var(--text-muted)] file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-[var(--accent-purple)] file:text-white hover:file:bg-[var(--accent-purple-hover)]"
                                     />
                                     {files.length > 0 && (
-                                        <div className="text-xs text-slate-400 italic mt-2">
+                                        <div className="text-xs text-[var(--text-secondary)] italic mt-2">
                                             {files.length} file(s) selected
                                         </div>
                                     )}
@@ -470,7 +470,7 @@ export default function Dashboard({ user }) {
                                             setShowLinkBox(true);
                                             setShowCommentBox(false);
                                         }}
-                                        className="text-xs text-[#8b5cf6] hover:text-white flex items-center gap-1 transition-colors"
+                                        className="text-xs text-[var(--accent-purple)] hover:text-[var(--text-primary)] flex items-center gap-1 transition-colors"
                                     >
                                         <LinkIcon size={12} />
                                         <span>Or add a URL Link</span>
@@ -479,17 +479,17 @@ export default function Dashboard({ user }) {
 
                                 {/* Link Input Box */}
                                 {showLinkBox && (
-                                    <div className="p-4 bg-[#1a1a22] rounded-xl border border-[#3b82f6]/30 animate-in slide-in-from-top fade-in duration-300">
+                                    <div className="p-4 bg-[var(--surface-2)] rounded-xl border border-[var(--accent-blue)]/30 animate-in slide-in-from-top fade-in duration-300">
                                         <div className="flex items-center gap-2 mb-3">
-                                            <LinkIcon size={16} className="text-[#3b82f6]" />
-                                            <label className="text-sm font-bold text-white">Paste URL Link</label>
+                                            <LinkIcon size={16} className="text-[var(--accent-blue)]" />
+                                            <label className="text-sm font-bold text-[var(--text-primary)]">Paste URL Link</label>
                                         </div>
                                         <input
                                             type="url"
                                             value={linkInput}
                                             onChange={(e) => setLinkInput(e.target.value)}
                                             placeholder="https://..."
-                                            className="w-full px-3 py-2 bg-black/50 border border-slate-700/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#3b82f6] focus:ring-1 focus:ring-[#3b82f6] mb-3"
+                                            className="w-full px-3 py-2 bg-black/50 border border-[var(--border-strong)]/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[var(--accent-blue)] focus:ring-1 focus:ring-[var(--accent-blue)] mb-3"
                                         />
                                         <div className="flex justify-end gap-2 mt-3">
                                             <button
@@ -497,7 +497,7 @@ export default function Dashboard({ user }) {
                                                     setShowLinkBox(false);
                                                     setLinkInput('');
                                                 }}
-                                                className="flex items-center gap-1.5 px-4 py-2 bg-[#1f1f23] hover:bg-[#2d2d35] text-slate-400 hover:text-white text-xs font-bold rounded-lg border border-slate-700 transition-all"
+                                                className="flex items-center gap-1.5 px-4 py-2 bg-[var(--surface-3)] hover:bg-[var(--surface-3-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-bold rounded-lg border border-[var(--border-strong)] transition-all"
                                             >
                                                 <X size={14} />
                                                 Cancel
@@ -510,7 +510,7 @@ export default function Dashboard({ user }) {
                                                         setLinkInput('');
                                                     }
                                                 }}
-                                                className="flex items-center gap-1.5 px-4 py-2 bg-[#3b82f6] hover:bg-[#2563eb] text-white text-xs font-bold rounded-lg transition-all shadow-lg shadow-blue-900/20"
+                                                className="flex items-center gap-1.5 px-4 py-2 bg-[var(--accent-blue)] hover:bg-[var(--accent-blue-hover)] text-white text-xs font-bold rounded-lg transition-all shadow-lg shadow-blue-900/20"
                                             >
                                                 <Save size={14} />
                                                 Add Link
@@ -521,29 +521,29 @@ export default function Dashboard({ user }) {
 
                                 {/* Comment Box - appears after file selection */}
                                 {showCommentBox && (
-                                    <div className="p-4 bg-[#1a1a22] rounded-xl border border-[#8b5cf6]/30 animate-in slide-in-from-top fade-in duration-300">
+                                    <div className="p-4 bg-[var(--surface-2)] rounded-xl border border-[var(--accent-purple)]/30 animate-in slide-in-from-top fade-in duration-300">
                                         <div className="flex items-center gap-2 mb-3">
-                                            <MessageSquare size={16} className="text-[#8b5cf6]" />
-                                            <label className="text-sm font-bold text-white">Any notes for these files?</label>
-                                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Optional</span>
+                                            <MessageSquare size={16} className="text-[var(--accent-purple)]" />
+                                            <label className="text-sm font-bold text-[var(--text-primary)]">Any notes for these files?</label>
+                                            <span className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider">Optional</span>
                                         </div>
                                         <textarea
                                             value={attachmentComment}
                                             onChange={(e) => setAttachmentComment(e.target.value)}
                                             placeholder="Example: Medical Certificate for 03/04 (Optional)..."
-                                            className="w-full h-20 px-3 py-2 bg-black/50 border border-slate-700/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#8b5cf6] focus:ring-1 focus:ring-[#8b5cf6] resize-none mb-3"
+                                            className="w-full h-20 px-3 py-2 bg-black/50 border border-[var(--border-strong)]/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[var(--accent-purple)] focus:ring-1 focus:ring-[var(--accent-purple)] resize-none mb-3"
                                         />
                                         <div className="flex justify-end gap-2 mt-3">
                                             <button
                                                 onClick={handleCancelComment}
-                                                className="flex items-center gap-1.5 px-4 py-2 bg-[#1f1f23] hover:bg-[#2d2d35] text-slate-400 hover:text-white text-xs font-bold rounded-lg border border-slate-700 transition-all"
+                                                className="flex items-center gap-1.5 px-4 py-2 bg-[var(--surface-3)] hover:bg-[var(--surface-3-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-bold rounded-lg border border-[var(--border-strong)] transition-all"
                                             >
                                                 <X size={14} />
                                                 Cancel
                                             </button>
                                             <button
                                                 onClick={handleSaveComment}
-                                                className="flex items-center gap-1.5 px-4 py-2 bg-[#8b5cf6] hover:bg-[#7c3aed] text-white text-xs font-bold rounded-lg transition-all shadow-lg shadow-purple-900/20"
+                                                className="flex items-center gap-1.5 px-4 py-2 bg-[var(--accent-purple)] hover:bg-[var(--accent-purple-hover)] text-white text-xs font-bold rounded-lg transition-all shadow-lg shadow-purple-900/20"
                                             >
                                                 <Save size={14} />
                                                 Save Comment
@@ -553,7 +553,7 @@ export default function Dashboard({ user }) {
                                 )}
 
                                 {uploading && (
-                                    <div className="mt-4 p-3 bg-[#8b5cf6]/20 text-[#8b5cf6] text-center rounded-xl text-xs font-bold animate-pulse">
+                                    <div className="mt-4 p-3 bg-[var(--accent-purple)]/20 text-[var(--accent-purple)] text-center rounded-xl text-xs font-bold animate-pulse">
                                         Uploading and sending... please wait.
                                     </div>
                                 )}

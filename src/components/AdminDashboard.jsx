@@ -267,55 +267,54 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
     return (
         <div className="flex flex-col h-full gap-6 animate-in fade-in duration-500">
             {/* Top Bar: Cutoff Management */}
-            <div className="bg-[#141419] rounded-3xl border border-[#1f1f23] p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] p-4 flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
-                    <div className="p-3 bg-[#8b5cf6]/10 rounded-xl text-[#8b5cf6]">
+                    <div className="p-3 bg-[var(--accent-purple)]/10 rounded-xl text-[var(--accent-purple)]">
                         <UserIcon size={20} />
                     </div>
                     <div>
-                        <h2 className="text-lg font-bold text-white">Admin Dashboard</h2>
-                        <p className="text-xs text-slate-500">Manage cutoffs and employee submissions</p>
+                        <h2 className="text-lg font-bold text-[var(--text-primary)]">Admin Dashboard</h2>
+                        <p className="text-xs text-[var(--text-muted)]">Manage cutoffs and employee submissions</p>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-4 bg-[#1f1f23] p-2 rounded-xl border border-slate-800">
+                <div className="flex items-center gap-4 bg-[var(--surface-3)] p-2 rounded-xl border border-[var(--border-strong)]">
                     <div className="px-2">
-                        <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Active Cutoff</p>
+                        <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-bold">Active Cutoff</p>
                         <select
-                            className="text-xs text-white font-mono bg-[#1f1f23] border-none focus:outline-none cursor-pointer rounded px-1 py-0.5"
-                            style={{ colorScheme: 'dark' }}
+                            className="text-xs text-[var(--text-primary)] font-mono bg-[var(--surface-3)] border-none focus:outline-none cursor-pointer rounded px-1 py-0.5"
                             value={cutoff ? cutoff.id : ''}
                             onChange={(e) => {
                                 const selectedId = e.target.value;
                                 setCutoff(cutoffs.find(c => c.id === selectedId) || null);
                             }}
                         >
-                            <option value="" style={{ backgroundColor: '#1f1f23', color: '#fff' }}>Select Cutoff Period</option>
+                            <option value="" style={{ backgroundColor: 'var(--surface-3)', color: 'var(--text-primary)' }}>Select Cutoff Period</option>
                             {cutoffs.map(cutoff => (
-                                <option key={cutoff.id} value={cutoff.id} style={{ backgroundColor: '#1f1f23', color: '#fff' }}>
+                                <option key={cutoff.id} value={cutoff.id} style={{ backgroundColor: 'var(--surface-3)', color: 'var(--text-primary)' }}>
                                     {`${new Date(cutoff.startDate.toDate()).toLocaleDateString('en-GB')} - ${new Date(cutoff.endDate.toDate()).toLocaleDateString('en-GB')}`}
                                 </option>
                             ))}
                         </select>
                     </div>
-                    <div className="h-8 w-[1px] bg-slate-700"></div>
+                    <div className="h-8 w-[1px] bg-[var(--border-strong)]"></div>
                     <div className="flex items-center gap-2">
                         <input
                             type="date"
-                            className="bg-[#141419] text-white text-xs px-2 py-1.5 rounded border border-slate-700 focus:outline-none focus:border-[#8b5cf6]"
+                            className="bg-[var(--surface-1)] text-[var(--text-primary)] text-xs px-2 py-1.5 rounded border border-[var(--border-strong)] focus:outline-none focus:border-[var(--accent-purple)]"
                             value={startDate}
                             onChange={(e) => setStartDate(e.target.value)}
                         />
-                        <span className="text-slate-500 text-xs">to</span>
+                        <span className="text-[var(--text-muted)] text-xs">to</span>
                         <input
                             type="date"
-                            className="bg-[#141419] text-white text-xs px-2 py-1.5 rounded border border-slate-700 focus:outline-none focus:border-[#8b5cf6]"
+                            className="bg-[var(--surface-1)] text-[var(--text-primary)] text-xs px-2 py-1.5 rounded border border-[var(--border-strong)] focus:outline-none focus:border-[var(--accent-purple)]"
                             value={endDate}
                             onChange={(e) => setEndDate(e.target.value)}
                         />
                         <button
                             onClick={handleSetCutoff}
-                            className="px-3 py-1.5 bg-[#8b5cf6] hover:bg-[#7c3aed] text-white text-xs font-bold rounded-lg transition-colors"
+                            className="px-3 py-1.5 bg-[var(--accent-purple)] hover:bg-[var(--accent-purple-hover)] text-white text-xs font-bold rounded-lg transition-colors"
                         >
                             Set New
                         </button>
@@ -325,11 +324,11 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
 
             {/* View Switcher: only super admins can see the Cutoffs folder view */}
             {isSuperAdmin && (
-                <div className="flex items-center gap-2 bg-[#141419] rounded-2xl border border-[#1f1f23] p-1.5 w-fit">
+                <div className="flex items-center gap-2 bg-[var(--surface-1)] rounded-2xl border border-[var(--border)] p-1.5 w-fit">
                     <button
                         onClick={() => setView('employees')}
                         className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-colors
-                            ${view === 'employees' ? 'bg-[#8b5cf6] text-white' : 'text-slate-500 hover:text-white'}`}
+                            ${view === 'employees' ? 'bg-[var(--accent-purple)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
                     >
                         <Users size={14} />
                         Employees
@@ -337,7 +336,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                     <button
                         onClick={() => setView('cutoffs')}
                         className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-colors
-                            ${view === 'cutoffs' ? 'bg-[#8b5cf6] text-white' : 'text-slate-500 hover:text-white'}`}
+                            ${view === 'cutoffs' ? 'bg-[var(--accent-purple)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
                     >
                         <Folder size={14} />
                         Cutoffs
@@ -351,15 +350,15 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
             <div className="flex flex-1 gap-6 overflow-hidden">
                 {/* User List Panel */}
                 <div className="w-80 flex flex-col gap-4">
-                    <div className="bg-[#141419] rounded-3xl border border-[#1f1f23] overflow-hidden flex flex-col h-full">
-                        <div className="p-6 border-b border-[#1f1f23]">
-                            <h2 className="text-xl font-bold text-white mb-4">Employees</h2>
+                    <div className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] overflow-hidden flex flex-col h-full">
+                        <div className="p-6 border-b border-[var(--border)]">
+                            <h2 className="text-xl font-bold text-[var(--text-primary)] mb-4">Employees</h2>
                             <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 h-4 w-4" />
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] h-4 w-4" />
                                 <input
                                     type="text"
                                     placeholder="Search users..."
-                                    className="w-full bg-[#1f1f23] text-white text-sm rounded-xl py-2 pl-9 pr-4 focus:outline-none focus:ring-1 focus:ring-[#8b5cf6]"
+                                    className="w-full bg-[var(--surface-3)] text-[var(--text-primary)] text-sm rounded-xl py-2 pl-9 pr-4 focus:outline-none focus:ring-1 focus:ring-[var(--accent-purple)]"
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
                                 />
@@ -368,17 +367,17 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
 
                         <div className="flex-1 overflow-y-auto p-2 space-y-1">
                             {loading ? (
-                                <div className="flex justify-center py-8 text-slate-500">
+                                <div className="flex justify-center py-8 text-[var(--text-muted)]">
                                     <Loader2 className="animate-spin" />
                                 </div>
                             ) : filteredUsers.length === 0 ? (
-                                <div className="text-center py-8 text-slate-500 text-sm">No users found</div>
+                                <div className="text-center py-8 text-[var(--text-muted)] text-sm">No users found</div>
                             ) : (
                                 filteredUsers.map(user => {
                                     const submission = getSubmissionStatus(user.id)
                                     const isSubmitted = !!submission && submission.status !== 'rejected'
                                     const isApproved = submission?.status === 'approved'
-                                    const badgeColor = isApproved ? 'bg-[#22c55e]/20 text-[#22c55e] border-[#22c55e]/20' : 'bg-amber-500/20 text-amber-500 border-amber-500/20'
+                                    const badgeColor = isApproved ? 'bg-[var(--accent-green)]/20 text-[var(--accent-green)] border-[var(--accent-green)]/20' : 'bg-[var(--accent-amber)]/20 text-[var(--accent-amber)] border-[var(--accent-amber)]/20'
 
                                     return (
                                         <button
@@ -386,17 +385,17 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                             onClick={() => setSelectedUser(user)}
                                             className={`w-full text-left p-3 rounded-xl transition-all flex items-center gap-3 relative overflow-hidden group
                                                 ${selectedUser?.id === user.id
-                                                    ? 'bg-[#8b5cf6] text-white shadow-lg shadow-purple-900/20'
-                                                    : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                                                    ? 'bg-[var(--accent-purple)] text-white shadow-lg shadow-purple-900/20'
+                                                    : 'text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)]'
                                                 }`}
                                         >
                                             {/* Status Indicator Bar */}
                                             {isSubmitted && (
-                                                <div className={`absolute left-0 top-0 bottom-0 w-1 ${isApproved ? 'bg-[#22c55e]' : 'bg-amber-500'}`} />
+                                                <div className={`absolute left-0 top-0 bottom-0 w-1 ${isApproved ? 'bg-[var(--accent-green)]' : 'bg-[var(--accent-amber)]'}`} />
                                             )}
 
                                             <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0
-                                                ${selectedUser?.id === user.id ? 'bg-white text-[#8b5cf6]' : 'bg-[#1f1f23] text-slate-500'}`}>
+                                                ${selectedUser?.id === user.id ? 'bg-white text-[var(--accent-purple)]' : 'bg-[var(--surface-3)] text-[var(--text-muted)]'}`}>
                                                 {user.name?.charAt(0) || '?'}
                                             </div>
 
@@ -409,38 +408,38 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                                                 SENT
                                                             </span>
                                                             {submission.otStatus === 'approved' && (
-                                                                <span className="text-[9px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded font-bold uppercase shrink-0 border border-amber-500/20">
+                                                                <span className="text-[9px] bg-[var(--accent-amber)]/20 text-[var(--accent-amber)] px-1.5 py-0.5 rounded font-bold uppercase shrink-0 border border-[var(--accent-amber)]/20">
                                                                     APPROVED
                                                                 </span>
                                                             )}
                                                             {submission.otStatus === 'declined' && (
-                                                                <span className="text-[9px] bg-red-500/20 text-red-500 px-1.5 py-0.5 rounded font-bold uppercase shrink-0 border border-red-500/20">
+                                                                <span className="text-[9px] bg-[var(--accent-red)]/20 text-[var(--accent-red)] px-1.5 py-0.5 rounded font-bold uppercase shrink-0 border border-[var(--accent-red)]/20">
                                                                     DECLINED
                                                                 </span>
                                                             )}
                                                         </div>
                                                     )}
                                                 </div>
-                                                <p className={`text-xs truncate ${selectedUser?.id === user.id ? 'text-purple-200' : 'text-slate-600'}`}>
+                                                <p className={`text-xs truncate ${selectedUser?.id === user.id ? 'text-purple-200' : 'text-[var(--text-muted)]'}`}>
                                                     {user.email}
                                                 </p>
                                             </div>
 
                                             {user.role === 'admin' && (
                                                 <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ml-auto flex-shrink-0
-                                                    ${selectedUser?.id === user.id ? 'bg-white/20 text-white' : 'bg-red-500/10 text-red-500'}`}>
+                                                    ${selectedUser?.id === user.id ? 'bg-white/20 text-white' : 'bg-[var(--accent-red)]/10 text-[var(--accent-red)]'}`}>
                                                     ADM
                                                 </span>
                                             )}
                                             {user.role === 'super_admin' && (
                                                 <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ml-auto flex-shrink-0
-                                                    ${selectedUser?.id === user.id ? 'bg-white/20 text-white' : 'bg-purple-500/10 text-purple-500'}`}>
+                                                    ${selectedUser?.id === user.id ? 'bg-white/20 text-white' : 'bg-[var(--accent-purple)]/10 text-[var(--accent-purple)]'}`}>
                                                     S.ADM
                                                 </span>
                                             )}
                                             {user.isSenior && (
                                                 <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ml-1 flex-shrink-0
-                                                    ${selectedUser?.id === user.id ? 'bg-amber-500/20 text-white' : 'bg-amber-500/10 text-amber-500'}`}>
+                                                    ${selectedUser?.id === user.id ? 'bg-amber-500/20 text-white' : 'bg-[var(--accent-amber)]/10 text-[var(--accent-amber)]'}`}>
                                                     SNR
                                                 </span>
                                             )}
@@ -459,16 +458,16 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                             {/* User Header */}
                             <div className="flex flex-col md:flex-row justify-between items-start gap-4">
                                 <div>
-                                    <h2 className="text-3xl font-bold text-white max-w-2xl truncate">{selectedUser.name}</h2>
-                                    <div className="flex items-center gap-3 text-slate-500 mt-1">
+                                    <h2 className="text-3xl font-bold text-[var(--text-primary)] max-w-2xl truncate">{selectedUser.name}</h2>
+                                    <div className="flex items-center gap-3 text-[var(--text-muted)] mt-1">
                                         <span className="text-sm">ID: {selectedUser.id}</span>
                                         {selectedUser.role === 'admin' && (
-                                            <span className="text-xs bg-red-500/10 text-red-500 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+                                            <span className="text-xs bg-[var(--accent-red)]/10 text-[var(--accent-red)] px-2 py-0.5 rounded font-bold uppercase tracking-wider">
                                                 Administrator
                                             </span>
                                         )}
                                         {selectedUser.role === 'super_admin' && (
-                                            <span className="text-xs bg-purple-500/10 text-purple-500 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+                                            <span className="text-xs bg-[var(--accent-purple)]/10 text-[var(--accent-purple)] px-2 py-0.5 rounded font-bold uppercase tracking-wider">
                                                 Super Admin
                                             </span>
                                         )}
@@ -476,19 +475,19 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                     <div className="flex flex-wrap gap-2 mt-4">
                                         <button
                                             onClick={handleExportDTR}
-                                            className="flex items-center gap-2 px-4 py-2 bg-[#22c55e] hover:bg-[#16a34a] text-black text-xs font-bold rounded-xl transition-colors shadow-lg shadow-green-900/20"
+                                            className="flex items-center gap-2 px-4 py-2 bg-[var(--accent-green)] hover:bg-[var(--accent-green-hover)] text-black text-xs font-bold rounded-xl transition-colors shadow-lg shadow-green-900/20"
                                         >
                                             <FileSpreadsheet size={16} />
                                             Export DTR to Excel
                                         </button>
 
                                         {/* Role Management Buttons */}
-                                        {currentUser.id !== selectedUser.id && ( 
+                                        {currentUser.id !== selectedUser.id && (
                                             <>
                                                 {selectedUser.role === 'employee' && (
                                                     <button
                                                         onClick={() => handleUpdateRole('admin')}
-                                                        className="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/20 text-xs font-bold rounded-xl transition-colors"
+                                                        className="flex items-center gap-2 px-4 py-2 bg-[var(--accent-red)]/10 text-[var(--accent-red)] hover:bg-[var(--accent-red)]/20 border border-[var(--accent-red)]/20 text-xs font-bold rounded-xl transition-colors"
                                                     >
                                                         Promote to Admin
                                                     </button>
@@ -498,14 +497,14 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                                         {currentUser.role === 'super_admin' && (
                                                             <button
                                                                 onClick={() => handleUpdateRole('super_admin')}
-                                                                className="flex items-center gap-2 px-4 py-2 bg-purple-500/10 text-purple-500 hover:bg-purple-500/20 border border-purple-500/20 text-xs font-bold rounded-xl transition-colors"
+                                                                className="flex items-center gap-2 px-4 py-2 bg-[var(--accent-purple)]/10 text-[var(--accent-purple)] hover:bg-[var(--accent-purple)]/20 border border-[var(--accent-purple)]/20 text-xs font-bold rounded-xl transition-colors"
                                                             >
                                                                 Promote to Super Admin
                                                             </button>
                                                         )}
                                                         <button
                                                             onClick={() => handleUpdateRole('employee')}
-                                                            className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700 text-xs font-bold rounded-xl transition-colors"
+                                                            className="flex items-center gap-2 px-4 py-2 bg-[var(--surface-3)] text-[var(--text-secondary)] hover:bg-[var(--surface-3-hover)] border border-[var(--border-strong)] text-xs font-bold rounded-xl transition-colors"
                                                         >
                                                             Demote to Employee
                                                         </button>
@@ -514,7 +513,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                                 {selectedUser.role === 'super_admin' && (
                                                     <button
                                                         onClick={() => handleUpdateRole('admin')}
-                                                        className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700 text-xs font-bold rounded-xl transition-colors"
+                                                        className="flex items-center gap-2 px-4 py-2 bg-[var(--surface-3)] text-[var(--text-secondary)] hover:bg-[var(--surface-3-hover)] border border-[var(--border-strong)] text-xs font-bold rounded-xl transition-colors"
                                                     >
                                                         Demote to Admin
                                                     </button>
@@ -524,8 +523,8 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                                     onClick={() => handleUpdateSeniorStatus(!selectedUser.isSenior)}
                                                     className={`flex items-center gap-2 px-4 py-2 border text-xs font-bold rounded-xl transition-colors
                                                         ${selectedUser.isSenior
-                                                            ? 'bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20'
-                                                            : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'}`}
+                                                            ? 'bg-[var(--accent-amber)]/10 text-[var(--accent-amber)] border-[var(--accent-amber)]/20 hover:bg-[var(--accent-amber)]/20'
+                                                            : 'bg-[var(--surface-3)] text-[var(--text-secondary)] border-[var(--border-strong)] hover:text-[var(--text-primary)]'}`}
                                                 >
                                                     {selectedUser.isSenior ? 'Remove Senior Role' : 'Make Senior'}
                                                 </button>
@@ -534,10 +533,10 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                     </div>
 
                                     {/* Senior Assignment */}
-                                    <div className="mt-4 p-4 bg-[#1f1f23] rounded-xl border border-slate-800">
-                                        <label className="text-xs text-slate-500 font-bold uppercase tracking-wider block mb-2">Assigned Senior</label>
+                                    <div className="mt-4 p-4 bg-[var(--surface-3)] rounded-xl border border-[var(--border-strong)]">
+                                        <label className="text-xs text-[var(--text-muted)] font-bold uppercase tracking-wider block mb-2">Assigned Senior</label>
                                         <select
-                                            className="w-full bg-[#141419] text-white text-sm px-3 py-2 rounded-lg border border-slate-700 focus:outline-none focus:border-amber-500"
+                                            className="w-full bg-[var(--surface-1)] text-[var(--text-primary)] text-sm px-3 py-2 rounded-lg border border-[var(--border-strong)] focus:outline-none focus:border-[var(--accent-amber)]"
                                             value={selectedUser.assignedSeniorId || ''}
                                             onChange={(e) => handleAssignSenior(e.target.value)}
                                         >
@@ -558,21 +557,21 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                             {/* Actions for Super Admin */}
                                             {currentUser.role === 'super_admin' && !selectedUser.assignedSeniorId && ['pending', 'pending_senior'].includes(getSubmissionStatus(selectedUser.id).status) ? (
                                                 <div className="flex gap-2">
-                                                    <button onClick={() => handleDTRAction('approved')} className="px-4 py-2 bg-[#22c55e] hover:bg-[#16a34a] text-black text-xs font-bold uppercase tracking-wider rounded-xl transition-colors shadow-lg shadow-green-900/20">
+                                                    <button onClick={() => handleDTRAction('approved')} className="px-4 py-2 bg-[var(--accent-green)] hover:bg-[var(--accent-green-hover)] text-black text-xs font-bold uppercase tracking-wider rounded-xl transition-colors shadow-lg shadow-green-900/20">
                                                         Approve DTR
                                                     </button>
-                                                    <button onClick={() => handleDTRAction('rejected')} className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-colors shadow-lg shadow-red-900/20">
+                                                    <button onClick={() => handleDTRAction('rejected')} className="px-4 py-2 bg-[var(--accent-red)] hover:bg-[var(--accent-red)] text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-colors shadow-lg shadow-red-900/20">
                                                         Reject
                                                     </button>
                                                 </div>
                                             ) : <div></div>}
-                                            
+
                                             <p className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1
-                                                ${getSubmissionStatus(selectedUser.id).status === 'approved' ? 'text-[#22c55e]' : 
-                                                  getSubmissionStatus(selectedUser.id).status === 'rejected' ? 'text-red-500' : 'text-amber-500'}`}>
-                                                <span className={`w-2 h-2 rounded-full 
-                                                    ${getSubmissionStatus(selectedUser.id).status === 'approved' ? 'bg-[#22c55e]' : 
-                                                      getSubmissionStatus(selectedUser.id).status === 'rejected' ? 'bg-red-500' : 'bg-amber-500'}`}></span>
+                                                ${getSubmissionStatus(selectedUser.id).status === 'approved' ? 'text-[var(--accent-green)]' :
+                                                  getSubmissionStatus(selectedUser.id).status === 'rejected' ? 'text-[var(--accent-red)]' : 'text-[var(--accent-amber)]'}`}>
+                                                <span className={`w-2 h-2 rounded-full
+                                                    ${getSubmissionStatus(selectedUser.id).status === 'approved' ? 'bg-[var(--accent-green)]' :
+                                                      getSubmissionStatus(selectedUser.id).status === 'rejected' ? 'bg-[var(--accent-red)]' : 'bg-[var(--accent-amber)]'}`}></span>
                                                 DTR {getSubmissionStatus(selectedUser.id).status.toUpperCase().replace('PENDING_SENIOR', 'PENDING')}
                                             </p>
                                         </div>
@@ -589,7 +588,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                                                 href={link}
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
-                                                                className="text-xs text-[#3b82f6] hover:text-[#2563eb] underline break-all bg-[#1a1a22] p-2 rounded-lg border border-[#3b82f6]/20 w-fit text-right"
+                                                                className="text-xs text-[var(--accent-blue)] hover:text-[var(--accent-blue-hover)] underline break-all bg-[var(--surface-2)] p-2 rounded-lg border border-[var(--accent-blue)]/20 w-fit text-right"
                                                             >
                                                                 {link}
                                                             </a>
@@ -618,7 +617,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                                             link.click();
                                                             document.body.removeChild(link);
                                                         }}
-                                                        className="group relative block w-24 h-24 bg-[#1f1f23] rounded-lg border border-slate-700 overflow-hidden hover:border-[#22c55e] hover:ring-2 hover:ring-[#22c55e]/20 transition-all cursor-pointer"
+                                                        className="group relative block w-24 h-24 bg-[var(--surface-3)] rounded-lg border border-[var(--border-strong)] overflow-hidden hover:border-[var(--accent-green)] hover:ring-2 hover:ring-[var(--accent-green)]/20 transition-all cursor-pointer"
                                                         title={`Click to Download Image ${idx + 1}`}
                                                     >
                                                         {/* Preview Image */}
@@ -649,13 +648,13 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                             if (sub.attachmentComments && sub.attachmentComments.length > 0) {
                                                 return (
                                                     <div className="mt-3 space-y-2 max-w-sm">
-                                                        <p className="text-[10px] text-[#8b5cf6] font-bold uppercase tracking-wider flex items-center gap-1">
+                                                        <p className="text-[10px] text-[var(--accent-purple)] font-bold uppercase tracking-wider flex items-center gap-1">
                                                             <span>💬</span> Attachment Comments ({sub.attachmentComments.length})
                                                         </p>
                                                         {sub.attachmentComments.map((item, idx) => (
-                                                            <div key={idx} className="p-2.5 bg-[#1f1f23] rounded-lg border border-slate-700">
-                                                                <p className="text-[10px] text-slate-500 mb-1">{item.fileCount} file(s)</p>
-                                                                <p className="text-xs text-slate-300 leading-relaxed">{item.comment}</p>
+                                                            <div key={idx} className="p-2.5 bg-[var(--surface-3)] rounded-lg border border-[var(--border-strong)]">
+                                                                <p className="text-[10px] text-[var(--text-muted)] mb-1">{item.fileCount} file(s)</p>
+                                                                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">{item.comment}</p>
                                                             </div>
                                                         ))}
                                                     </div>
@@ -664,23 +663,23 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                             // Handle legacy single comment format
                                             if (sub.attachmentComment) {
                                                 return (
-                                                    <div className="mt-3 p-3 bg-[#1f1f23] rounded-lg border border-slate-700 max-w-sm">
-                                                        <p className="text-[10px] text-[#8b5cf6] font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
+                                                    <div className="mt-3 p-3 bg-[var(--surface-3)] rounded-lg border border-[var(--border-strong)] max-w-sm">
+                                                        <p className="text-[10px] text-[var(--accent-purple)] font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
                                                             <span>💬</span> Attachment Comment
                                                         </p>
-                                                        <p className="text-xs text-slate-300 leading-relaxed">{sub.attachmentComment}</p>
+                                                        <p className="text-xs text-[var(--text-secondary)] leading-relaxed">{sub.attachmentComment}</p>
                                                     </div>
                                                 )
                                             }
                                             return null;
                                         })()}
 
-                                        <p className="text-[10px] text-slate-500 mt-1">
+                                        <p className="text-[10px] text-[var(--text-muted)] mt-1">
                                             {new Date(getSubmissionStatus(selectedUser.id).submittedAt.toDate()).toLocaleString()}
                                         </p>
                                     </div>
                                 ) : (
-                                    <div className="px-4 py-2 rounded-xl bg-[#1f1f23] border border-[#1f1f23] text-slate-500 text-xs font-bold uppercase">
+                                    <div className="px-4 py-2 rounded-xl bg-[var(--surface-3)] border border-[var(--border)] text-[var(--text-muted)] text-xs font-bold uppercase">
                                         No Submission Yet
                                     </div>
                                 )}
@@ -688,8 +687,8 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
 
                             {/* DTR Table */}
                             {loadingHistory ? (
-                                <div className="flex items-center justify-center p-12 bg-[#141419] rounded-3xl border border-[#1f1f23]">
-                                    <Loader2 className="animate-spin text-[#8b5cf6]" size={32} />
+                                <div className="flex items-center justify-center p-12 bg-[var(--surface-1)] rounded-3xl border border-[var(--border)]">
+                                    <Loader2 className="animate-spin text-[var(--accent-purple)]" size={32} />
                                 </div>
                             ) : (
                                 <div className="space-y-6">
@@ -705,7 +704,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                             )}
                         </div>
                     ) : (
-                        <div className="h-full flex flex-col items-center justify-center bg-[#141419] rounded-3xl border border-[#1f1f23] text-slate-500">
+                        <div className="h-full flex flex-col items-center justify-center bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] text-[var(--text-muted)]">
                             <UserIcon size={48} className="mb-4 opacity-20" />
                             <p className="text-lg font-medium">Select an employee to view their records</p>
                         </div>

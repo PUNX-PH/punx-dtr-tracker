@@ -36,10 +36,10 @@ export default function NotificationToast({
 
     return (
         <div className={`fixed top-[260px] right-4 md:right-8 z-[9999] transition-all duration-500 transform ${visible ? 'translate-y-0 opacity-100' : '-translate-y-10 opacity-0 pointer-events-none'}`}>
-            <div className="bg-[#141419] border border-[#f6e05e]/50 p-6 rounded-2xl shadow-2xl relative bg-opacity-95 backdrop-blur-md w-96 max-w-[calc(100vw-2rem)]">
+            <div className="bg-[var(--surface-1)] border border-[var(--accent-yellow)]/50 p-6 rounded-2xl shadow-2xl relative bg-opacity-95 backdrop-blur-md w-96 max-w-[calc(100vw-2rem)]">
                 <button
                     onClick={handleClose}
-                    className="absolute top-3 right-3 text-slate-500 hover:text-white transition-colors"
+                    className="absolute top-3 right-3 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
                 >
                     <XCircle size={20} />
                 </button>
@@ -48,12 +48,12 @@ export default function NotificationToast({
                     className={`flex items-start gap-4 ${isNavigable ? 'cursor-pointer' : ''}`}
                     onClick={handleBodyClick}
                 >
-                    <div className={`p-3 rounded-xl shrink-0 ${notification.type === 'DTR_REJECTED' ? 'bg-red-500/10 text-red-500' : 'bg-[#f6e05e]/10 text-[#f6e05e]'}`}>
+                    <div className={`p-3 rounded-xl shrink-0 ${notification.type === 'DTR_REJECTED' ? 'bg-[var(--accent-red)]/10 text-[var(--accent-red)]' : 'bg-[var(--accent-yellow)]/10 text-[var(--accent-yellow)]'}`}>
                         {notification.type === 'DTR_REJECTED' ? <XCircle size={24} /> : <Clock size={24} />}
                     </div>
                     <div className="flex-1 w-full flex flex-col items-start text-left">
-                        <h3 className="text-lg font-bold text-white mb-1">{notification.title}</h3>
-                        <p className="text-slate-400 text-xs mb-3 leading-relaxed">
+                        <h3 className="text-lg font-bold text-[var(--text-primary)] mb-1">{notification.title}</h3>
+                        <p className="text-[var(--text-secondary)] text-xs mb-3 leading-relaxed">
                             {notification.message}
                         </p>
 
@@ -61,13 +61,13 @@ export default function NotificationToast({
                             <div className="flex gap-3 w-full mt-1">
                                 <button
                                     onClick={(e) => { e.stopPropagation(); onApprove(notification) }}
-                                    className="text-xs font-bold text-[#22c55e] hover:text-[#16a34a] transition-colors uppercase tracking-wider"
+                                    className="text-xs font-bold text-[var(--accent-green)] hover:text-[var(--accent-green-hover)] transition-colors uppercase tracking-wider"
                                 >
                                     Approve
                                 </button>
                                 <button
                                     onClick={(e) => { e.stopPropagation(); onDecline(notification) }}
-                                    className="text-xs font-bold text-red-500 hover:text-red-400 transition-colors uppercase tracking-wider ml-2"
+                                    className="text-xs font-bold text-[var(--accent-red)] hover:text-[var(--accent-red-hover)] transition-colors uppercase tracking-wider ml-2"
                                 >
                                     Reject
                                 </button>
@@ -75,7 +75,7 @@ export default function NotificationToast({
                         ) : (
                             <button
                                 onClick={(e) => { e.stopPropagation(); handleClose() }}
-                                className={`text-xs font-bold transition-colors uppercase tracking-wider ${notification.type === 'DTR_REJECTED' ? 'text-red-500 hover:text-red-400' : 'text-[#f6e05e] hover:text-white'}`}
+                                className={`text-xs font-bold transition-colors uppercase tracking-wider ${notification.type === 'DTR_REJECTED' ? 'text-[var(--accent-red)] hover:text-[var(--accent-red-hover)]' : 'text-[var(--accent-yellow)] hover:text-[var(--text-primary)]'}`}
                             >
                                 Dismiss
                             </button>

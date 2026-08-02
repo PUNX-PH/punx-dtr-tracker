@@ -64,15 +64,15 @@ export default function ExcelViewer({ isOpen, onClose }) {
     if (!isOpen) return null
 
     return (
-        <div className="h-full flex flex-col bg-white dark:bg-[#141419]">
+        <div className="h-full flex flex-col bg-[var(--surface-1)]">
             {/* Header */}
-            <div className="p-6 border-b border-[#1f1f23] flex justify-between items-center bg-slate-50 dark:bg-[#1a1a20]">
+            <div className="p-6 border-b border-[var(--border)] flex justify-between items-center bg-[var(--surface-2)]">
                 <div>
-                    <h3 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                        <FileSpreadsheet className="text-[#22c55e]" />
+                    <h3 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
+                        <FileSpreadsheet className="text-[var(--accent-green)]" />
                         Excel Viewer
                     </h3>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                    <p className="text-sm text-[var(--text-secondary)] mt-1">
                         {fileName ? fileName : 'Upload DTR .xlsx file to view'}
                     </p>
                 </div>
@@ -80,14 +80,14 @@ export default function ExcelViewer({ isOpen, onClose }) {
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-auto p-6 bg-slate-100 dark:bg-[#0f0f12]">
+            <div className="flex-1 overflow-auto p-6 bg-[var(--surface-0)]">
                 {data.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-4 border-2 border-dashed border-[#1f1f23] rounded-3xl m-4 bg-[#141419]">
+                    <div className="h-full flex flex-col items-center justify-center text-[var(--text-secondary)] gap-4 border-2 border-dashed border-[var(--border)] rounded-3xl m-4 bg-[var(--surface-1)]">
                         <Upload size={48} className="opacity-20" />
                         <p>No file selected</p>
                         <button
                             onClick={() => fileInputRef.current.click()}
-                            className="bg-[#22c55e] hover:bg-[#22c55e]/90 text-black font-bold px-8 py-3 rounded-xl transition-all shadow-lg shadow-green-500/20"
+                            className="bg-[var(--accent-green)] hover:bg-[var(--accent-green)]/90 text-black font-bold px-8 py-3 rounded-xl transition-all shadow-lg shadow-green-500/20"
                         >
                             Choose Excel File
                         </button>
@@ -127,16 +127,16 @@ export default function ExcelViewer({ isOpen, onClose }) {
 
             {/* Footer */}
             {data.length > 0 && (
-                <div className="p-4 border-t border-[#1f1f23] bg-[#1a1a20] flex justify-end gap-3">
+                <div className="p-4 border-t border-[var(--border)] bg-[var(--surface-2)] flex justify-end gap-3">
                     <button
                         onClick={() => { setData([]); setFileName(''); }}
-                        className="text-sm text-red-500 hover:text-red-400 font-medium px-4 py-2"
+                        className="text-sm text-[var(--accent-red)] hover:text-[var(--accent-red-hover)] font-medium px-4 py-2"
                     >
                         Clear Data
                     </button>
                     <button
                         onClick={() => fileInputRef.current.click()}
-                        className="px-6 py-2 bg-[#22c55e] hover:bg-[#22c55e]/90 rounded-lg text-sm font-bold text-black transition-colors"
+                        className="px-6 py-2 bg-[var(--accent-green)] hover:bg-[var(--accent-green)]/90 rounded-lg text-sm font-bold text-black transition-colors"
                     >
                         Upload New
                     </button>

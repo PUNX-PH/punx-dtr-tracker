@@ -82,9 +82,9 @@ function App() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-[#0f0f12] flex items-center justify-center">
+            <div className="min-h-screen bg-[var(--surface-0)] flex items-center justify-center">
                 {/* Simple CSS Spinner */}
-                <div className="w-12 h-12 border-4 border-[#1f1f23] border-t-[#8b5cf6] rounded-full animate-spin"></div>
+                <div className="w-12 h-12 border-4 border-[var(--border)] border-t-[var(--accent-purple)] rounded-full animate-spin"></div>
             </div>
         )
     }
@@ -118,7 +118,7 @@ function App() {
                     )}
                 </Layout>
             ) : (
-                <div className="min-h-screen bg-[#0f0f12] flex flex-col items-center justify-center p-4">
+                <div className="min-h-screen bg-[var(--surface-0)] flex flex-col items-center justify-center p-4">
                     <Login onLogin={handleLogin} />
                 </div>
             )}

@@ -2,27 +2,80 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* Light theme (default when no stored preference / system prefers light) */
+  color-scheme: light;
+  --surface-0: #f1f5f9;
+  --surface-1: #ffffff;
+  --surface-2: #f8fafc;
+  --surface-3: #e2e8f0;
+  --surface-3-hover: #cbd5e1;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+
+  --accent-purple: #7c3aed;
+  --accent-purple-hover: #6d28d9;
+  --accent-green: #16a34a;
+  --accent-green-hover: #15803d;
+  --accent-red: #dc2626;
+  --accent-red-hover: #b91c1c;
+  --accent-amber: #b45309;
+  --accent-yellow: #a16207;
+  --accent-blue: #1d4ed8;
+  --accent-blue-hover: #1e40af;
+}
+
+.dark {
+  /* Dark theme — matches the app's original hardcoded palette exactly */
+  color-scheme: dark;
+  --surface-0: #0f0f12;
+  --surface-1: #141419;
+  --surface-2: #1a1a20;
+  --surface-3: #1f1f23;
+  --surface-3-hover: #2d2d35;
+  --border: #1f1f23;
+  --border-strong: #334155;
+  --text-primary: #ffffff;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+
+  --accent-purple: #8b5cf6;
+  --accent-purple-hover: #7c3aed;
+  --accent-green: #22c55e;
+  --accent-green-hover: #16a34a;
+  --accent-red: #ef4444;
+  --accent-red-hover: #f87171;
+  --accent-amber: #f59e0b;
+  --accent-yellow: #f6e05e;
+  --accent-blue: #3b82f6;
+  --accent-blue-hover: #2563eb;
+}
+
 @layer base {
   body {
-    @apply bg-[#0f0f12] text-slate-200;
+    background-color: var(--surface-0);
+    color: var(--text-secondary);
   }
 }
 
-/* Custom Scrollbar for the dark theme */
+/* Custom scrollbar, theme-aware */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #141419;
+  background: var(--surface-1);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
+  background: var(--border-strong);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: var(--text-muted);
 }

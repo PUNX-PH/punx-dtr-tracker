@@ -107,32 +107,31 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
     return (
         <div className="flex flex-col h-full gap-6 animate-in fade-in duration-500">
             {/* Top Bar */}
-            <div className="bg-[#141419] rounded-3xl border border-[#1f1f23] p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] p-4 flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
-                    <div className="p-3 bg-amber-500/10 rounded-xl text-amber-500">
+                    <div className="p-3 bg-[var(--accent-amber)]/10 rounded-xl text-[var(--accent-amber)]">
                         <UserCheck size={20} />
                     </div>
                     <div>
-                        <h2 className="text-lg font-bold text-white">Senior Dashboard</h2>
-                        <p className="text-xs text-slate-500">Review DTRs from your assigned employees</p>
+                        <h2 className="text-lg font-bold text-[var(--text-primary)]">Senior Dashboard</h2>
+                        <p className="text-xs text-[var(--text-muted)]">Review DTRs from your assigned employees</p>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-4 bg-[#1f1f23] p-2 rounded-xl border border-slate-800">
+                <div className="flex items-center gap-4 bg-[var(--surface-3)] p-2 rounded-xl border border-[var(--border-strong)]">
                     <div className="px-2">
-                        <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Active Cutoff</p>
+                        <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-bold">Active Cutoff</p>
                         <select
-                            className="text-xs text-white font-mono bg-[#1f1f23] border-none focus:outline-none cursor-pointer rounded px-1 py-0.5"
-                            style={{ colorScheme: 'dark' }}
+                            className="text-xs text-[var(--text-primary)] font-mono bg-[var(--surface-3)] border-none focus:outline-none cursor-pointer rounded px-1 py-0.5"
                             value={cutoff ? cutoff.id : ''}
                             onChange={(e) => {
                                 const selectedId = e.target.value
                                 setCutoff(cutoffs.find(c => c.id === selectedId) || null)
                             }}
                         >
-                            <option value="" style={{ backgroundColor: '#1f1f23', color: '#fff' }}>Select Cutoff Period</option>
+                            <option value="" style={{ backgroundColor: 'var(--surface-3)', color: 'var(--text-primary)' }}>Select Cutoff Period</option>
                             {cutoffs.map(c => (
-                                <option key={c.id} value={c.id} style={{ backgroundColor: '#1f1f23', color: '#fff' }}>
+                                <option key={c.id} value={c.id} style={{ backgroundColor: 'var(--surface-3)', color: 'var(--text-primary)' }}>
                                     {`${new Date(c.startDate.toDate()).toLocaleDateString('en-GB')} - ${new Date(c.endDate.toDate()).toLocaleDateString('en-GB')}`}
                                 </option>
                             ))}
@@ -144,16 +143,16 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
             <div className="flex flex-1 gap-6 overflow-hidden">
                 {/* User List Panel */}
                 <div className="w-80 flex flex-col gap-4">
-                    <div className="bg-[#141419] rounded-3xl border border-[#1f1f23] overflow-hidden flex flex-col h-full">
-                        <div className="p-6 border-b border-[#1f1f23]">
-                            <h2 className="text-xl font-bold text-white mb-1">Assigned Employees</h2>
-                            <p className="text-xs text-slate-500 mb-4">{users.length} total</p>
+                    <div className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] overflow-hidden flex flex-col h-full">
+                        <div className="p-6 border-b border-[var(--border)]">
+                            <h2 className="text-xl font-bold text-[var(--text-primary)] mb-1">Assigned Employees</h2>
+                            <p className="text-xs text-[var(--text-muted)] mb-4">{users.length} total</p>
                             <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 h-4 w-4" />
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] h-4 w-4" />
                                 <input
                                     type="text"
                                     placeholder="Search employees..."
-                                    className="w-full bg-[#1f1f23] text-white text-sm rounded-xl py-2 pl-9 pr-4 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                    className="w-full bg-[var(--surface-3)] text-[var(--text-primary)] text-sm rounded-xl py-2 pl-9 pr-4 focus:outline-none focus:ring-1 focus:ring-[var(--accent-amber)]"
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
                                 />
@@ -162,11 +161,11 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
 
                         <div className="flex-1 overflow-y-auto p-2 space-y-1">
                             {loading ? (
-                                <div className="flex justify-center py-8 text-slate-500">
+                                <div className="flex justify-center py-8 text-[var(--text-muted)]">
                                     <Loader2 className="animate-spin" />
                                 </div>
                             ) : filteredUsers.length === 0 ? (
-                                <div className="text-center py-12 px-4 text-slate-500 text-sm">
+                                <div className="text-center py-12 px-4 text-[var(--text-muted)] text-sm">
                                     {users.length === 0
                                         ? 'No employees assigned to you yet. Ask an admin to assign you employees.'
                                         : 'No employees match your search.'}
@@ -177,8 +176,8 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
                                     const isSubmitted = !!submission && submission.status !== 'rejected'
                                     const isApproved = submission?.status === 'approved'
                                     const badgeColor = isApproved
-                                        ? 'bg-[#22c55e]/20 text-[#22c55e] border-[#22c55e]/20'
-                                        : 'bg-amber-500/20 text-amber-500 border-amber-500/20'
+                                        ? 'bg-[var(--accent-green)]/20 text-[var(--accent-green)] border-[var(--accent-green)]/20'
+                                        : 'bg-[var(--accent-amber)]/20 text-[var(--accent-amber)] border-[var(--accent-amber)]/20'
 
                                     return (
                                         <button
@@ -186,16 +185,16 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
                                             onClick={() => setSelectedUser(user)}
                                             className={`w-full text-left p-3 rounded-xl transition-all flex items-center gap-3 relative overflow-hidden group
                                                 ${selectedUser?.id === user.id
-                                                    ? 'bg-amber-500 text-black shadow-lg shadow-amber-900/20'
-                                                    : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                                                    ? 'bg-[var(--accent-amber)] text-black shadow-lg shadow-amber-900/20'
+                                                    : 'text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)]'
                                                 }`}
                                         >
                                             {isSubmitted && (
-                                                <div className={`absolute left-0 top-0 bottom-0 w-1 ${isApproved ? 'bg-[#22c55e]' : 'bg-amber-500'}`} />
+                                                <div className={`absolute left-0 top-0 bottom-0 w-1 ${isApproved ? 'bg-[var(--accent-green)]' : 'bg-[var(--accent-amber)]'}`} />
                                             )}
 
                                             <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0
-                                                ${selectedUser?.id === user.id ? 'bg-black text-amber-500' : 'bg-[#1f1f23] text-slate-500'}`}>
+                                                ${selectedUser?.id === user.id ? 'bg-black text-[var(--accent-amber)]' : 'bg-[var(--surface-3)] text-[var(--text-muted)]'}`}>
                                                 {user.name?.charAt(0) || '?'}
                                             </div>
 
@@ -208,7 +207,7 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
                                                         </span>
                                                     )}
                                                 </div>
-                                                <p className={`text-xs truncate ${selectedUser?.id === user.id ? 'text-black/70' : 'text-slate-600'}`}>
+                                                <p className={`text-xs truncate ${selectedUser?.id === user.id ? 'text-black/70' : 'text-[var(--text-muted)]'}`}>
                                                     {user.email}
                                                 </p>
                                             </div>
@@ -227,8 +226,8 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
                             {/* User Header */}
                             <div className="flex flex-col md:flex-row justify-between items-start gap-4">
                                 <div>
-                                    <h2 className="text-3xl font-bold text-white max-w-2xl truncate">{selectedUser.name}</h2>
-                                    <div className="flex items-center gap-3 text-slate-500 mt-1">
+                                    <h2 className="text-3xl font-bold text-[var(--text-primary)] max-w-2xl truncate">{selectedUser.name}</h2>
+                                    <div className="flex items-center gap-3 text-[var(--text-muted)] mt-1">
                                         <span className="text-sm">ID: {selectedUser.id}</span>
                                     </div>
                                 </div>
@@ -241,13 +240,13 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
                                                 <div className="flex gap-2">
                                                     <button
                                                         onClick={() => handleDTRAction('approved')}
-                                                        className="px-4 py-2 bg-[#22c55e] hover:bg-[#16a34a] text-black text-xs font-bold uppercase tracking-wider rounded-xl transition-colors shadow-lg shadow-green-900/20"
+                                                        className="px-4 py-2 bg-[var(--accent-green)] hover:bg-[var(--accent-green-hover)] text-black text-xs font-bold uppercase tracking-wider rounded-xl transition-colors shadow-lg shadow-green-900/20"
                                                     >
                                                         Approve DTR
                                                     </button>
                                                     <button
                                                         onClick={() => handleDTRAction('rejected')}
-                                                        className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-colors shadow-lg shadow-red-900/20"
+                                                        className="px-4 py-2 bg-[var(--accent-red)] hover:bg-[var(--accent-red-hover)] text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-colors shadow-lg shadow-red-900/20"
                                                     >
                                                         Reject
                                                     </button>
@@ -255,11 +254,11 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
                                             ) : null}
 
                                             <p className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1
-                                                ${selectedSub.status === 'approved' ? 'text-[#22c55e]' :
-                                                  selectedSub.status === 'rejected' ? 'text-red-500' : 'text-amber-500'}`}>
+                                                ${selectedSub.status === 'approved' ? 'text-[var(--accent-green)]' :
+                                                  selectedSub.status === 'rejected' ? 'text-[var(--accent-red)]' : 'text-[var(--accent-amber)]'}`}>
                                                 <span className={`w-2 h-2 rounded-full
-                                                    ${selectedSub.status === 'approved' ? 'bg-[#22c55e]' :
-                                                      selectedSub.status === 'rejected' ? 'bg-red-500' : 'bg-amber-500'}`}></span>
+                                                    ${selectedSub.status === 'approved' ? 'bg-[var(--accent-green)]' :
+                                                      selectedSub.status === 'rejected' ? 'bg-[var(--accent-red)]' : 'bg-[var(--accent-amber)]'}`}></span>
                                                 DTR {selectedSub.status.toUpperCase().replace('PENDING_SENIOR', 'PENDING')}
                                             </p>
                                         </div>
@@ -273,7 +272,7 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
                                                         href={link}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
-                                                        className="text-xs text-[#3b82f6] hover:text-[#2563eb] underline break-all bg-[#1a1a22] p-2 rounded-lg border border-[#3b82f6]/20 w-fit text-right"
+                                                        className="text-xs text-[var(--accent-blue)] hover:text-[var(--accent-blue-hover)] underline break-all bg-[var(--surface-2)] p-2 rounded-lg border border-[var(--accent-blue)]/20 w-fit text-right"
                                                     >
                                                         {link}
                                                     </a>
@@ -298,7 +297,7 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
                                                                 link.click()
                                                                 document.body.removeChild(link)
                                                             }}
-                                                            className="group relative block w-24 h-24 bg-[#1f1f23] rounded-lg border border-slate-700 overflow-hidden hover:border-amber-500 hover:ring-2 hover:ring-amber-500/20 transition-all cursor-pointer"
+                                                            className="group relative block w-24 h-24 bg-[var(--surface-3)] rounded-lg border border-[var(--border-strong)] overflow-hidden hover:border-[var(--accent-amber)] hover:ring-2 hover:ring-[var(--accent-amber)]/20 transition-all cursor-pointer"
                                                             title={`Click to Download Image ${idx + 1}`}
                                                         >
                                                             <img
@@ -324,24 +323,24 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
 
                                         {selectedSub.attachmentComments && selectedSub.attachmentComments.length > 0 && (
                                             <div className="mt-3 space-y-2 max-w-sm">
-                                                <p className="text-[10px] text-[#8b5cf6] font-bold uppercase tracking-wider flex items-center gap-1">
+                                                <p className="text-[10px] text-[var(--accent-purple)] font-bold uppercase tracking-wider flex items-center gap-1">
                                                     <span>💬</span> Attachment Comments ({selectedSub.attachmentComments.length})
                                                 </p>
                                                 {selectedSub.attachmentComments.map((item, idx) => (
-                                                    <div key={idx} className="p-2.5 bg-[#1f1f23] rounded-lg border border-slate-700">
-                                                        <p className="text-[10px] text-slate-500 mb-1">{item.fileCount} file(s)</p>
-                                                        <p className="text-xs text-slate-300 leading-relaxed">{item.comment}</p>
+                                                    <div key={idx} className="p-2.5 bg-[var(--surface-3)] rounded-lg border border-[var(--border-strong)]">
+                                                        <p className="text-[10px] text-[var(--text-muted)] mb-1">{item.fileCount} file(s)</p>
+                                                        <p className="text-xs text-[var(--text-secondary)] leading-relaxed">{item.comment}</p>
                                                     </div>
                                                 ))}
                                             </div>
                                         )}
 
-                                        <p className="text-[10px] text-slate-500 mt-1">
+                                        <p className="text-[10px] text-[var(--text-muted)] mt-1">
                                             {new Date(selectedSub.submittedAt.toDate()).toLocaleString()}
                                         </p>
                                     </div>
                                 ) : (
-                                    <div className="px-4 py-2 rounded-xl bg-[#1f1f23] border border-[#1f1f23] text-slate-500 text-xs font-bold uppercase">
+                                    <div className="px-4 py-2 rounded-xl bg-[var(--surface-3)] border border-[var(--border)] text-[var(--text-muted)] text-xs font-bold uppercase">
                                         No Submission Yet
                                     </div>
                                 )}
@@ -349,8 +348,8 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
 
                             {/* DTR Table (read-only — Senior can review but not edit) */}
                             {loadingHistory ? (
-                                <div className="flex items-center justify-center p-12 bg-[#141419] rounded-3xl border border-[#1f1f23]">
-                                    <Loader2 className="animate-spin text-amber-500" size={32} />
+                                <div className="flex items-center justify-center p-12 bg-[var(--surface-1)] rounded-3xl border border-[var(--border)]">
+                                    <Loader2 className="animate-spin text-[var(--accent-amber)]" size={32} />
                                 </div>
                             ) : (
                                 <div className="space-y-6">
@@ -367,7 +366,7 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
                             )}
                         </div>
                     ) : (
-                        <div className="h-full flex flex-col items-center justify-center bg-[#141419] rounded-3xl border border-[#1f1f23] text-slate-500">
+                        <div className="h-full flex flex-col items-center justify-center bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] text-[var(--text-muted)]">
                             <UserIcon size={48} className="mb-4 opacity-20" />
                             <p className="text-lg font-medium">
                                 {users.length === 0

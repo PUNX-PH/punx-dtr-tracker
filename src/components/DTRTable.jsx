@@ -447,17 +447,17 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
     }
 
     return (
-        <div className="bg-[#141419] rounded-3xl border border-[#1f1f23] overflow-hidden">
+        <div className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] overflow-hidden">
             {/* Header Metadata Area */}
-            <div className="p-6 border-b border-[#1f1f23] flex flex-col md:flex-row justify-between md:items-center gap-4">
+            <div className="p-6 border-b border-[var(--border)] flex flex-col md:flex-row justify-between md:items-center gap-4">
                 <div>
-                    <h3 className="text-xl font-bold text-white tracking-tight">DAILY TIME RECORD</h3>
+                    <h3 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">DAILY TIME RECORD</h3>
                     <div className="flex items-center gap-2 mt-1">
-                        <span className="text-slate-500 text-xs uppercase tracking-widest">Period Start Date:</span>
+                        <span className="text-[var(--text-muted)] text-xs uppercase tracking-widest">Period Start Date:</span>
                         {/* Date Picker */}
                         <input
                             type="date"
-                            className="bg-[#1f1f23] text-white text-xs px-2 py-1 rounded border border-slate-700 focus:outline-none focus:border-[#8b5cf6]"
+                            className="bg-[var(--surface-3)] text-[var(--text-primary)] text-xs px-2 py-1 rounded border border-[var(--border-strong)] focus:outline-none focus:border-[var(--accent-purple)]"
                             value={formatDateForInput(anchorDate)}
                             onChange={handleDateChange}
                         />
@@ -469,7 +469,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                         <>
                             <button
                                 onClick={handleSmartFill}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#f6e05e]/10 text-[#f6e05e] hover:bg-[#f6e05e]/20 text-sm font-bold transition-colors mr-2 border border-[#f6e05e]/20"
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--accent-yellow)]/10 text-[var(--accent-yellow)] hover:bg-[var(--accent-yellow)]/20 text-sm font-bold transition-colors mr-2 border border-[var(--accent-yellow)]/20"
                                 title="Auto-fill Mon-Fri (9am-6pm)"
                             >
                                 <Zap size={16} />
@@ -477,7 +477,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                             </button>
                             <button
                                 onClick={handleClearRecords}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20 text-sm font-bold transition-colors mr-2 border border-red-500/20"
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--accent-red)]/10 text-[var(--accent-red)] hover:bg-[var(--accent-red)]/20 text-sm font-bold transition-colors mr-2 border border-[var(--accent-red)]/20"
                                 title="Clear all records in view"
                             >
                                 <Trash2 size={16} />
@@ -486,7 +486,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                             <button
                                 onClick={handleCancel}
                                 disabled={saving}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 text-sm font-bold transition-colors"
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--surface-3)] text-[var(--text-secondary)] hover:bg-[var(--surface-3-hover)] text-sm font-bold transition-colors"
                             >
                                 <X size={16} />
                                 Cancel
@@ -494,7 +494,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                             <button
                                 onClick={handleSave}
                                 disabled={saving}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#22c55e] text-black hover:bg-[#22c55e]/90 text-sm font-bold transition-colors shadow-lg shadow-green-900/20"
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--accent-green)] text-black hover:bg-[var(--accent-green)]/90 text-sm font-bold transition-colors shadow-lg shadow-green-900/20"
                             >
                                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                                 Save Changes
@@ -503,7 +503,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                     ) : canEdit ? (
                         <button
                             onClick={() => setEditMode(true)}
-                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#8b5cf6]/10 text-[#8b5cf6] hover:bg-[#8b5cf6]/20 border border-[#8b5cf6]/50 text-sm font-bold transition-colors"
+                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--accent-purple)]/10 text-[var(--accent-purple)] hover:bg-[var(--accent-purple)]/20 border border-[var(--accent-purple)]/50 text-sm font-bold transition-colors"
                         >
                             <Pencil size={16} />
                             Edit Records
@@ -517,76 +517,76 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                 <table className="w-full text-center border-collapse">
                     <thead>
                         {/* Top Level Headers */}
-                        <tr className="border-b border-[#1f1f23]">
-                            <th className="p-3 bg-[#1a1a20] text-slate-400 font-medium text-xs w-32 border-r border-[#1f1f23]">DAY</th>
-                            <th className="p-3 bg-[#1a1a20] text-slate-400 font-medium text-xs w-32 border-r border-[#1f1f23]">DATE</th>
+                        <tr className="border-b border-[var(--border)]">
+                            <th className="p-3 bg-[var(--surface-2)] text-[var(--text-secondary)] font-medium text-xs w-32 border-r border-[var(--border)]">DAY</th>
+                            <th className="p-3 bg-[var(--surface-2)] text-[var(--text-secondary)] font-medium text-xs w-32 border-r border-[var(--border)]">DATE</th>
 
-                            <th colSpan={2} className="p-2 border-r border-[#1f1f23] bg-[#22c55e]/5">
-                                <div className="text-[#22c55e] font-bold text-xs uppercase tracking-wider">Regular Time</div>
+                            <th colSpan={2} className="p-2 border-r border-[var(--border)] bg-[var(--accent-green)]/5">
+                                <div className="text-[var(--accent-green)] font-bold text-xs uppercase tracking-wider">Regular Time</div>
                             </th>
 
-                            <th colSpan={2} className="p-2 border-r border-[#1f1f23] bg-[#8b5cf6]/5">
-                                <div className="text-[#8b5cf6] font-bold text-xs uppercase tracking-wider">Overtime</div>
+                            <th colSpan={2} className="p-2 border-r border-[var(--border)] bg-[var(--accent-purple)]/5">
+                                <div className="text-[var(--accent-purple)] font-bold text-xs uppercase tracking-wider">Overtime</div>
                             </th>
-                            <th className="p-3 bg-[#1a1a20] text-slate-400 font-medium text-xs border-r border-[#1f1f23]">REASON / NOTES</th>
+                            <th className="p-3 bg-[var(--surface-2)] text-[var(--text-secondary)] font-medium text-xs border-r border-[var(--border)]">REASON / NOTES</th>
                         </tr>
 
-                        <tr className="border-b border-[#1f1f23] text-xs font-semibold">
-                            <th className="bg-[#141419] border-r border-[#1f1f23]"></th>
-                            <th className="bg-[#141419] border-r border-[#1f1f23]"></th>
+                        <tr className="border-b border-[var(--border)] text-xs font-semibold">
+                            <th className="bg-[var(--surface-1)] border-r border-[var(--border)]"></th>
+                            <th className="bg-[var(--surface-1)] border-r border-[var(--border)]"></th>
 
-                            <th className="py-2 text-[#22c55e] bg-[#22c55e]/5 border-r border-[#1f1f23] border-dashed border-white/10 w-32">IN</th>
-                            <th className="py-2 text-[#22c55e] bg-[#22c55e]/5 border-r border-[#1f1f23] w-32">OUT</th>
+                            <th className="py-2 text-[var(--accent-green)] bg-[var(--accent-green)]/5 border-r border-[var(--border)] border-dashed border-white/10 w-32">IN</th>
+                            <th className="py-2 text-[var(--accent-green)] bg-[var(--accent-green)]/5 border-r border-[var(--border)] w-32">OUT</th>
 
-                            <th colSpan={2} className="py-2 text-[#8b5cf6] bg-[#8b5cf6]/5 border-r border-[#1f1f23] w-32">SESSIONS</th>
-                            <th className="bg-[#141419]"></th>
+                            <th colSpan={2} className="py-2 text-[var(--accent-purple)] bg-[var(--accent-purple)]/5 border-r border-[var(--border)] w-32">SESSIONS</th>
+                            <th className="bg-[var(--surface-1)]"></th>
                         </tr>
                     </thead>
                     <tbody className="text-sm">
                         {rows.map((date, i) => (
-                            <tr key={i} className="border-b border-[#1f1f23] group hover:bg-white/5 transition-colors">
+                            <tr key={i} className="border-b border-[var(--border)] group hover:bg-white/5 transition-colors">
                                 {/* Day */}
-                                <td className="py-4 text-white border-r border-[#1f1f23] font-bold text-left px-4 text-base">
+                                <td className="py-4 text-[var(--text-primary)] border-r border-[var(--border)] font-bold text-left px-4 text-base">
                                     {date.toLocaleDateString('en-GB', { weekday: 'long' })}
                                 </td>
                                 {/* Date */}
-                                <td className="py-4 text-white border-r border-[#1f1f23] font-mono text-center text-base">
+                                <td className="py-4 text-[var(--text-primary)] border-r border-[var(--border)] font-mono text-center text-base">
                                     {date.toLocaleDateString('en-GB')}
                                 </td>
 
                                 {/* Regular IN */}
-                                <td className="p-0 border-r border-[#1f1f23] border-dashed border-white/10 bg-[#22c55e]/5 font-mono h-12">
+                                <td className="p-0 border-r border-[var(--border)] border-dashed border-white/10 bg-[var(--accent-green)]/5 font-mono h-12">
                                     {editMode ? (
                                         <TimeCellEditor
                                             value={getInputValue(date, 'IN')}
                                             onChange={(v) => handleEditChange(date, 'IN', v)}
                                             onDelete={() => handleCellDelete(date, 'IN')}
-                                            ringColor="#22c55e"
+                                            ringColor="var(--accent-green)"
                                         />
                                     ) : (
-                                        <div className="py-3 text-white">{getDisplayValue(date, 'IN') || '-'}</div>
+                                        <div className="py-3 text-[var(--text-primary)]">{getDisplayValue(date, 'IN') || '-'}</div>
                                     )}
                                 </td>
 
                                 {/* Regular OUT */}
-                                <td className="p-0 border-r border-[#1f1f23] bg-[#22c55e]/5 font-mono">
+                                <td className="p-0 border-r border-[var(--border)] bg-[var(--accent-green)]/5 font-mono">
                                     {editMode ? (
                                         <TimeCellEditor
                                             value={getInputValue(date, 'OUT')}
                                             onChange={(v) => handleEditChange(date, 'OUT', v)}
                                             onDelete={() => handleCellDelete(date, 'OUT')}
-                                            ringColor="#22c55e"
+                                            ringColor="var(--accent-green)"
                                         />
                                     ) : (
-                                        <div className="py-3 text-white">{getDisplayValue(date, 'OUT') || '-'}</div>
+                                        <div className="py-3 text-[var(--text-primary)]">{getDisplayValue(date, 'OUT') || '-'}</div>
                                     )}
                                 </td>
 
                                 {/* Overtime — one or more sessions per day, each row matching the
                                     h-12 height/flush edges of the Regular Time cells beside it */}
-                                <td colSpan={2} className="p-0 border-r border-[#1f1f23] bg-[#8b5cf6]/5 font-mono align-top">
+                                <td colSpan={2} className="p-0 border-r border-[var(--border)] bg-[var(--accent-purple)]/5 font-mono align-top">
                                     {editMode ? (
-                                        <div className="flex flex-col divide-y divide-[#1f1f23]/60">
+                                        <div className="flex flex-col divide-y divide-[var(--border)]/60">
                                             {getOTSessionsForDate(date).map(session => (
                                                 <div key={session} className="h-12 flex items-center gap-2 px-2">
                                                     <div className="w-24 h-8 shrink-0">
@@ -594,23 +594,23 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                                             value={getInputValue(date, 'OT_IN', session)}
                                                             onChange={(v) => handleEditChange(date, 'OT_IN', v, session)}
                                                             onDelete={() => handleCellDelete(date, 'OT_IN', session)}
-                                                            ringColor="#8b5cf6"
+                                                            ringColor="var(--accent-purple)"
                                                         />
                                                     </div>
-                                                    <span className="text-slate-600 text-xs shrink-0">-</span>
+                                                    <span className="text-[var(--text-muted)] text-xs shrink-0">-</span>
                                                     <div className="w-24 h-8 shrink-0">
                                                         <TimeCellEditor
                                                             value={getInputValue(date, 'OT_OUT', session)}
                                                             onChange={(v) => handleEditChange(date, 'OT_OUT', v, session)}
                                                             onDelete={() => handleCellDelete(date, 'OT_OUT', session)}
-                                                            ringColor="#8b5cf6"
+                                                            ringColor="var(--accent-purple)"
                                                         />
                                                     </div>
                                                     <button
                                                         type="button"
                                                         onClick={() => handleSessionDelete(date, session)}
                                                         title="Remove this OT session"
-                                                        className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-slate-600 hover:bg-red-500/20 hover:text-red-400 transition-colors"
+                                                        className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-[var(--text-muted)] hover:bg-[var(--accent-red)]/20 hover:text-[var(--accent-red)] transition-colors"
                                                     >
                                                         <Trash2 size={11} />
                                                     </button>
@@ -620,7 +620,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                                 <button
                                                     type="button"
                                                     onClick={() => handleAddSession(date)}
-                                                    className="text-[10px] text-[#8b5cf6] hover:text-white flex items-center gap-1"
+                                                    className="text-[10px] text-[var(--accent-purple)] hover:text-[var(--text-primary)] flex items-center gap-1"
                                                 >
                                                     <Plus size={11} />
                                                     Add session
@@ -628,20 +628,20 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                             </div>
                                         </div>
                                     ) : getVisibleOTSessions(date).length > 0 ? (
-                                        <div className="flex flex-col divide-y divide-[#1f1f23]/60">
+                                        <div className="flex flex-col divide-y divide-[var(--border)]/60">
                                             {getVisibleOTSessions(date).map(session => (
-                                                <div key={session} className="h-12 flex items-center px-2 text-white">
+                                                <div key={session} className="h-12 flex items-center px-2 text-[var(--text-primary)]">
                                                     {getDisplayValue(date, 'OT_IN', session) || '–'} – {getDisplayValue(date, 'OT_OUT', session) || '–'}
                                                 </div>
                                             ))}
                                         </div>
                                     ) : (
-                                        <div className="h-12 flex items-center justify-center text-white">-</div>
+                                        <div className="h-12 flex items-center justify-center text-[var(--text-primary)]">-</div>
                                     )}
                                 </td>
 
                                 {/* Reason / Notes */}
-                                <td className="p-0 border-r border-[#1f1f23] text-slate-400 font-mono">
+                                <td className="p-0 border-r border-[var(--border)] text-[var(--text-secondary)] font-mono">
                                     {editMode ? (
                                         <input
                                             type="text"
@@ -651,7 +651,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                             onChange={(e) => handleEditChange(date, 'REASON', e.target.value)}
                                         />
                                     ) : (
-                                        <div className="py-3 px-2 text-xs text-white whitespace-pre-wrap break-words" title={getDisplayValue(date, 'REASON')}>{getDisplayValue(date, 'REASON') || ''}</div>
+                                        <div className="py-3 px-2 text-xs text-[var(--text-primary)] whitespace-pre-wrap break-words" title={getDisplayValue(date, 'REASON')}>{getDisplayValue(date, 'REASON') || ''}</div>
                                     )}
                                 </td>
                             </tr>
@@ -694,7 +694,7 @@ function TimeCellEditor({ value, onChange, onDelete, ringColor }) {
                     onClick={handleDeleteClick}
                     disabled={deleting}
                     title="Delete this entry"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded-full bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white text-[10px] leading-none transition-colors disabled:opacity-50"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded-full bg-[var(--accent-red)]/20 text-[var(--accent-red)] hover:bg-[var(--accent-red)] hover:text-white text-[10px] leading-none transition-colors disabled:opacity-50"
                 >
                     {deleting ? <Loader2 size={10} className="animate-spin" /> : <X size={10} strokeWidth={3} />}
                 </button>

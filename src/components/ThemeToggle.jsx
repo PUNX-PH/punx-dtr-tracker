@@ -5,14 +5,9 @@ export default function ThemeToggle() {
     const [darkMode, setDarkMode] = useState(false)
 
     useEffect(() => {
-        // Check local storage or system preference
-        if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-            setDarkMode(true)
-            document.documentElement.classList.add('dark')
-        } else {
-            setDarkMode(false)
-            document.documentElement.classList.remove('dark')
-        }
+        // Reflect whatever index.html's pre-paint script already decided
+        // (stored preference, or system preference as a fallback).
+        setDarkMode(document.documentElement.classList.contains('dark'))
     }, [])
 
     const toggleTheme = () => {
@@ -30,10 +25,10 @@ export default function ThemeToggle() {
     return (
         <button
             onClick={toggleTheme}
-            className="fixed top-4 right-4 p-2 rounded-full bg-white dark:bg-slate-800 text-slate-800 dark:text-yellow-400 shadow-lg border border-slate-200 dark:border-slate-700 hover:scale-110 transition-all z-50"
-            aria-label="Toggle Theme"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-[var(--text-secondary)] bg-[var(--surface-3)] hover:bg-[var(--surface-3-hover)] rounded-xl transition-colors mb-2"
         >
-            {darkMode ? <Sun size={24} /> : <Moon size={24} />}
+            {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+            {darkMode ? 'Light Mode' : 'Dark Mode'}
         </button>
     )
 }

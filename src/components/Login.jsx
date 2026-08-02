@@ -46,18 +46,18 @@ export default function Login({ onLogin }) {
     }
 
     return (
-        <div className="w-full max-w-md bg-[#141419] rounded-3xl shadow-2xl p-8 border border-[#1f1f23] animate-in fade-in zoom-in duration-500">
+        <div className="w-full max-w-md bg-[var(--surface-1)] rounded-3xl shadow-2xl p-8 border border-[var(--border)] animate-in fade-in zoom-in duration-500">
             <div className="text-center mb-8">
-                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-black text-white mb-6 border border-[#1f1f23]">
+                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-black text-white mb-6 border border-[var(--border)]">
                     <span className="text-2xl font-black tracking-tighter">PUNX</span>
                 </div>
-                <h1 className="text-3xl font-bold text-white tracking-tight">Welcome Back</h1>
-                <p className="text-slate-500 mt-2">Sign in to access your dashboard</p>
+                <h1 className="text-3xl font-bold text-[var(--text-primary)] tracking-tight">Welcome Back</h1>
+                <p className="text-[var(--text-muted)] mt-2">Sign in to access your dashboard</p>
             </div>
 
             <div className="space-y-6">
                 {error && (
-                    <div className="text-red-500 text-sm text-center bg-red-500/10 border border-red-500/20 p-3 rounded-xl">
+                    <div className="text-[var(--accent-red)] text-sm text-center bg-[var(--accent-red)]/10 border border-[var(--accent-red)]/20 p-3 rounded-xl">
                         {error}
                     </div>
                 )}
@@ -81,11 +81,11 @@ export default function Login({ onLogin }) {
                 </button>
 
                 <div className="text-center">
-                    <p className="text-xs text-slate-600 uppercase tracking-widest font-semibold">
+                    <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest font-semibold">
                         Restricted Access
                     </p>
-                    <p className="text-[10px] text-slate-700 mt-1">
-                        Only <span className="text-[#8b5cf6]">@punx.ai</span> accounts allowed
+                    <p className="text-[10px] text-[var(--text-muted)] mt-1">
+                        Only <span className="text-[var(--accent-purple)]">@punx.ai</span> accounts allowed
                     </p>
                 </div>
             </div>

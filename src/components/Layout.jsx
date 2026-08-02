@@ -105,7 +105,7 @@ export default function Layout({ children, user, onLogout, activeTab, onTabChang
     }
 
     return (
-        <div className="flex h-screen bg-[#0f0f12] overflow-hidden relative">
+        <div className="flex h-screen bg-[var(--surface-0)] overflow-hidden relative">
             {/* Persistent bell — always visible across every dashboard */}
             <NotificationBell
                 notifications={notifications}
@@ -145,7 +145,7 @@ export default function Layout({ children, user, onLogout, activeTab, onTabChang
                     {/* Close Button for Mobile */}
                     <button
                         onClick={() => setSidebarOpen(false)}
-                        className="md:hidden absolute top-4 right-4 text-slate-500 hover:text-white z-50"
+                        className="md:hidden absolute top-4 right-4 text-[var(--text-muted)] hover:text-[var(--text-primary)] z-50"
                     >
                         <X size={24} />
                     </button>
@@ -168,7 +168,7 @@ export default function Layout({ children, user, onLogout, activeTab, onTabChang
                 <div className="p-4 md:hidden">
                     <button
                         onClick={() => setSidebarOpen(true)}
-                        className="p-2 bg-[#141419] border border-[#1f1f23] rounded-xl text-white hover:bg-[#1f1f23] transition-colors"
+                        className="p-2 bg-[var(--surface-1)] border border-[var(--border)] rounded-xl text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors"
                     >
                         <Menu size={24} />
                     </button>
@@ -179,7 +179,7 @@ export default function Layout({ children, user, onLogout, activeTab, onTabChang
                     <div className="absolute top-8 left-8 z-30">
                         <button
                             onClick={() => setSidebarOpen(true)}
-                            className="p-3 bg-[#141419] border border-[#1f1f23] rounded-xl text-white hover:bg-[#1f1f23] transition-colors shadow-xl"
+                            className="p-3 bg-[var(--surface-1)] border border-[var(--border)] rounded-xl text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors shadow-xl"
                         >
                             <Menu size={20} />
                         </button>

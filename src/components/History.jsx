@@ -3,18 +3,18 @@ import { ArrowDownLeft, ArrowUpRight } from 'lucide-react'
 export default function History({ history }) {
     if (!history || history.length === 0) {
         return (
-            <div className="text-center py-8 text-slate-400 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700 transition-colors">
+            <div className="text-center py-8 text-[var(--text-secondary)] bg-[var(--surface-1)] rounded-lg border border-[var(--border-strong)] transition-colors">
                 No logs for today yet.
             </div>
         )
     }
 
     return (
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden transition-colors">
-            <div className="bg-slate-50 dark:bg-slate-900 px-4 py-3 border-b border-slate-200 dark:border-slate-700">
-                <h3 className="font-semibold text-slate-700 dark:text-slate-300">Today's Activity</h3>
+        <div className="bg-[var(--surface-1)] rounded-xl shadow-sm border border-[var(--border-strong)] overflow-hidden transition-colors">
+            <div className="bg-[var(--surface-2)] px-4 py-3 border-b border-[var(--border-strong)]">
+                <h3 className="font-semibold text-[var(--text-secondary)]">Today's Activity</h3>
             </div>
-            <ul className="divide-y divide-slate-100 dark:divide-slate-700">
+            <ul className="divide-y divide-[var(--border-strong)]">
                 {history.map((log) => {
                     const isTimeIn = log.type === 'IN';
                     return (
@@ -27,13 +27,13 @@ export default function History({ history }) {
                                     <p className={`font-medium ${isTimeIn ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
                                         {isTimeIn ? 'Time In' : 'Time Out'}
                                     </p>
-                                    <p className="text-xs text-slate-400 dark:text-slate-500">
+                                    <p className="text-xs text-[var(--text-muted)]">
                                         {new Date(log.timestamp).toLocaleDateString('en-GB')}
                                     </p>
                                 </div>
                             </div>
                             <div className="text-right">
-                                <span className="text-lg font-mono font-semibold text-slate-700 dark:text-slate-300">
+                                <span className="text-lg font-mono font-semibold text-[var(--text-secondary)]">
                                     {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                 </span>
                             </div>
