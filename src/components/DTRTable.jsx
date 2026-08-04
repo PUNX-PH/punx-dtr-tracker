@@ -7,6 +7,9 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
     const [edits, setEdits] = useState({}) // Key: "YYYY-MM-DD_TYPE", Value: "HH:MM" or "REASON_TEXT"
     const [saving, setSaving] = useState(false)
     const [anchorDate, setAnchorDate] = useState(new Date())
+    const [restoredDraft, setRestoredDraft] = useState(false)
+
+    const draftStorageKey = `dtr_draft_${user.id}`
 
     // Sync anchorDate with initialDate if provided
     useEffect(() => {
@@ -16,6 +19,42 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
             setAnchorDate(new Date())
         }
     }, [initialDate])
+
+    // Restore any unsaved edits left over from a previous session (accidental
+    // refresh/navigation) so nothing gets silently lost. Skipped in read-only
+    // views (canEdit=false) since there's no save flow to resume there.
+    useEffect(() => {
+        if (!canEdit) return
+        try {
+            const saved = localStorage.getItem(draftStorageKey)
+            if (saved) {
+                const parsed = JSON.parse(saved)
+                if (parsed && Object.keys(parsed).length > 0) {
+                    setEdits(parsed)
+                    setEditMode(true)
+                    setRestoredDraft(true)
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to restore DTR draft', e)
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [draftStorageKey, canEdit])
+
+    // Keep the draft in sync with every edit. Cleared automatically once
+    // `edits` empties out (Save, Cancel, or a fresh Clear-all all reset it).
+    useEffect(() => {
+        try {
+            if (Object.keys(edits).length > 0) {
+                localStorage.setItem(draftStorageKey, JSON.stringify(edits))
+            } else {
+                localStorage.removeItem(draftStorageKey)
+                setRestoredDraft(false)
+            }
+        } catch (e) {
+            console.warn('Failed to persist DTR draft', e)
+        }
+    }, [edits, draftStorageKey])
 
     // Generate rows based on anchorDate
     const rows = useMemo(() => {
@@ -511,6 +550,21 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                     ) : null}
                 </div>
             </div>
+
+            {/* Restored draft notice */}
+            {restoredDraft && editMode && (
+                <div className="px-6 py-2 bg-[var(--accent-blue)]/10 text-[var(--accent-blue)] text-xs font-medium flex items-center justify-between border-b border-[var(--border)]">
+                    <span>Restored unsaved changes from your last session — click Save Changes to keep them, or Cancel to discard.</span>
+                    <button
+                        type="button"
+                        onClick={() => setRestoredDraft(false)}
+                        className="hover:text-[var(--text-primary)] shrink-0 ml-2"
+                        title="Dismiss"
+                    >
+                        <X size={12} />
+                    </button>
+                </div>
+            )}
 
             {/* The Grid */}
             <div className="overflow-x-auto">

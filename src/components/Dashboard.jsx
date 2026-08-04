@@ -25,10 +25,55 @@ export default function Dashboard({ user }) {
     const hasTimeIn = todayLogs.some(l => l.type === 'IN');
     const hasTimeOut = todayLogs.some(l => l.type === 'OUT');
 
+    const submissionDraftKey = `dtr_submission_draft_${user.id}`
+
     useEffect(() => {
         loadHistory()
         checkCutoff()
     }, [user.id])
+
+    // Restore any comments/links left over from a previous session (accidental
+    // refresh/navigation). The actual selected files can't survive a reload —
+    // browsers don't let JS re-access a picked file after the page reloads —
+    // so only the surrounding text is recoverable here.
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem(submissionDraftKey)
+            if (saved) {
+                const parsed = JSON.parse(saved)
+                if (parsed) {
+                    if (Array.isArray(parsed.submissionLinks) && parsed.submissionLinks.length > 0) {
+                        setSubmissionLinks(parsed.submissionLinks)
+                    }
+                    if (parsed.linkInput) {
+                        setLinkInput(parsed.linkInput)
+                        setShowLinkBox(true)
+                    }
+                    if (parsed.attachmentComment) {
+                        setAttachmentComment(parsed.attachmentComment)
+                        setShowCommentBox(true)
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to restore submission draft', e)
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user.id])
+
+    // Keep the draft in sync so an accidental refresh doesn't lose it.
+    useEffect(() => {
+        try {
+            const hasDraft = submissionLinks.length > 0 || !!linkInput || !!attachmentComment
+            if (hasDraft) {
+                localStorage.setItem(submissionDraftKey, JSON.stringify({ submissionLinks, linkInput, attachmentComment }))
+            } else {
+                localStorage.removeItem(submissionDraftKey)
+            }
+        } catch (e) {
+            console.warn('Failed to persist submission draft', e)
+        }
+    }, [submissionLinks, linkInput, attachmentComment, submissionDraftKey])
 
     const checkCutoff = async () => {
         const cutoff = await api.getActiveCutoff()
@@ -148,6 +193,9 @@ export default function Dashboard({ user }) {
                 setShowCommentBox(false)
                 setShowLinkBox(false)
                 setFiles([])
+                // Clear synchronously — the reload below happens before React
+                // would otherwise get a chance to run the persist effect.
+                localStorage.removeItem(submissionDraftKey)
                 window.location.reload()
             } else {
                 alert("Failed to submit: " + res.message)
