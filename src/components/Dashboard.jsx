@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { CheckCircle2, Clock, CheckCircle, XCircle, Send, Upload, MessageSquare, X, Save, Pencil, ChevronLeft, ChevronRight, Eye, Link as LinkIcon } from 'lucide-react'
 import { api } from '../services/api'
 import ClockComp from './Clock'
@@ -26,6 +26,7 @@ export default function Dashboard({ user }) {
     const hasTimeOut = todayLogs.some(l => l.type === 'OUT');
 
     const submissionDraftKey = `dtr_submission_draft_${user.id}`
+    const hasMountedDraftRef = useRef(false)
 
     useEffect(() => {
         loadHistory()
@@ -62,7 +63,14 @@ export default function Dashboard({ user }) {
     }, [user.id])
 
     // Keep the draft in sync so an accidental refresh doesn't lose it.
+    // Skips its very first run: on mount this would otherwise see the pre-restore
+    // (empty) state — the restore effect above hasn't committed yet — and wipe
+    // the draft it's about to bring back.
     useEffect(() => {
+        if (!hasMountedDraftRef.current) {
+            hasMountedDraftRef.current = true
+            return
+        }
         try {
             const hasDraft = submissionLinks.length > 0 || !!linkInput || !!attachmentComment
             if (hasDraft) {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { Pencil, Save, X, Loader2, Zap, Trash2, Plus } from 'lucide-react'
 import { api } from '../services/api'
 
@@ -10,6 +10,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
     const [restoredDraft, setRestoredDraft] = useState(false)
 
     const draftStorageKey = `dtr_draft_${user.id}`
+    const hasMountedEditsRef = useRef(false)
 
     // Sync anchorDate with initialDate if provided
     useEffect(() => {
@@ -43,7 +44,14 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
 
     // Keep the draft in sync with every edit. Cleared automatically once
     // `edits` empties out (Save, Cancel, or a fresh Clear-all all reset it).
+    // Skips its very first run: on mount this would otherwise see the pre-restore
+    // `edits` value (the restore effect above hasn't committed yet) and wipe the
+    // draft it's about to bring back.
     useEffect(() => {
+        if (!hasMountedEditsRef.current) {
+            hasMountedEditsRef.current = true
+            return
+        }
         try {
             if (Object.keys(edits).length > 0) {
                 localStorage.setItem(draftStorageKey, JSON.stringify(edits))
