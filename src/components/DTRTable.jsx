@@ -3,14 +3,36 @@ import { Pencil, Save, X, Loader2, Zap, Trash2, Plus } from 'lucide-react'
 import { api } from '../services/api'
 
 export default function DTRTable({ user, history, onRefresh, initialDate, periodEnd, canEdit = true }) {
-    const [editMode, setEditMode] = useState(false)
-    const [edits, setEdits] = useState({}) // Key: "YYYY-MM-DD_TYPE", Value: "HH:MM" or "REASON_TEXT"
+    const draftStorageKey = `dtr_draft_${user.id}`
+
+    // Reads a non-empty draft for `key`, or null. Read-only views (canEdit=false)
+    // never restore since there's no save flow there to resume.
+    const readDraft = (key) => {
+        if (!canEdit) return null
+        try {
+            const saved = localStorage.getItem(key)
+            if (!saved) return null
+            const parsed = JSON.parse(saved)
+            if (parsed && Object.keys(parsed).length > 0) return parsed
+        } catch (e) {
+            console.warn('Failed to restore DTR draft', e)
+        }
+        return null
+    }
+
+    // Read synchronously as part of initial state — not in a useEffect — so a
+    // refresh lands directly in edit mode with the draft already showing on the
+    // very first paint, instead of racing a later effect to restore it.
+    const initialDraft = readDraft(draftStorageKey)
+
+    const [editMode, setEditMode] = useState(!!initialDraft)
+    const [edits, setEdits] = useState(initialDraft || {}) // Key: "YYYY-MM-DD_TYPE", Value: "HH:MM" or "REASON_TEXT"
     const [saving, setSaving] = useState(false)
     const [anchorDate, setAnchorDate] = useState(new Date())
-    const [restoredDraft, setRestoredDraft] = useState(false)
+    const [restoredDraft, setRestoredDraft] = useState(!!initialDraft)
 
-    const draftStorageKey = `dtr_draft_${user.id}`
-    const hasMountedEditsRef = useRef(false)
+    const hasMountedRestoreRef = useRef(false)
+    const hasMountedPersistRef = useRef(false)
 
     // Sync anchorDate with initialDate if provided
     useEffect(() => {
@@ -21,35 +43,30 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
         }
     }, [initialDate])
 
-    // Restore any unsaved edits left over from a previous session (accidental
-    // refresh/navigation) so nothing gets silently lost. Skipped in read-only
-    // views (canEdit=false) since there's no save flow to resume there.
+    // The initial state above already covers the normal mount case. This only
+    // handles switching to a different user's table without a remount (e.g.
+    // Admin picking another employee), where draftStorageKey changes later.
     useEffect(() => {
-        if (!canEdit) return
-        try {
-            const saved = localStorage.getItem(draftStorageKey)
-            if (saved) {
-                const parsed = JSON.parse(saved)
-                if (parsed && Object.keys(parsed).length > 0) {
-                    setEdits(parsed)
-                    setEditMode(true)
-                    setRestoredDraft(true)
-                }
-            }
-        } catch (e) {
-            console.warn('Failed to restore DTR draft', e)
+        if (!hasMountedRestoreRef.current) {
+            hasMountedRestoreRef.current = true
+            return
+        }
+        const draft = readDraft(draftStorageKey)
+        if (draft) {
+            setEdits(draft)
+            setEditMode(true)
+            setRestoredDraft(true)
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [draftStorageKey, canEdit])
 
     // Keep the draft in sync with every edit. Cleared automatically once
     // `edits` empties out (Save, Cancel, or a fresh Clear-all all reset it).
-    // Skips its very first run: on mount this would otherwise see the pre-restore
-    // `edits` value (the restore effect above hasn't committed yet) and wipe the
-    // draft it's about to bring back.
+    // Skips its very first run: `edits` already matches localStorage from the
+    // initial state above, so writing again there is redundant.
     useEffect(() => {
-        if (!hasMountedEditsRef.current) {
-            hasMountedEditsRef.current = true
+        if (!hasMountedPersistRef.current) {
+            hasMountedPersistRef.current = true
             return
         }
         try {

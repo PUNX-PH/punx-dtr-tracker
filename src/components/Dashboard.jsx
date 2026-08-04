@@ -6,6 +6,27 @@ import DTRTable from './DTRTable'
 import RecentActivityTable from './RecentActivityTable'
 
 export default function Dashboard({ user }) {
+    const submissionDraftKey = `dtr_submission_draft_${user.id}`
+
+    // Read synchronously as part of initial state — not in a useEffect — so a
+    // refresh shows the restored comment/links on the very first paint instead
+    // of racing a later effect to restore it.
+    const readSubmissionDraft = () => {
+        try {
+            const saved = localStorage.getItem(submissionDraftKey)
+            return saved ? JSON.parse(saved) : null
+        } catch (e) {
+            console.warn('Failed to restore submission draft', e)
+            return null
+        }
+    }
+    const initialSubmissionDraft = readSubmissionDraft()
+    const initialSubmissionLinks = Array.isArray(initialSubmissionDraft?.submissionLinks) && initialSubmissionDraft.submissionLinks.length > 0
+        ? initialSubmissionDraft.submissionLinks
+        : []
+    const initialLinkInput = initialSubmissionDraft?.linkInput || ''
+    const initialAttachmentComment = initialSubmissionDraft?.attachmentComment || ''
+
     const [history, setHistory] = useState([])
     const [processing, setProcessing] = useState(false)
     const [showSuccess, setShowSuccess] = useState(false)
@@ -14,18 +35,17 @@ export default function Dashboard({ user }) {
     const [showCutoffAlert, setShowCutoffAlert] = useState(false)
     const [files, setFiles] = useState([])
     const [uploading, setUploading] = useState(false)
-    const [attachmentComment, setAttachmentComment] = useState('')
-    const [showCommentBox, setShowCommentBox] = useState(false)
+    const [attachmentComment, setAttachmentComment] = useState(initialAttachmentComment)
+    const [showCommentBox, setShowCommentBox] = useState(!!initialAttachmentComment)
     const [attachmentGroups, setAttachmentGroups] = useState([]) // Array of { files: File[], comment: string }
-    const [submissionLinks, setSubmissionLinks] = useState([]) // Array of url strings
-    const [showLinkBox, setShowLinkBox] = useState(false)
-    const [linkInput, setLinkInput] = useState('')
+    const [submissionLinks, setSubmissionLinks] = useState(initialSubmissionLinks) // Array of url strings
+    const [showLinkBox, setShowLinkBox] = useState(!!initialLinkInput)
+    const [linkInput, setLinkInput] = useState(initialLinkInput)
     // Stats for the cards (calculated from history)
     const todayLogs = history.filter(h => new Date(h.timestamp).toDateString() === new Date().toDateString());
     const hasTimeIn = todayLogs.some(l => l.type === 'IN');
     const hasTimeOut = todayLogs.some(l => l.type === 'OUT');
 
-    const submissionDraftKey = `dtr_submission_draft_${user.id}`
     const hasMountedDraftRef = useRef(false)
 
     useEffect(() => {
@@ -33,39 +53,9 @@ export default function Dashboard({ user }) {
         checkCutoff()
     }, [user.id])
 
-    // Restore any comments/links left over from a previous session (accidental
-    // refresh/navigation). The actual selected files can't survive a reload —
-    // browsers don't let JS re-access a picked file after the page reloads —
-    // so only the surrounding text is recoverable here.
-    useEffect(() => {
-        try {
-            const saved = localStorage.getItem(submissionDraftKey)
-            if (saved) {
-                const parsed = JSON.parse(saved)
-                if (parsed) {
-                    if (Array.isArray(parsed.submissionLinks) && parsed.submissionLinks.length > 0) {
-                        setSubmissionLinks(parsed.submissionLinks)
-                    }
-                    if (parsed.linkInput) {
-                        setLinkInput(parsed.linkInput)
-                        setShowLinkBox(true)
-                    }
-                    if (parsed.attachmentComment) {
-                        setAttachmentComment(parsed.attachmentComment)
-                        setShowCommentBox(true)
-                    }
-                }
-            }
-        } catch (e) {
-            console.warn('Failed to restore submission draft', e)
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user.id])
-
     // Keep the draft in sync so an accidental refresh doesn't lose it.
-    // Skips its very first run: on mount this would otherwise see the pre-restore
-    // (empty) state — the restore effect above hasn't committed yet — and wipe
-    // the draft it's about to bring back.
+    // Skips its very first run: the state above already matches localStorage
+    // from the initial read, so writing again there is redundant.
     useEffect(() => {
         if (!hasMountedDraftRef.current) {
             hasMountedDraftRef.current = true
