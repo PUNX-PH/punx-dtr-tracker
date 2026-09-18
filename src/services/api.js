@@ -1,4 +1,4 @@
-import { db } from '../firebase';
+import { auth, db } from '../firebase';
 import { collection, query, where, getDocs, getDoc, setDoc, addDoc, updateDoc, doc, Timestamp, orderBy, limit, onSnapshot, writeBatch } from "firebase/firestore";
 
 /**
@@ -683,3 +683,60 @@ export const api = {
         }
     }
 };
+
+// ---- DTR reminder (punx-messenger Worker) ----
+//
+// The reminder itself runs on a Cloudflare Worker, not here: it has to fire on
+// a schedule when nobody has this app open, and it writes into a DIFFERENT
+// Firebase project (punx-msg) that this client has no credentials for.
+//
+// Authenticated with the admin's own Firebase ID token rather than a shared
+// key. A key that unlocks "DM the entire workspace" cannot ship inside a React
+// bundle — that publishes it to everyone who opens the app. The Worker
+// verifies the token against punx-dtr and re-reads the caller's role, so
+// demoting someone takes effect at once.
+const REMINDER_API = 'https://punx-messenger-gifs.rey-433.workers.dev'
+
+async function reminderFetch(path, init = {}) {
+    const user = auth.currentUser
+    if (!user) return { success: false, message: 'Not signed in' }
+    try {
+        const res = await fetch(`${REMINDER_API}${path}`, {
+            ...init,
+            headers: {
+                ...(init.headers || {}),
+                Authorization: `Bearer ${await user.getIdToken()}`,
+                'Content-Type': 'application/json',
+            },
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) return { success: false, message: data.error || `HTTP ${res.status}` }
+        return { success: true, data }
+    } catch (error) {
+        // A CORS rejection and an offline browser are indistinguishable from
+        // here; say so rather than reporting a misleading cause.
+        return { success: false, message: `Could not reach the reminder service: ${error.message}` }
+    }
+}
+
+export const reminderApi = {
+    /** Render the message and count recipients. Writes nothing. */
+    preview: () => reminderFetch('/dtr/remind?dry=1&force=1', { method: 'POST' }),
+
+    /**
+     * Send for real. `onlyUid` restricts it to ONE punx-messenger user — the
+     * way to see the actual DM without involving 22 colleagues. A test send
+     * deliberately does not mark the cutoff as reminded, or testing it would
+     * cancel the real send.
+     */
+    send: (onlyUid = null) => reminderFetch(
+        `/dtr/remind?force=1${onlyUid ? `&only=${encodeURIComponent(onlyUid)}` : ''}`,
+        { method: 'POST' },
+    ),
+
+    getAutoSend: () => reminderFetch('/dtr/auto-send', { method: 'GET' }),
+    setAutoSend: (enabled) => reminderFetch('/dtr/auto-send', {
+        method: 'POST',
+        body: JSON.stringify({ enabled }),
+    }),
+}

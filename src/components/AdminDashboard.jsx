@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Search, User as UserIcon, Loader2, FileSpreadsheet, Users, Folder } from 'lucide-react'
 import * as XLSX from 'xlsx'
-import { api, defaultSubmitBy } from '../services/api'
+import { api, defaultSubmitBy, reminderApi } from '../services/api'
 import DTRTable from './DTRTable'
 import RecentActivityTable from './RecentActivityTable'
 import CutoffsView from './CutoffsView'
@@ -141,6 +141,59 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
             alert("Failed to update deadline: " + res.message)
         }
     }
+    // ---- DTR reminder (sent as a bot DM in punx-messenger) ----
+    const [autoSend, setAutoSend] = useState(null) // null = not loaded yet
+    const [reminderBusy, setReminderBusy] = useState(false)
+
+    useEffect(() => {
+        let cancelled = false
+        reminderApi.getAutoSend().then(res => {
+            if (!cancelled && res.success) setAutoSend(res.data.enabled)
+        })
+        return () => { cancelled = true }
+    }, [])
+
+    const handleToggleAutoSend = async () => {
+        const next = !autoSend
+        setReminderBusy(true)
+        const res = await reminderApi.setAutoSend(next)
+        setReminderBusy(false)
+        if (res.success) setAutoSend(res.data.enabled)
+        else alert("Couldn't change the setting: " + res.message)
+    }
+
+    const handlePreviewReminder = async () => {
+        setReminderBusy(true)
+        const res = await reminderApi.preview()
+        setReminderBusy(false)
+        if (!res.success) return alert("Preview failed: " + res.message)
+        const d = res.data
+        if (!d.text) return alert(d.reason || 'Nothing to send.')
+        const warning = d.submitByWasStored
+            ? ''
+            : 'WARNING: this cutoff has no Submit By set, so the deadline below is a guess.\n'
+        alert(
+            'Would send to ' + d.wouldSendTo + ' people on ' + d.sendOn + '.\n'
+            + warning
+            + '\n----------\n' + d.text
+        )
+    }
+
+    const handleSendReminder = async () => {
+        // One confirmation carrying the number, because the count is the part
+        // that cannot be undone.
+        if (!window.confirm(
+            'Send the DTR reminder now, as a DM to EVERYONE in Punx Messenger?\n\n'
+            + 'This cannot be undone. Use Preview first if you have not.'
+        )) return
+        setReminderBusy(true)
+        const res = await reminderApi.send()
+        setReminderBusy(false)
+        if (!res.success) return alert("Send failed: " + res.message)
+        const d = res.data
+        alert(d.sent ? 'Sent to ' + d.sent + ' people.' : (d.reason || 'Nothing was sent.'))
+    }
+
     const handleEndDateChange = (value) => {
         setEndDate(value)
         if (!submitByTouched) setSubmitBy(defaultSubmitBy(value))
@@ -408,6 +461,49 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                         </button>
                     </div>
                 </div>
+            </div>
+
+            {/* DTR reminder. Runs on a Cloudflare Worker and posts as a bot into
+                Punx Messenger, so nothing here needs anyone to be online — the
+                buttons only ask it to run now instead of on schedule. */}
+            <div className="flex flex-wrap items-center gap-3 bg-[var(--surface-1)] rounded-2xl border border-[var(--border)] p-3">
+                <div className="flex-1 min-w-[220px]">
+                    <p className="text-xs font-bold text-[var(--text-primary)]">Punx Messenger reminder</p>
+                    <p className="text-[11px] text-[var(--text-muted)]">
+                        DMs everyone to submit their DTR, automatically the day before the cutoff ends.
+                    </p>
+                </div>
+
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                        type="checkbox"
+                        className="accent-[var(--accent-purple)] cursor-pointer"
+                        checked={autoSend === true}
+                        disabled={autoSend === null || reminderBusy}
+                        onChange={handleToggleAutoSend}
+                    />
+                    <span className="text-[11px] text-[var(--text-primary)]">
+                        {autoSend === null ? 'Checking…' : autoSend ? 'Auto-send on' : 'Auto-send off'}
+                    </span>
+                </label>
+
+                {/* Preview first, and it is listed first for that reason: it
+                    writes nothing, and it is the only way to see the exact
+                    wording and recipient count before 20-odd people do. */}
+                <button
+                    onClick={handlePreviewReminder}
+                    disabled={reminderBusy}
+                    className="px-3 py-1.5 bg-[var(--surface-3)] hover:bg-[var(--surface-2)] disabled:opacity-40 text-[var(--text-primary)] text-xs font-bold rounded-lg border border-[var(--border-strong)] transition-colors"
+                >
+                    Preview
+                </button>
+                <button
+                    onClick={handleSendReminder}
+                    disabled={reminderBusy}
+                    className="px-3 py-1.5 bg-[var(--accent-purple)] hover:bg-[var(--accent-purple-hover)] disabled:opacity-40 text-white text-xs font-bold rounded-lg transition-colors"
+                >
+                    {reminderBusy ? 'Working…' : 'Send now'}
+                </button>
             </div>
 
             {/* View Switcher: only super admins can see the Cutoffs folder view */}
