@@ -168,14 +168,22 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
         setReminderBusy(false)
         if (!res.success) return alert("Preview failed: " + res.message)
         const d = res.data
-        if (!d.text) return alert(d.reason || 'Nothing to send.')
+        if (!d.messages) return alert(d.reason || 'Nothing to send.')
+
+        // Both messages, because neither is visible on the day the other
+        // fires, and someone checking the wording wants to see all of it.
         const warning = d.submitByWasStored
             ? ''
-            : 'WARNING: this cutoff has no Submit By set, so the deadline below is a guess.\n'
+            : 'WARNING: this cutoff has no Submit By set, so the deadline in these is a guess.\n\n'
         alert(
-            'Would send to ' + d.wouldSendTo + ' people on ' + d.sendOn + '.\n'
-            + warning
-            + '\n----------\n' + d.text
+            warning
+            + 'Goes to ' + d.wouldSendTo + ' people.\n\n'
+            + 'HEADS-UP, sends ' + d.sendDays.cutoff
+            + (d.alreadySent.cutoff ? ' (already sent)' : '') + '\n'
+            + '----------\n' + d.messages.cutoff + '\n\n'
+            + 'LAST CALL, sends ' + d.sendDays.deadline
+            + (d.alreadySent.deadline ? ' (already sent)' : '') + '\n'
+            + '----------\n' + d.messages.deadline
         )
     }
 
