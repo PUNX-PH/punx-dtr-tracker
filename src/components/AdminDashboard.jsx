@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Search, User as UserIcon, Loader2, FileSpreadsheet, Users, Folder } from 'lucide-react'
 import * as XLSX from 'xlsx'
-import { api } from '../services/api'
+import { api, defaultSubmitBy } from '../services/api'
 import DTRTable from './DTRTable'
 import RecentActivityTable from './RecentActivityTable'
 import CutoffsView from './CutoffsView'
@@ -19,6 +19,9 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
     const [cutoffs, setCutoffs] = useState([]) // List of all available cutoffs
     const [startDate, setStartDate] = useState('')
     const [endDate, setEndDate] = useState('')
+    // The deadline the reminder quotes. Prefilled from endDate, and left
+    // editable because that default is only right until a holiday moves it.
+    const [submitBy, setSubmitBy] = useState('')
     const [submissions, setSubmissions] = useState({}) // Map userId -> submission
 
     useEffect(() => {
@@ -101,11 +104,22 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
         }
     }
 
+    // Keep the deadline trailing endDate until someone edits it by hand; after
+    // that it is theirs and picking a new end date must not silently overwrite
+    // it. `touched` is what tells the two apart.
+    const [submitByTouched, setSubmitByTouched] = useState(false)
+    const handleEndDateChange = (value) => {
+        setEndDate(value)
+        if (!submitByTouched) setSubmitBy(defaultSubmitBy(value))
+    }
+
     const handleSetCutoff = async () => {
         if (!startDate || !endDate) return alert("Please select start and end dates")
-        const res = await api.setCutoff(startDate, endDate)
+        if (!submitBy) return alert("Please set a submission deadline")
+        const res = await api.setCutoff(startDate, endDate, submitBy)
         if (res.success) {
             alert("New Cutoff Period Set!")
+            setSubmitByTouched(false)
             loadCutoff()
         } else {
             alert("Failed to set cutoff")
@@ -310,7 +324,15 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                             type="date"
                             className="bg-[var(--surface-1)] text-[var(--text-primary)] text-xs px-2 py-1.5 rounded border border-[var(--border-strong)] focus:outline-none focus:border-[var(--accent-purple)]"
                             value={endDate}
-                            onChange={(e) => setEndDate(e.target.value)}
+                            onChange={(e) => handleEndDateChange(e.target.value)}
+                        />
+                        <span className="text-[var(--text-muted)] text-xs">due</span>
+                        <input
+                            type="datetime-local"
+                            title="Deadline quoted in the DTR reminder. Defaults to 10:00 AM the day after the period ends."
+                            className="bg-[var(--surface-1)] text-[var(--text-primary)] text-xs px-2 py-1.5 rounded border border-[var(--border-strong)] focus:outline-none focus:border-[var(--accent-purple)]"
+                            value={submitBy}
+                            onChange={(e) => { setSubmitByTouched(true); setSubmitBy(e.target.value) }}
                         />
                         <button
                             onClick={handleSetCutoff}

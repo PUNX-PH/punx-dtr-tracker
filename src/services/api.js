@@ -1,6 +1,30 @@
 import { db } from '../firebase';
 import { collection, query, where, getDocs, getDoc, setDoc, addDoc, updateDoc, doc, Timestamp, orderBy, limit, onSnapshot, writeBatch } from "firebase/firestore";
 
+/**
+ * The deadline a cutoff gets unless someone changes it: 10:00 AM the day after
+ * the period closes. Matches what the reminder has always said — a period
+ * ending Thu Sep 10 was due 10:00 AM Fri Sep 11.
+ *
+ * This is a DEFAULT, not a rule. It prefills the admin form so setting a
+ * cutoff stays one click, and the moment a holiday or long weekend moves the
+ * real deadline, someone edits the field instead of discovering the message
+ * has been quoting a fiction.
+ *
+ * Takes and returns the `YYYY-MM-DDTHH:mm` that `<input type="datetime-local">`
+ * uses, and builds the date in LOCAL time deliberately: `new Date('2026-09-10')`
+ * parses as UTC and lands on the 9th for anyone behind it, which is exactly the
+ * off-by-one this field exists to prevent.
+ */
+export function defaultSubmitBy(endDateStr) {
+    if (!endDateStr) return '';
+    const [y, m, d] = endDateStr.split('-').map(Number);
+    if (!y || !m || !d) return '';
+    const due = new Date(y, m - 1, d + 1, 10, 0, 0, 0); // rolls months/years itself
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${due.getFullYear()}-${pad(due.getMonth() + 1)}-${pad(due.getDate())}T10:00`;
+}
+
 export const api = {
     login: async (pin) => {
         try {
@@ -451,11 +475,22 @@ export const api = {
     },
 
     // Cutoff Management
-    setCutoff: async (startDate, endDate) => {
+    // submitBy is the deadline quoted to everyone in the reminder — "no later
+    // than 10:00 AM on Friday, September 11". It is STORED rather than derived
+    // from endDate because a derived deadline is right until the first holiday
+    // or long weekend moves it, and that failure is silent and goes to the
+    // whole team at once: everyone reads an authoritative-looking time, submits
+    // against it, and misses the real one. Getting the send DAY wrong costs a
+    // reminder arriving early; getting this wrong costs payroll.
+    //
+    // Optional so existing callers and the cutoffs already in Firestore keep
+    // working — anything reading it must handle absence, see defaultSubmitBy.
+    setCutoff: async (startDate, endDate, submitBy = null) => {
         try {
             const newCutoff = {
                 startDate: Timestamp.fromDate(new Date(startDate)),
                 endDate: Timestamp.fromDate(new Date(endDate)),
+                submitBy: submitBy ? Timestamp.fromDate(new Date(submitBy)) : null,
                 createdAt: Timestamp.now()
             };
             const docRef = await addDoc(collection(db, "cutoffs"), newCutoff);
