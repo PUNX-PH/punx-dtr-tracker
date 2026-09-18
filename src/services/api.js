@@ -501,6 +501,27 @@ export const api = {
         }
     },
 
+    // Cutoffs could only ever be CREATED, which made submitBy unreachable for
+    // every period already running — including the one live when the field
+    // shipped. Without this the reminder falls back to a derived deadline for
+    // months, which is the exact thing the field exists to stop: the first
+    // fallback it produced landed on a Saturday.
+    //
+    // Deliberately narrow. The dates define a period people have already
+    // logged time against and are not something to edit casually; the deadline
+    // is a scheduling decision that legitimately changes for a holiday.
+    updateCutoffDeadline: async (cutoffId, submitBy) => {
+        try {
+            await updateDoc(doc(db, "cutoffs", cutoffId), {
+                submitBy: Timestamp.fromDate(new Date(submitBy)),
+            });
+            return { success: true };
+        } catch (error) {
+            console.error("Update cutoff deadline error", error);
+            return { success: false, message: error.message };
+        }
+    },
+
     getActiveCutoff: async () => {
         try {
             // Get the most recently created cutoff

@@ -108,6 +108,39 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
     // that it is theirs and picking a new end date must not silently overwrite
     // it. `touched` is what tells the two apart.
     const [submitByTouched, setSubmitByTouched] = useState(false)
+
+    // Deadline of the cutoff currently SELECTED above — distinct from the
+    // submitBy on the "Set New" form, which belongs to a cutoff that does not
+    // exist yet. Conflating the two would have picking a cutoff silently
+    // rewrite the form, or saving the form silently rewrite a live cutoff.
+    const [editDeadline, setEditDeadline] = useState('')
+    const [savingDeadline, setSavingDeadline] = useState(false)
+
+    // `datetime-local` wants local wall-clock `YYYY-MM-DDTHH:mm`; toISOString
+    // is UTC and would show the wrong hour, so build it from local parts.
+    const toLocalInput = (date) => {
+        if (!date) return ''
+        const p = (n) => String(n).padStart(2, '0')
+        return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}`
+            + `T${p(date.getHours())}:${p(date.getMinutes())}`
+    }
+
+    useEffect(() => {
+        setEditDeadline(cutoff?.submitBy ? toLocalInput(cutoff.submitBy.toDate()) : '')
+    }, [cutoff])
+
+    const handleSaveDeadline = async () => {
+        if (!cutoff || !editDeadline) return
+        setSavingDeadline(true)
+        const res = await api.updateCutoffDeadline(cutoff.id, editDeadline)
+        setSavingDeadline(false)
+        if (res.success) {
+            alert("Deadline updated. The DTR reminder will quote this.")
+            loadCutoffs()
+        } else {
+            alert("Failed to update deadline: " + res.message)
+        }
+    }
     const handleEndDateChange = (value) => {
         setEndDate(value)
         if (!submitByTouched) setSubmitBy(defaultSubmitBy(value))
@@ -120,7 +153,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
         if (res.success) {
             alert("New Cutoff Period Set!")
             setSubmitByTouched(false)
-            loadCutoff()
+            loadCutoffs()
         } else {
             alert("Failed to set cutoff")
         }
@@ -311,6 +344,39 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                             ))}
                         </select>
                     </div>
+
+                    {/* Deadline of the SELECTED cutoff. Separate from the one on
+                        the "Set New" form, which belongs to a period that does not
+                        exist yet — and the reason this exists at all is that cutoffs
+                        could previously only be created, so every period already
+                        running had no deadline to quote. */}
+                    {cutoff && (
+                        <>
+                            <div className="h-8 w-[1px] bg-[var(--border-strong)]"></div>
+                            <div className="px-2">
+                                <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-bold">
+                                    Submit By {!cutoff.submitBy && <span className="text-[var(--accent-purple)]">— not set</span>}
+                                </p>
+                                <div className="flex items-center gap-1.5">
+                                    <input
+                                        type="datetime-local"
+                                        title="Deadline quoted in the DTR reminder DM."
+                                        className="text-xs text-[var(--text-primary)] font-mono bg-[var(--surface-3)] border-none focus:outline-none rounded px-1 py-0.5"
+                                        value={editDeadline}
+                                        onChange={(e) => setEditDeadline(e.target.value)}
+                                    />
+                                    <button
+                                        onClick={handleSaveDeadline}
+                                        disabled={savingDeadline || !editDeadline}
+                                        className="px-2 py-0.5 bg-[var(--surface-1)] hover:bg-[var(--accent-purple)] disabled:opacity-40 disabled:hover:bg-[var(--surface-1)] text-[var(--text-primary)] text-[10px] font-bold rounded transition-colors"
+                                    >
+                                        {savingDeadline ? '...' : 'Save'}
+                                    </button>
+                                </div>
+                            </div>
+                        </>
+                    )}
+
                     <div className="h-8 w-[1px] bg-[var(--border-strong)]"></div>
                     <div className="flex items-center gap-2">
                         <input
