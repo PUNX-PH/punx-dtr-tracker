@@ -1,0 +1,184 @@
+rules_version = '2';
+
+// punx-dtr security rules.
+//
+// These replace `allow read, write: if request.auth != null` on `/{document=**}`,
+// which let ANY authenticated Google account read and write the entire database.
+// The `@punx.ai` check in Login.jsx runs in JavaScript AFTER Firebase Auth has
+// already issued a token, so it gates the UI and not the data — anyone talking
+// to Firestore directly never reaches it. The web config needed to do that is
+// public by design, committed in src/firebase.js and shipped in the bundle.
+//
+// Written against an audit of every call in src/services/api.js. The notes on
+// individual rules say which screen depends on them, because the failure mode
+// here is not a vulnerability, it is payroll going down.
+//
+// HOW A LIST QUERY IS EVALUATED — this shapes everything below.
+// A query is NOT checked against the documents it returns. The rule is
+// evaluated ONCE against the *query*, with a `resource` that knows only what
+// the query's own filters prove. `where('employeeId','==',uid)` makes
+// `resource.data.employeeId` readable; an unfiltered query leaves it unknown,
+// and reading an unknown field is an ERROR, which denies.
+//
+// So `resource.data.employeeId == myUid()` is not merely a permission check —
+// it is what refuses an unfiltered listing of the whole collection. Do not
+// "defensively" guard those reads with `in`; a guarded read evaluates to false
+// instead of erroring, the rule passes, and the collection is handed over.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function myUid() {
+      return request.auth.uid;
+    }
+
+    // The caller's own profile. Guarded with exists() because a first-time
+    // Google sign-in reads and writes before any profile exists, and get() on a
+    // missing document errors — which would deny the very create that fixes it.
+    function hasProfile() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(myUid()));
+    }
+
+    function myProfile() {
+      return get(/databases/$(database)/documents/users/$(myUid())).data;
+    }
+
+    // Defaults matter: documents predating a field must not error the rule.
+    function myRole() {
+      return hasProfile() ? myProfile().get('role', 'employee') : 'none';
+    }
+
+    function isAdmin() {
+      return myRole() in ['admin', 'super_admin'];
+    }
+
+    // Senior is a FLAG, not a role — App.jsx routes on `isSenior === true`
+    // independently of role. Seniors review their assigned employees' DTRs, so
+    // they read the same collections admins do.
+    function isSenior() {
+      return hasProfile() && myProfile().get('isSenior', false) == true;
+    }
+
+    function isStaff() {
+      return isAdmin() || isSenior();
+    }
+
+    // ---- users ----
+    // Holds `pin`, which is a credential: the app's legacy login() authenticates
+    // with `where('pin','==',pin)` alone. Under the old rules any signed-in
+    // account could list every user and harvest them. That login path is dead
+    // code today, but the field is still in the documents.
+    match /users/{userId} {
+      // Own profile always — ordered first so it short-circuits before
+      // isStaff(), which cannot resolve for someone who has no profile yet.
+      allow get: if signedIn() && (userId == myUid() || isStaff());
+
+      // AdminDashboard, SeniorDashboard and CutoffsView list every user.
+      // Employees never do. The unfiltered list is exactly what must not work
+      // for them, so there is no owner leg here to make provable.
+      allow list: if isStaff();
+
+      // First Google sign-in self-creates (api.ensureUserProfile). Pinned to
+      // `employee`: without this, a new account creates itself as super_admin
+      // and the role checks above become decoration.
+      allow create: if signedIn()
+        && userId == myUid()
+        && request.resource.data.uid == myUid()
+        && request.resource.data.get('role', 'employee') == 'employee'
+        && request.resource.data.get('isSenior', false) == false;
+
+      // role / isSenior / assignedSeniorId are the only updates the app makes,
+      // and all three are admin actions. Nothing self-updates a profile, so
+      // allowing it would widen the surface for no caller.
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // ---- logs ----
+    // The attendance record payroll is computed from.
+    match /logs/{logId} {
+      // getHistory always filters by employeeId, which is what makes the owner
+      // leg provable. An unfiltered list errors on that read and is denied.
+      allow read: if isStaff()
+        || (signedIn() && resource.data.employeeId == myUid());
+
+      // Admins create logs for others when correcting a DTR (api.createLog).
+      allow create: if isStaff()
+        || (signedIn() && request.resource.data.employeeId == myUid());
+
+      // Employees edit their own before submitting (DTRTable / saveDTRBatch).
+      allow update, delete: if isStaff()
+        || (signedIn() && resource.data.employeeId == myUid());
+    }
+
+    // ---- cutoffs ----
+    // Readable by EVERYONE signed in: Dashboard.jsx calls getActiveCutoff for
+    // ordinary employees, so restricting this to staff blanks the employee
+    // view. getActiveCutoff is an unfiltered orderBy query, which is fine only
+    // because this rule reads no fields.
+    match /cutoffs/{cutoffId} {
+      allow read: if signedIn();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // ---- submissions ----
+    // Doc id is `{userId}_{cutoffId}`.
+    match /submissions/{submissionId} {
+      allow read: if isStaff()
+        || (signedIn() && resource.data.userId == myUid());
+
+      allow create: if isStaff()
+        || (signedIn() && request.resource.data.userId == myUid());
+
+      // An employee may submit and resubmit, but only into a pending state.
+      // Without that clause the owner leg lets them approve their own DTR,
+      // which is the entire point of having a senior review it.
+      allow update: if isStaff()
+        || (signedIn()
+            && resource.data.userId == myUid()
+            && request.resource.data.get('status', 'pending') in ['pending', 'pending_senior']);
+
+      allow delete: if isStaff();
+    }
+
+    // ---- notifications ----
+    match /notifications/{notificationId} {
+      // Filtered by recipientId at every call site, which is what makes this
+      // provable — and what refuses an unfiltered sweep of everyone's alerts.
+      allow read: if isAdmin()
+        || (signedIn() && resource.data.recipientId == myUid());
+
+      // Anyone signed in may notify: submitting a DTR creates one addressed to
+      // the reviewing senior, so the sender is not the recipient.
+      allow create: if signedIn();
+
+      // Marking read.
+      allow update: if isAdmin()
+        || (signedIn() && resource.data.recipientId == myUid());
+
+      allow delete: if isAdmin();
+    }
+
+    // ---- settings ----
+    // The DTR reminder's kill switch. Written only by the Cloudflare Worker via
+    // a service account, which bypasses rules entirely — so the client needs no
+    // write here, and is given none.
+    match /settings/{settingId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // Anything not named above is denied. The previous catch-all is what this
+    // whole file exists to remove; a new collection should have to be thought
+    // about rather than inheriting access.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
