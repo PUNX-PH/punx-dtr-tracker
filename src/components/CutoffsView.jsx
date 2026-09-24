@@ -152,8 +152,8 @@ export default function CutoffsView() {
     const sortedCutoffs = [...cutoffs].sort((a, b) => b.startDate.toDate() - a.startDate.toDate())
 
     return (
-        <div className="flex flex-col h-full gap-6 animate-in fade-in duration-500">
-            <div className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="flex flex-col lg:h-full gap-4 sm:gap-6 animate-in fade-in duration-500">
+            <div className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                     <div className="p-3 bg-[var(--accent-purple)]/10 rounded-xl text-[var(--accent-purple)]">
                         <Folder size={20} />
@@ -176,7 +176,7 @@ export default function CutoffsView() {
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+            <div className="flex-1 min-h-0 lg:overflow-y-auto space-y-3 lg:pr-1">
                 {loading ? (
                     <div className="flex justify-center py-12 text-[var(--text-muted)]">
                         <Loader2 className="animate-spin" size={28} />
@@ -197,12 +197,12 @@ export default function CutoffsView() {
                             <div key={cutoff.id} className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] overflow-hidden">
                                 <button
                                     onClick={() => toggleFolder(cutoff)}
-                                    className="w-full flex items-center justify-between gap-4 p-5 hover:bg-white/5 transition-colors text-left"
+                                    className="w-full flex items-center justify-between gap-3 p-4 sm:p-5 hover:bg-white/5 transition-colors text-left"
                                 >
-                                    <div className="flex items-center gap-3">
-                                        {isOpen ? <FolderOpen size={20} className="text-[var(--accent-purple)]" /> : <Folder size={20} className="text-[var(--text-muted)]" />}
-                                        <div>
-                                            <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        {isOpen ? <FolderOpen size={20} className="text-[var(--accent-purple)] shrink-0" /> : <Folder size={20} className="text-[var(--text-muted)] shrink-0" />}
+                                        <div className="min-w-0">
+                                            <div className="flex flex-wrap md:flex-nowrap items-center gap-2">
                                                 <h3 className="text-sm font-bold text-[var(--text-primary)]">{formatCutoffLabel(cutoff)}</h3>
                                                 {isCurrent && (
                                                     <span className="text-[9px] bg-[var(--accent-purple)]/20 text-[var(--accent-purple)] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider border border-[var(--accent-purple)]/20">
@@ -213,11 +213,11 @@ export default function CutoffsView() {
                                             <p className="text-xs text-[var(--text-muted)] mt-0.5">{filteredUsers.length} employee{filteredUsers.length !== 1 ? 's' : ''}</p>
                                         </div>
                                     </div>
-                                    {isOpen ? <ChevronDown size={18} className="text-[var(--text-muted)]" /> : <ChevronRight size={18} className="text-[var(--text-muted)]" />}
+                                    {isOpen ? <ChevronDown size={18} className="text-[var(--text-muted)] shrink-0" /> : <ChevronRight size={18} className="text-[var(--text-muted)] shrink-0" />}
                                 </button>
 
                                 {isOpen && (
-                                    <div className="border-t border-[var(--border)] p-5 space-y-8">
+                                    <div className="border-t border-[var(--border)] p-3 sm:p-5 space-y-8">
                                         {filteredUsers.length === 0 ? (
                                             <p className="text-sm text-[var(--text-muted)] text-center py-6">No employees found</p>
                                         ) : (
@@ -228,14 +228,14 @@ export default function CutoffsView() {
 
                                                 return (
                                                     <div key={user.id} className="space-y-3">
-                                                        <div className="flex items-center justify-between gap-4 flex-wrap">
-                                                            <div className="flex items-center gap-3">
+                                                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                                                            <div className="flex items-center gap-3 min-w-0 flex-wrap md:flex-nowrap">
                                                                 <div className="w-8 h-8 rounded-full bg-[var(--surface-3)] text-[var(--text-muted)] flex items-center justify-center font-bold text-xs flex-shrink-0">
                                                                     {user.name?.charAt(0) || '?'}
                                                                 </div>
-                                                                <div>
-                                                                    <p className="text-sm font-bold text-[var(--text-primary)]">{user.name || 'Unknown'}</p>
-                                                                    <p className="text-xs text-[var(--text-muted)]">{user.email}</p>
+                                                                <div className="min-w-0">
+                                                                    <p className="text-sm font-bold text-[var(--text-primary)] truncate">{user.name || 'Unknown'}</p>
+                                                                    <p className="text-xs text-[var(--text-muted)] truncate">{user.email}</p>
                                                                 </div>
                                                                 {submission && (
                                                                     <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase border
@@ -249,7 +249,7 @@ export default function CutoffsView() {
                                                             <button
                                                                 onClick={() => handleExport(user, history || [], cutoff)}
                                                                 disabled={isLoadingHistory}
-                                                                className="flex items-center gap-2 px-3 py-1.5 bg-[var(--accent-green)] hover:bg-[var(--accent-green-hover)] text-black text-xs font-bold rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                                                className="flex items-center gap-2 px-3 py-2 sm:py-1.5 bg-[var(--accent-green)] hover:bg-[var(--accent-green-hover)] text-black text-xs font-bold rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
                                                             >
                                                                 <FileSpreadsheet size={14} />
                                                                 Export

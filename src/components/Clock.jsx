@@ -9,11 +9,11 @@ export default function Clock() {
     }, [])
 
     return (
-        <div className="text-center p-4">
-            <div className="text-4xl md:text-5xl font-mono font-bold text-[var(--text-primary)] tracking-wider">
+        <div className="text-center p-2 sm:p-4">
+            <div className="text-[2rem] xs:text-4xl md:text-5xl font-mono font-bold text-[var(--text-primary)] tracking-wide sm:tracking-wider tabular-nums">
                 {date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             </div>
-            <div className="text-[var(--text-secondary)] font-medium mt-1 text-lg">
+            <div className="text-[var(--text-secondary)] font-medium mt-1 text-sm sm:text-lg text-balance">
                 {date.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </div>
         </div>

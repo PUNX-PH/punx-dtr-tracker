@@ -513,10 +513,10 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
     return (
         <div className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] overflow-hidden">
             {/* Header Metadata Area */}
-            <div className="p-6 border-b border-[var(--border)] flex flex-col md:flex-row justify-between md:items-center gap-4">
+            <div className="p-4 sm:p-6 border-b border-[var(--border)] flex flex-col md:flex-row justify-between md:items-center gap-4">
                 <div>
-                    <h3 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">DAILY TIME RECORD</h3>
-                    <div className="flex items-center gap-2 mt-1">
+                    <h3 className="text-lg sm:text-xl font-bold text-[var(--text-primary)] tracking-tight">DAILY TIME RECORD</h3>
+                    <div className="flex flex-wrap md:flex-nowrap items-center gap-2 mt-1">
                         <span className="text-[var(--text-muted)] text-xs uppercase tracking-widest">Period Start Date:</span>
                         {/* Date Picker */}
                         <input
@@ -528,12 +528,12 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap md:flex-nowrap items-center gap-2">
                     {editMode ? (
                         <>
                             <button
                                 onClick={handleSmartFill}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--accent-yellow)]/10 text-[var(--accent-yellow)] hover:bg-[var(--accent-yellow)]/20 text-sm font-bold transition-colors mr-2 border border-[var(--accent-yellow)]/20"
+                                className="flex items-center gap-2 px-4 py-2.5 md:py-2 rounded-xl bg-[var(--accent-yellow)]/10 text-[var(--accent-yellow)] hover:bg-[var(--accent-yellow)]/20 text-sm font-bold transition-colors border border-[var(--accent-yellow)]/20"
                                 title="Auto-fill Mon-Fri (9am-6pm)"
                             >
                                 <Zap size={16} />
@@ -541,7 +541,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                             </button>
                             <button
                                 onClick={handleClearRecords}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--accent-red)]/10 text-[var(--accent-red)] hover:bg-[var(--accent-red)]/20 text-sm font-bold transition-colors mr-2 border border-[var(--accent-red)]/20"
+                                className="flex items-center gap-2 px-4 py-2.5 md:py-2 rounded-xl bg-[var(--accent-red)]/10 text-[var(--accent-red)] hover:bg-[var(--accent-red)]/20 text-sm font-bold transition-colors border border-[var(--accent-red)]/20"
                                 title="Clear all records in view"
                             >
                                 <Trash2 size={16} />
@@ -550,7 +550,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                             <button
                                 onClick={handleCancel}
                                 disabled={saving}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--surface-3)] text-[var(--text-secondary)] hover:bg-[var(--surface-3-hover)] text-sm font-bold transition-colors"
+                                className="flex items-center gap-2 px-4 py-2.5 md:py-2 rounded-xl bg-[var(--surface-3)] text-[var(--text-secondary)] hover:bg-[var(--surface-3-hover)] text-sm font-bold transition-colors"
                             >
                                 <X size={16} />
                                 Cancel
@@ -558,7 +558,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                             <button
                                 onClick={handleSave}
                                 disabled={saving}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--accent-green)] text-black hover:bg-[var(--accent-green)]/90 text-sm font-bold transition-colors shadow-lg shadow-green-900/20"
+                                className="flex items-center gap-2 px-4 py-2.5 md:py-2 rounded-xl bg-[var(--accent-green)] text-black hover:bg-[var(--accent-green)]/90 text-sm font-bold transition-colors shadow-lg shadow-green-900/20"
                             >
                                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                                 Save Changes
@@ -567,7 +567,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                     ) : canEdit ? (
                         <button
                             onClick={() => setEditMode(true)}
-                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--accent-purple)]/10 text-[var(--accent-purple)] hover:bg-[var(--accent-purple)]/20 border border-[var(--accent-purple)]/50 text-sm font-bold transition-colors"
+                            className="flex items-center gap-2 px-4 py-2.5 md:py-2 rounded-xl bg-[var(--accent-purple)]/10 text-[var(--accent-purple)] hover:bg-[var(--accent-purple)]/20 border border-[var(--accent-purple)]/50 text-sm font-bold transition-colors"
                         >
                             <Pencil size={16} />
                             Edit Records
@@ -578,7 +578,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
 
             {/* Restored draft notice */}
             {restoredDraft && editMode && (
-                <div className="px-6 py-2 bg-[var(--accent-blue)]/10 text-[var(--accent-blue)] text-xs font-medium flex items-center justify-between border-b border-[var(--border)]">
+                <div className="px-4 sm:px-6 py-2 bg-[var(--accent-blue)]/10 text-[var(--accent-blue)] text-xs font-medium flex items-start sm:items-center justify-between gap-2 border-b border-[var(--border)]">
                     <span>Restored unsaved changes from your last session — click Save Changes to keep them, or Cancel to discard.</span>
                     <button
                         type="button"
@@ -591,9 +591,14 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                 </div>
             )}
 
+            {/* Swipe hint — the grid below scrolls sideways on phones. */}
+            <p className="md:hidden px-4 pt-3 text-[10px] font-medium uppercase tracking-widest text-[var(--text-muted)]">
+                Swipe the table sideways to see overtime and notes
+            </p>
+
             {/* The Grid */}
-            <div className="overflow-x-auto">
-                <table className="w-full text-center border-collapse">
+            <div className="overflow-x-auto overscroll-x-contain">
+                <table className="w-full min-w-[720px] text-center border-collapse">
                     <thead>
                         {/* Top Level Headers */}
                         <tr className="border-b border-[var(--border)]">

@@ -373,9 +373,9 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
     }
 
     return (
-        <div className="flex flex-col h-full gap-6 animate-in fade-in duration-500">
+        <div className="flex flex-col lg:h-full gap-4 sm:gap-6 animate-in fade-in duration-500">
             {/* Top Bar: Cutoff Management */}
-            <div className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                     <div className="p-3 bg-[var(--accent-purple)]/10 rounded-xl text-[var(--accent-purple)]">
                         <UserIcon size={20} />
@@ -386,7 +386,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                     </div>
                 </div>
 
-                <div className="flex items-center gap-4 bg-[var(--surface-3)] p-2 rounded-xl border border-[var(--border-strong)]">
+                <div className="w-full md:w-auto flex flex-wrap md:flex-nowrap items-center gap-y-3 gap-x-4 bg-[var(--surface-3)] p-2 rounded-xl border border-[var(--border-strong)]">
                     <div className="px-2">
                         <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-bold">Active Cutoff</p>
                         <select
@@ -413,7 +413,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                         running had no deadline to quote. */}
                     {cutoff && (
                         <>
-                            <div className="h-8 w-[1px] bg-[var(--border-strong)]"></div>
+                            <div className="hidden md:block h-8 w-[1px] bg-[var(--border-strong)]"></div>
                             <div className="px-2">
                                 <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-bold">
                                     Submit By {!cutoff.submitBy && <span className="text-[var(--accent-purple)]">— not set</span>}
@@ -438,8 +438,8 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                         </>
                     )}
 
-                    <div className="h-8 w-[1px] bg-[var(--border-strong)]"></div>
-                    <div className="flex items-center gap-2">
+                    <div className="hidden md:block h-8 w-[1px] bg-[var(--border-strong)]"></div>
+                    <div className="flex flex-wrap md:flex-nowrap items-center gap-2">
                         <input
                             type="date"
                             className="bg-[var(--surface-1)] text-[var(--text-primary)] text-xs px-2 py-1.5 rounded border border-[var(--border-strong)] focus:outline-none focus:border-[var(--accent-purple)]"
@@ -516,7 +516,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
 
             {/* View Switcher: only super admins can see the Cutoffs folder view */}
             {isSuperAdmin && (
-                <div className="flex items-center gap-2 bg-[var(--surface-1)] rounded-2xl border border-[var(--border)] p-1.5 w-fit">
+                <div className="flex items-center gap-2 bg-[var(--surface-1)] rounded-2xl border border-[var(--border)] p-1.5 w-full sm:w-fit">
                     <button
                         onClick={() => setView('employees')}
                         className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-colors
@@ -539,11 +539,11 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
             {view === 'cutoffs' && isSuperAdmin ? (
                 <CutoffsView />
             ) : (
-            <div className="flex flex-1 gap-6 overflow-hidden">
+            <div className="flex flex-col lg:flex-row flex-1 min-h-0 gap-4 lg:gap-6 lg:overflow-hidden">
                 {/* User List Panel */}
-                <div className="w-80 flex flex-col gap-4">
-                    <div className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] overflow-hidden flex flex-col h-full">
-                        <div className="p-6 border-b border-[var(--border)]">
+                <div className="w-full lg:w-80 shrink-0 flex flex-col gap-4">
+                    <div className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] overflow-hidden flex flex-col lg:h-full">
+                        <div className="p-4 sm:p-6 border-b border-[var(--border)]">
                             <h2 className="text-xl font-bold text-[var(--text-primary)] mb-4">Employees</h2>
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] h-4 w-4" />
@@ -557,7 +557,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                        <div className="flex-1 max-h-[45dvh] lg:max-h-none overflow-y-auto overscroll-contain p-2 space-y-1">
                             {loading ? (
                                 <div className="flex justify-center py-8 text-[var(--text-muted)]">
                                     <Loader2 className="animate-spin" />
@@ -644,15 +644,15 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                 </div>
 
                 {/* Right Panel: Selected User Detail */}
-                <div className="flex-1 flex flex-col h-full overflow-hidden">
+                <div className="flex-1 min-w-0 flex flex-col lg:h-full lg:overflow-hidden">
                     {selectedUser ? (
-                        <div className="h-full flex flex-col gap-6 overflow-y-auto pr-2 pb-6">
+                        <div className="flex flex-col gap-6 lg:h-full lg:overflow-y-auto lg:pr-2 pb-6">
                             {/* User Header */}
-                            <div className="flex flex-col md:flex-row justify-between items-start gap-4">
-                                <div>
-                                    <h2 className="text-3xl font-bold text-[var(--text-primary)] max-w-2xl truncate">{selectedUser.name}</h2>
-                                    <div className="flex items-center gap-3 text-[var(--text-muted)] mt-1">
-                                        <span className="text-sm">ID: {selectedUser.id}</span>
+                            <div className="flex flex-col lg:flex-row justify-between items-start gap-4">
+                                <div className="min-w-0 w-full lg:w-auto">
+                                    <h2 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)] max-w-full lg:max-w-2xl truncate">{selectedUser.name}</h2>
+                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[var(--text-muted)] mt-1">
+                                        <span className="text-xs sm:text-sm break-anywhere">ID: {selectedUser.id}</span>
                                         {selectedUser.role === 'admin' && (
                                             <span className="text-xs bg-[var(--accent-red)]/10 text-[var(--accent-red)] px-2 py-0.5 rounded font-bold uppercase tracking-wider">
                                                 Administrator
@@ -744,8 +744,8 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
 
                                 {/* Attachment Viewer */}
                                 {getSubmissionStatus(selectedUser.id) ? (
-                                    <div className="flex flex-col items-end gap-2">
-                                        <div className="flex flex-col md:flex-row items-end md:items-center justify-between w-full gap-4 mb-2">
+                                    <div className="w-full lg:w-auto flex flex-col items-start lg:items-end gap-2">
+                                        <div className="flex flex-col sm:flex-row items-start sm:items-center lg:items-center justify-between w-full gap-3 sm:gap-4 mb-2">
                                             {/* Actions for Super Admin */}
                                             {currentUser.role === 'super_admin' && !selectedUser.assignedSeniorId && ['pending', 'pending_senior'].includes(getSubmissionStatus(selectedUser.id).status) ? (
                                                 <div className="flex gap-2">
@@ -773,14 +773,14 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                             const sub = getSubmissionStatus(selectedUser.id);
                                             if (sub.links && sub.links.length > 0) {
                                                 return (
-                                                    <div className="flex flex-col gap-1 items-end w-full max-w-sm mb-2">
+                                                    <div className="flex flex-col gap-1 items-start lg:items-end w-full max-w-full lg:max-w-sm mb-2">
                                                         {sub.links.map((link, idx) => (
                                                             <a
                                                                 key={`link-${idx}`}
                                                                 href={link}
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
-                                                                className="text-xs text-[var(--accent-blue)] hover:text-[var(--accent-blue-hover)] underline break-all bg-[var(--surface-2)] p-2 rounded-lg border border-[var(--accent-blue)]/20 w-fit text-right"
+                                                                className="text-xs text-[var(--accent-blue)] hover:text-[var(--accent-blue-hover)] underline break-all bg-[var(--surface-2)] p-2 rounded-lg border border-[var(--accent-blue)]/20 max-w-full lg:w-fit lg:text-right"
                                                             >
                                                                 {link}
                                                             </a>
@@ -792,7 +792,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                         })()}
 
                                         {/* Image Attachments */}
-                                        <div className="flex flex-wrap gap-2 justify-end max-w-sm">
+                                        <div className="flex flex-wrap gap-2 justify-start lg:justify-end max-w-full lg:max-w-sm">
                                             {(() => {
                                                 const sub = getSubmissionStatus(selectedUser.id);
                                                 // Handle both new array format and old string format
@@ -839,7 +839,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                             // Handle new array format
                                             if (sub.attachmentComments && sub.attachmentComments.length > 0) {
                                                 return (
-                                                    <div className="mt-3 space-y-2 max-w-sm">
+                                                    <div className="mt-3 space-y-2 w-full max-w-full lg:max-w-sm">
                                                         <p className="text-[10px] text-[var(--accent-purple)] font-bold uppercase tracking-wider flex items-center gap-1">
                                                             <span>💬</span> Attachment Comments ({sub.attachmentComments.length})
                                                         </p>
@@ -855,7 +855,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                             // Handle legacy single comment format
                                             if (sub.attachmentComment) {
                                                 return (
-                                                    <div className="mt-3 p-3 bg-[var(--surface-3)] rounded-lg border border-[var(--border-strong)] max-w-sm">
+                                                    <div className="mt-3 p-3 bg-[var(--surface-3)] rounded-lg border border-[var(--border-strong)] w-full max-w-full lg:max-w-sm">
                                                         <p className="text-[10px] text-[var(--accent-purple)] font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
                                                             <span>💬</span> Attachment Comment
                                                         </p>
@@ -896,9 +896,9 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                             )}
                         </div>
                     ) : (
-                        <div className="h-full flex flex-col items-center justify-center bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] text-[var(--text-muted)]">
+                        <div className="h-full py-16 lg:py-0 px-6 text-center flex flex-col items-center justify-center bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] text-[var(--text-muted)]">
                             <UserIcon size={48} className="mb-4 opacity-20" />
-                            <p className="text-lg font-medium">Select an employee to view their records</p>
+                            <p className="text-base sm:text-lg font-medium">Select an employee to view their records</p>
                         </div>
                     )}
                 </div>

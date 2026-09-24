@@ -38,7 +38,7 @@ export default function NotificationBell({
     const unreadCount = notifications.filter(n => !n.read).length
 
     return (
-        <div ref={wrapRef} className="fixed top-4 right-4 md:top-8 md:right-8 z-40">
+        <div ref={wrapRef} className="fixed top-[calc(0.75rem+env(safe-area-inset-top,0px))] right-3 md:top-8 md:right-8 md:mt-0 z-40">
             <button
                 onClick={() => setOpen(o => !o)}
                 className="relative w-11 h-11 bg-[var(--surface-1)] border border-[var(--border)] rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors flex items-center justify-center shadow-lg"
@@ -54,7 +54,7 @@ export default function NotificationBell({
             </button>
 
             {open && (
-                <div className="absolute right-0 mt-2 w-96 max-w-[calc(100vw-2rem)] bg-[var(--surface-1)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden">
+                <div className="fixed left-3 right-3 top-[calc(3.75rem+env(safe-area-inset-top,0px))] md:absolute md:left-auto md:right-0 md:top-auto md:mt-2 w-auto md:w-96 bg-[var(--surface-1)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden">
                     <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
                         <h3 className="text-sm font-bold text-[var(--text-primary)]">Notifications</h3>
                         {unreadCount > 0 && (
@@ -67,7 +67,7 @@ export default function NotificationBell({
                         )}
                     </div>
 
-                    <div className="max-h-[480px] overflow-y-auto">
+                    <div className="max-h-[min(480px,60dvh)] overflow-y-auto overscroll-contain">
                         {notifications.length === 0 ? (
                             <div className="text-center py-12 text-[var(--text-muted)] text-sm">
                                 No notifications yet
@@ -96,16 +96,16 @@ export default function NotificationBell({
                                                     <p className="text-[10px] text-[var(--text-muted)] mt-2">{formatTime(n.createdAt)}</p>
 
                                                     {ACTIONABLE_TYPES.has(n.type) && !n.read ? (
-                                                        <div className="flex gap-4 mt-3">
+                                                        <div className="flex gap-2 mt-3">
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); onApprove(n) }}
-                                                                className="text-xs font-bold text-[var(--accent-green)] hover:text-[var(--accent-green-hover)] uppercase tracking-wider transition-colors"
+                                                                className="text-xs font-bold text-[var(--accent-green)] hover:text-[var(--accent-green-hover)] uppercase tracking-wider transition-colors py-2 px-3 -mx-1 rounded-lg bg-[var(--accent-green)]/10 md:bg-transparent md:px-0 md:mx-0 md:py-0"
                                                             >
                                                                 Approve
                                                             </button>
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); onDecline(n) }}
-                                                                className="text-xs font-bold text-[var(--accent-red)] hover:text-[var(--accent-red-hover)] uppercase tracking-wider transition-colors"
+                                                                className="text-xs font-bold text-[var(--accent-red)] hover:text-[var(--accent-red-hover)] uppercase tracking-wider transition-colors py-2 px-3 rounded-lg bg-[var(--accent-red)]/10 md:bg-transparent md:px-0 md:py-0"
                                                             >
                                                                 Reject
                                                             </button>
@@ -113,7 +113,7 @@ export default function NotificationBell({
                                                     ) : !n.read ? (
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); onMarkRead(n) }}
-                                                            className="text-xs font-bold text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors mt-2 uppercase tracking-wider"
+                                                            className="text-xs font-bold text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors mt-2 uppercase tracking-wider py-2 md:py-0"
                                                         >
                                                             Mark as read
                                                         </button>

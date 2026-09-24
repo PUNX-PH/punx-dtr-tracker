@@ -6,7 +6,13 @@ export default {
     ],
     darkMode: 'class',
     theme: {
-        extend: {},
+        extend: {
+            // Phones narrower than ~480px still need a break below
+            // Tailwind's 640px `sm` for the tightest controls.
+            screens: {
+                xs: '480px',
+            },
+        },
     },
     plugins: [],
 }

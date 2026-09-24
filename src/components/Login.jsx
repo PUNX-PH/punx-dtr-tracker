@@ -46,12 +46,12 @@ export default function Login({ onLogin }) {
     }
 
     return (
-        <div className="w-full max-w-md bg-[var(--surface-1)] rounded-3xl shadow-2xl p-8 border border-[var(--border)] animate-in fade-in zoom-in duration-500">
-            <div className="text-center mb-8">
-                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-black text-white mb-6 border border-[var(--border)]">
+        <div className="w-full max-w-md bg-[var(--surface-1)] rounded-3xl shadow-2xl p-6 sm:p-8 border border-[var(--border)] animate-in fade-in zoom-in duration-500">
+            <div className="text-center mb-6 sm:mb-8">
+                <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-black text-white mb-5 sm:mb-6 border border-[var(--border)]">
                     <span className="text-2xl font-black tracking-tighter">PUNX</span>
                 </div>
-                <h1 className="text-3xl font-bold text-[var(--text-primary)] tracking-tight">Welcome Back</h1>
+                <h1 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)] tracking-tight">Welcome Back</h1>
                 <p className="text-[var(--text-muted)] mt-2">Sign in to access your dashboard</p>
             </div>
 
@@ -65,7 +65,7 @@ export default function Login({ onLogin }) {
                 <button
                     onClick={handleGoogleLogin}
                     disabled={loading}
-                    className="w-full bg-black hover:bg-slate-900 text-white border border-[#333] font-bold py-4 px-4 rounded-xl transition-all shadow-lg hover:-translate-y-0.5 flex items-center justify-center gap-3 disabled:opacity-70 disabled:cursor-not-allowed"
+                    className="w-full bg-black hover:bg-slate-900 text-white border border-[#333] font-bold py-4 px-4 rounded-xl transition-all shadow-lg hover:-translate-y-0.5 active:scale-[0.99] flex items-center justify-center gap-3 disabled:opacity-70 disabled:cursor-not-allowed"
                 >
                     {loading ? (
                         <span>Connecting...</span>

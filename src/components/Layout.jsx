@@ -105,7 +105,7 @@ export default function Layout({ children, user, onLogout, activeTab, onTabChang
     }
 
     return (
-        <div className="flex h-screen bg-[var(--surface-0)] overflow-hidden relative">
+        <div className="flex h-[100dvh] bg-[var(--surface-0)] overflow-hidden relative">
             {/* Persistent bell — always visible across every dashboard */}
             <NotificationBell
                 notifications={notifications}
@@ -137,15 +137,16 @@ export default function Layout({ children, user, onLogout, activeTab, onTabChang
 
             {/* Sidebar Wrapper */}
             <div className={`
-                fixed md:relative z-50 h-full
-                transition-all duration-300 ease-in-out
+                fixed md:relative z-50 h-full max-w-[85vw] md:max-w-none
+                transition-transform md:transition-all duration-300 ease-in-out
                 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0 md:w-0 md:overflow-hidden'}
             `}>
                 <div className="h-full relative">
                     {/* Close Button for Mobile */}
                     <button
                         onClick={() => setSidebarOpen(false)}
-                        className="md:hidden absolute top-4 right-4 text-[var(--text-muted)] hover:text-[var(--text-primary)] z-50"
+                        aria-label="Close menu"
+                        className="md:hidden absolute top-3 right-3 p-2 -m-0.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] active:bg-[var(--surface-3)] z-50"
                     >
                         <X size={24} />
                     </button>
@@ -164,15 +165,22 @@ export default function Layout({ children, user, onLogout, activeTab, onTabChang
             </div>
 
             <main className="flex-1 overflow-auto relative">
-                {/* Header / Toggle Area */}
-                <div className="p-4 md:hidden">
-                    <button
-                        onClick={() => setSidebarOpen(true)}
-                        className="p-2 bg-[var(--surface-1)] border border-[var(--border)] rounded-xl text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors"
-                    >
-                        <Menu size={24} />
-                    </button>
-                </div>
+                {/* Header / Toggle Area — sticky so the menu stays reachable */}
+                <header className="md:hidden sticky top-0 z-30 pt-safe px-safe bg-[var(--surface-0)]/90 backdrop-blur-md border-b border-[var(--border)]">
+                    <div className="flex items-center gap-3 px-4 py-3 pr-16">
+                        <button
+                            onClick={() => setSidebarOpen(true)}
+                            aria-label="Open menu"
+                            className="p-2 bg-[var(--surface-1)] border border-[var(--border)] rounded-xl text-[var(--text-primary)] hover:bg-[var(--surface-3)] active:bg-[var(--surface-3)] transition-colors shrink-0"
+                        >
+                            <Menu size={24} />
+                        </button>
+                        <div className="min-w-0">
+                            <p className="text-base font-bold tracking-tighter text-[var(--text-primary)] leading-none">PUNX</p>
+                            <p className="text-[10px] font-medium tracking-widest text-[var(--text-muted)] mt-0.5">DTR TRACKER</p>
+                        </div>
+                    </div>
+                </header>
 
                 {/* Toggle Button for Desktop (Optional, if user wants to hide sidebar on desktop too) */}
                 {!isMobile && !isSidebarOpen && (
@@ -186,7 +194,7 @@ export default function Layout({ children, user, onLogout, activeTab, onTabChang
                     </div>
                 )}
 
-                <div className="max-w-7xl mx-auto p-4 md:p-8">
+                <div className="max-w-7xl mx-auto content-gutter">
                     {children}
                 </div>
             </main>

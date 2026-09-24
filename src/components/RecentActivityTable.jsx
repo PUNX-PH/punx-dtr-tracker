@@ -20,15 +20,19 @@ export default function RecentActivityTable({ history }) {
     return (
         <>
             <div className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] overflow-hidden">
-                <div className="p-6 border-b border-[var(--border)] flex justify-between items-center">
+                <div className="p-4 sm:p-6 border-b border-[var(--border)] flex justify-between items-center">
                     <div>
                         <h3 className="text-lg font-bold text-[var(--text-primary)]">Recent Activity</h3>
                         <p className="text-xs text-[var(--text-muted)]">Latest logs — Page {activityPage} of {Math.max(1, Math.ceil(history.length / ITEMS_PER_PAGE))}</p>
                     </div>
                 </div>
 
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left">
+                <p className="md:hidden px-4 pt-3 text-[10px] font-medium uppercase tracking-widest text-[var(--text-muted)]">
+                    Swipe sideways for notes and source
+                </p>
+
+                <div className="overflow-x-auto overscroll-x-contain">
+                    <table className="w-full min-w-[640px] text-left">
                         <thead className="bg-[var(--surface-2)] text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
                             <tr>
                                 <th className="px-6 py-4">Type</th>
@@ -118,8 +122,8 @@ export default function RecentActivityTable({ history }) {
                         : 'bg-[var(--surface-3)] text-[var(--text-primary)] hover:bg-[var(--surface-3-hover)] border border-[var(--border-strong)] hover:border-[var(--accent-purple)]'
 
                     return (
-                        <div className="p-4 border-t border-[var(--border)] flex items-center justify-between">
-                            <p className="text-xs text-[var(--text-muted)]">
+                        <div className="p-4 border-t border-[var(--border)] flex flex-col sm:flex-row items-center justify-between gap-3">
+                            <p className="text-xs text-[var(--text-muted)] text-center sm:text-left">
                                 Showing {((activityPage - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(activityPage * ITEMS_PER_PAGE, history.length)} of {history.length} entries
                             </p>
                             <div className="flex items-center gap-1">
@@ -127,7 +131,7 @@ export default function RecentActivityTable({ history }) {
                                     onClick={() => setActivityPage(1)}
                                     disabled={isFirst}
                                     title="First page"
-                                    className={`${navBtn} ${navBtnState(isFirst)}`}
+                                    className={`hidden xs:flex ${navBtn} ${navBtnState(isFirst)}`}
                                 >
                                     <ChevronsLeft size={14} />
                                 </button>
@@ -169,7 +173,7 @@ export default function RecentActivityTable({ history }) {
                                     onClick={() => setActivityPage(totalPages)}
                                     disabled={isLast}
                                     title="Last page"
-                                    className={`${navBtn} ${navBtnState(isLast)}`}
+                                    className={`hidden xs:flex ${navBtn} ${navBtnState(isLast)}`}
                                 >
                                     <ChevronsRight size={14} />
                                 </button>
@@ -182,9 +186,9 @@ export default function RecentActivityTable({ history }) {
             {/* Edit Detail Modal */}
             {selectedEditLog && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setSelectedEditLog(null)}>
-                    <div className="bg-[var(--surface-1)] border border-[var(--accent-amber)]/30 rounded-2xl shadow-2xl shadow-amber-900/20 w-full max-w-lg mx-4 animate-in zoom-in-95 duration-300" onClick={e => e.stopPropagation()}>
+                    <div className="bg-[var(--surface-1)] border border-[var(--accent-amber)]/30 rounded-2xl shadow-2xl shadow-amber-900/20 w-full max-w-lg mx-4 max-h-[85dvh] flex flex-col animate-in zoom-in-95 duration-300" onClick={e => e.stopPropagation()}>
                         {/* Modal Header */}
-                        <div className="p-6 border-b border-[var(--border)] flex items-center justify-between">
+                        <div className="p-4 sm:p-6 border-b border-[var(--border)] flex items-center justify-between gap-3 shrink-0">
                             <div className="flex items-center gap-3">
                                 <div className="p-2.5 bg-[var(--accent-amber)]/10 rounded-xl">
                                     <Pencil size={18} className="text-[var(--accent-amber)]" />
@@ -205,7 +209,7 @@ export default function RecentActivityTable({ history }) {
                         </div>
 
                         {/* Modal Body */}
-                        <div className="p-6 max-h-[60vh] overflow-y-auto space-y-3">
+                        <div className="p-4 sm:p-6 flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-3">
                             {selectedEditLog.editDetails && selectedEditLog.editDetails.length > 0 ? (
                                 selectedEditLog.editDetails.map((detail, i) => (
                                     <div key={i} className="p-4 bg-[var(--surface-2)] rounded-xl border border-[var(--border)] hover:border-[var(--accent-amber)]/20 transition-colors">
@@ -256,7 +260,7 @@ export default function RecentActivityTable({ history }) {
                         </div>
 
                         {/* Modal Footer */}
-                        <div className="p-4 border-t border-[var(--border)] flex justify-end">
+                        <div className="p-4 border-t border-[var(--border)] flex justify-end shrink-0">
                             <button
                                 onClick={() => setSelectedEditLog(null)}
                                 className="px-4 py-2 bg-[var(--surface-3)] hover:bg-[var(--surface-3-hover)] text-[var(--text-primary)] text-xs font-bold rounded-xl border border-[var(--border-strong)] hover:border-[var(--accent-amber)]/50 transition-all"

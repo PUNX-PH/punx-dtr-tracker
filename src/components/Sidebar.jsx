@@ -13,9 +13,9 @@ export default function Sidebar({ activeTab, onTabChange, onLogout, user, onClos
     ]
 
     return (
-        <div className="w-64 h-screen bg-[var(--surface-1)] border-r border-[var(--border)] flex flex-col flex-shrink-0 relative group">
+        <div className="w-64 h-[100dvh] bg-[var(--surface-1)] border-r border-[var(--border)] flex flex-col flex-shrink-0 relative group pt-safe">
             {/* Logo Area */}
-            <div className="p-6 flex items-center justify-between">
+            <div className="p-6 pr-14 md:pr-6 flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tighter text-[var(--text-primary)]">
                         PUNX
@@ -36,7 +36,7 @@ export default function Sidebar({ activeTab, onTabChange, onLogout, user, onClos
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 px-4 space-y-1 mt-6">
+            <nav className="flex-1 overflow-y-auto px-4 space-y-1 mt-6">
                 {menuItems.map((item) => (
                     <button
                         key={item.id}
@@ -57,7 +57,7 @@ export default function Sidebar({ activeTab, onTabChange, onLogout, user, onClos
             </nav>
 
             {/* Footer / User Profile */}
-            <div className="p-4 border-t border-[var(--border)]">
+            <div className="p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] border-t border-[var(--border)] shrink-0">
                 <div className="flex items-center gap-3 mb-4 px-2">
                     <div className="w-10 h-10 rounded-full bg-[var(--accent-purple)] flex items-center justify-center text-white font-bold">
                         {user.name.charAt(0)}

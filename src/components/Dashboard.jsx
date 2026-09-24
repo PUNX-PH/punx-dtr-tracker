@@ -210,8 +210,8 @@ export default function Dashboard({ user }) {
         <div className="space-y-8 animate-in fade-in duration-500 relative">
             {/* Cutoff Alert - Compact Popup */}
             {showCutoffAlert && activeCutoff && (
-                <div className="fixed top-24 right-4 md:right-8 z-50 animate-in slide-in-from-right fade-in duration-500 max-w-sm w-full">
-                    <div className="bg-[var(--surface-1)] border border-[var(--accent-yellow)]/50 p-6 rounded-2xl shadow-2xl relative bg-opacity-95 backdrop-blur-md">
+                <div className="fixed inset-x-3 top-[calc(4.5rem+env(safe-area-inset-top,0px))] md:inset-x-auto md:top-24 md:right-8 z-50 animate-in slide-in-from-right fade-in duration-500 w-auto md:w-full md:max-w-sm">
+                    <div className="bg-[var(--surface-1)] border border-[var(--accent-yellow)]/50 p-5 md:p-6 rounded-2xl shadow-2xl relative bg-opacity-95 backdrop-blur-md">
                         <button
                             onClick={() => setShowCutoffAlert(false)}
                             className="absolute top-3 right-3 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
@@ -245,7 +245,7 @@ export default function Dashboard({ user }) {
             {/* Success Overlay */}
             {showSuccess && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm pointer-events-none">
-                    <div className="bg-[var(--surface-1)] border border-[var(--accent-green)] px-8 py-6 rounded-2xl flex flex-col items-center shadow-xl shadow-green-900/20 animate-in zoom-in">
+                    <div className="bg-[var(--surface-1)] border border-[var(--accent-green)] mx-4 px-6 sm:px-8 py-6 rounded-2xl flex flex-col items-center shadow-xl shadow-green-900/20 animate-in zoom-in">
                         <CheckCircle2 size={48} className="text-[var(--accent-green)] mb-2" />
                         <span className="text-[var(--accent-green)] font-bold text-lg">Request Successful</span>
                     </div>
@@ -254,8 +254,8 @@ export default function Dashboard({ user }) {
 
             {/* Header Section */}
             <div className="flex flex-col gap-1">
-                <h2 className="text-3xl font-bold text-[var(--text-primary)]">Dashboard</h2>
-                <div className="flex items-center gap-2">
+                <h2 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">Dashboard</h2>
+                <div className="flex flex-wrap items-center gap-2">
                     <p className="text-[var(--text-muted)]">System overview and activity log</p>
                     {activeCutoff && (
                         <span className="px-2 py-0.5 bg-[var(--accent-yellow)]/10 text-[var(--accent-yellow)] text-[10px] font-bold uppercase rounded">
@@ -266,10 +266,10 @@ export default function Dashboard({ user }) {
             </div>
 
             {/* Action Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
 
                 {/* Clock Card */}
-                <div className="bg-[var(--surface-1)] p-6 rounded-3xl border border-[var(--border)] hover:border-[var(--accent-purple)]/50 transition-colors shadow-lg shadow-black/50 lg:col-span-2">
+                <div className="bg-[var(--surface-1)] p-5 sm:p-6 rounded-3xl border border-[var(--border)] hover:border-[var(--accent-purple)]/50 transition-colors shadow-lg shadow-black/50 xs:col-span-2">
                     <div className="flex items-center gap-4 mb-4">
                         <div className="p-3 bg-[var(--accent-purple)]/10 rounded-xl text-[var(--accent-purple)]">
                             <Clock size={24} />
@@ -285,15 +285,15 @@ export default function Dashboard({ user }) {
                 <button
                     onClick={() => handleLog('IN')}
                     disabled={processing || hasTimeIn}
-                    className={`bg-[var(--surface-1)] p-6 rounded-3xl border border-[var(--border)] text-left transition-all duration-300 group relative overflow-hidden
-                    ${hasTimeIn ? 'opacity-50 cursor-not-allowed' : 'hover:border-[var(--accent-green)] hover:-translate-y-1 hover:shadow-lg hover:shadow-[var(--accent-green)]/10'}
+                    className={`bg-[var(--surface-1)] p-5 sm:p-6 rounded-3xl border border-[var(--border)] text-left transition-all duration-300 group relative overflow-hidden
+                    ${hasTimeIn ? 'opacity-50 cursor-not-allowed' : 'hover:border-[var(--accent-green)] active:scale-[0.99] hover:-translate-y-1 hover:shadow-lg hover:shadow-[var(--accent-green)]/10'}
                 `}
                 >
                     <div className="relative z-10">
-                        <div className="p-3 bg-[var(--accent-green)]/10 w-fit rounded-xl text-[var(--accent-green)] mb-6">
+                        <div className="p-3 bg-[var(--accent-green)]/10 w-fit rounded-xl text-[var(--accent-green)] mb-4 sm:mb-6">
                             <CheckCircle size={24} />
                         </div>
-                        <h3 className="text-4xl font-bold text-[var(--text-primary)] mb-1">TIME IN</h3>
+                        <h3 className="text-3xl sm:text-4xl font-bold text-[var(--text-primary)] mb-1">TIME IN</h3>
                         <p className="text-xs font-semibold tracking-widest text-[var(--accent-green)] uppercase">
                             {hasTimeIn ? 'ALREADY LOGGED' : 'START SHIFT'}
                         </p>
@@ -306,15 +306,15 @@ export default function Dashboard({ user }) {
                 <button
                     onClick={() => handleLog('OUT')}
                     disabled={processing || hasTimeOut}
-                    className={`bg-[var(--surface-1)] p-6 rounded-3xl border border-[var(--border)] text-left transition-all duration-300 group relative overflow-hidden
-                    ${hasTimeOut ? 'opacity-50 cursor-not-allowed' : 'hover:border-[var(--accent-red)] hover:-translate-y-1 hover:shadow-lg hover:shadow-red-500/10'}
+                    className={`bg-[var(--surface-1)] p-5 sm:p-6 rounded-3xl border border-[var(--border)] text-left transition-all duration-300 group relative overflow-hidden
+                    ${hasTimeOut ? 'opacity-50 cursor-not-allowed' : 'hover:border-[var(--accent-red)] active:scale-[0.99] hover:-translate-y-1 hover:shadow-lg hover:shadow-red-500/10'}
                 `}
                 >
                     <div className="relative z-10">
-                        <div className="p-3 bg-[var(--accent-red)]/10 w-fit rounded-xl text-[var(--accent-red)] mb-6">
+                        <div className="p-3 bg-[var(--accent-red)]/10 w-fit rounded-xl text-[var(--accent-red)] mb-4 sm:mb-6">
                             <XCircle size={24} />
                         </div>
-                        <h3 className="text-4xl font-bold text-[var(--text-primary)] mb-1">TIME OUT</h3>
+                        <h3 className="text-3xl sm:text-4xl font-bold text-[var(--text-primary)] mb-1">TIME OUT</h3>
                         <p className="text-xs font-semibold tracking-widest text-[var(--accent-red)] uppercase">
                             {hasTimeOut ? 'ALREADY LOGGED' : 'END SHIFT'}
                         </p>
@@ -336,7 +336,7 @@ export default function Dashboard({ user }) {
                     />
 
                     {/* Submission Panel */}
-                    <div className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] p-6 mt-8">
+                    <div className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] p-4 sm:p-6 mt-8">
                         <h3 className="text-xl font-bold text-[var(--text-primary)] mb-4 flex items-center gap-2">
                             <Send size={20} className="text-[var(--accent-purple)]" />
                             Submit DTR
@@ -362,7 +362,7 @@ export default function Dashboard({ user }) {
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="flex items-center justify-between bg-[var(--accent-amber)]/10 border border-[var(--accent-amber)]/20 p-4 rounded-2xl animate-in fade-in">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--accent-amber)]/10 border border-[var(--accent-amber)]/20 p-4 rounded-2xl animate-in fade-in">
                                         <div className="flex items-center gap-3">
                                             <div className="w-10 h-10 rounded-full bg-[var(--accent-amber)]/20 flex items-center justify-center text-[var(--accent-amber)]">
                                                 <Clock size={24} />
@@ -385,7 +385,7 @@ export default function Dashboard({ user }) {
                                                     }
                                                 }
                                             }}
-                                            className="px-4 py-2 bg-[var(--surface-3)] hover:bg-[var(--surface-3-hover)] text-[var(--text-primary)] text-xs font-bold rounded-xl border border-[var(--accent-amber)]/30 hover:border-[var(--accent-amber)] transition-all shadow-lg shadow-black/20 flex items-center gap-2 group shrink-0"
+                                            className="px-4 py-2.5 bg-[var(--surface-3)] hover:bg-[var(--surface-3-hover)] text-[var(--text-primary)] text-xs font-bold rounded-xl border border-[var(--accent-amber)]/30 hover:border-[var(--accent-amber)] transition-all shadow-lg shadow-black/20 flex items-center justify-center gap-2 group shrink-0 w-full sm:w-auto"
                                         >
                                             <Pencil size={14} className="group-hover:text-[var(--accent-amber)] transition-colors" />
                                             Resubmit / Update
@@ -502,7 +502,7 @@ export default function Dashboard({ user }) {
                                         accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.ppt,.pptx,.zip,.rar"
                                         multiple
                                         onChange={handleFileChange}
-                                        className="text-xs text-[var(--text-muted)] file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-[var(--accent-purple)] file:text-white hover:file:bg-[var(--accent-purple-hover)]"
+                                        className="max-w-full text-xs text-[var(--text-muted)] file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-[var(--accent-purple)] file:text-white hover:file:bg-[var(--accent-purple-hover)]"
                                     />
                                     {files.length > 0 && (
                                         <div className="text-xs text-[var(--text-secondary)] italic mt-2">
@@ -516,7 +516,7 @@ export default function Dashboard({ user }) {
                                             setShowLinkBox(true);
                                             setShowCommentBox(false);
                                         }}
-                                        className="text-xs text-[var(--accent-purple)] hover:text-[var(--text-primary)] flex items-center gap-1 transition-colors"
+                                        className="text-xs text-[var(--accent-purple)] hover:text-[var(--text-primary)] flex items-center gap-1 transition-colors py-2 px-3 md:py-0 md:px-0"
                                     >
                                         <LinkIcon size={12} />
                                         <span>Or add a URL Link</span>

@@ -35,11 +35,11 @@ export default function NotificationToast({
     }
 
     return (
-        <div className={`fixed top-[260px] right-4 md:right-8 z-[9999] transition-all duration-500 transform ${visible ? 'translate-y-0 opacity-100' : '-translate-y-10 opacity-0 pointer-events-none'}`}>
-            <div className="bg-[var(--surface-1)] border border-[var(--accent-yellow)]/50 p-6 rounded-2xl shadow-2xl relative bg-opacity-95 backdrop-blur-md w-96 max-w-[calc(100vw-2rem)]">
+        <div className={`fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] md:inset-x-auto md:bottom-auto md:top-[260px] md:right-8 z-[9999] transition-all duration-500 transform ${visible ? 'translate-y-0 opacity-100' : 'translate-y-10 md:-translate-y-10 opacity-0 pointer-events-none'}`}>
+            <div className="bg-[var(--surface-1)] border border-[var(--accent-yellow)]/50 p-5 md:p-6 rounded-2xl shadow-2xl relative bg-opacity-95 backdrop-blur-md w-auto md:w-96 max-w-full md:max-w-[calc(100vw-2rem)]">
                 <button
                     onClick={handleClose}
-                    className="absolute top-3 right-3 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                    className="absolute top-2 right-2 p-2 md:p-0 md:top-3 md:right-3 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
                 >
                     <XCircle size={20} />
                 </button>
@@ -61,13 +61,13 @@ export default function NotificationToast({
                             <div className="flex gap-3 w-full mt-1">
                                 <button
                                     onClick={(e) => { e.stopPropagation(); onApprove(notification) }}
-                                    className="text-xs font-bold text-[var(--accent-green)] hover:text-[var(--accent-green-hover)] transition-colors uppercase tracking-wider"
+                                    className="text-xs font-bold text-[var(--accent-green)] hover:text-[var(--accent-green-hover)] transition-colors uppercase tracking-wider py-2 px-3 rounded-lg bg-[var(--accent-green)]/10 md:bg-transparent md:px-0 md:py-0"
                                 >
                                     Approve
                                 </button>
                                 <button
                                     onClick={(e) => { e.stopPropagation(); onDecline(notification) }}
-                                    className="text-xs font-bold text-[var(--accent-red)] hover:text-[var(--accent-red-hover)] transition-colors uppercase tracking-wider ml-2"
+                                    className="text-xs font-bold text-[var(--accent-red)] hover:text-[var(--accent-red-hover)] transition-colors uppercase tracking-wider py-2 px-3 rounded-lg bg-[var(--accent-red)]/10 md:bg-transparent md:px-0 md:py-0 md:ml-2"
                                 >
                                     Reject
                                 </button>

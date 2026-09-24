@@ -79,3 +79,119 @@
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
+
+/* ---------------------------------------------------------------------------
+   Mobile behaviour
+   These rules are scoped so the desktop layout renders exactly as before.
+   --------------------------------------------------------------------------- */
+
+html {
+  /* Stop iOS from inflating text when the phone is rotated to landscape. */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  /* Keep pull-to-refresh/scroll chaining from fighting the in-app scrollers. */
+  overscroll-behavior-y: contain;
+}
+
+/* Taps should register immediately and without the grey flash overlay. */
+button,
+a,
+input,
+select,
+textarea,
+label,
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Long values (user ids, pasted URLs) must never widen the page. */
+.break-anywhere {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Safe-area helpers for notched / gesture-bar phones.
+
+   These are plain CSS, so they would beat an equally specific Tailwind
+   padding utility on the same element. Each one therefore carries its own
+   base value rather than expecting a `p-*` class to supply it. */
+
+/* For elements that have no padding of their own (the sticky mobile header,
+   the sidebar shell) — pure inset, nothing to combine with. */
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* The main content gutter: 1rem on phones, 2rem from md up (matching the
+   p-4 / md:p-8 it replaces), widened on any edge that sits under a notch. */
+.content-gutter {
+  padding: 1rem;
+  padding-left: max(1rem, env(safe-area-inset-left, 0px));
+  padding-right: max(1rem, env(safe-area-inset-right, 0px));
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+  .content-gutter {
+    padding: 2rem;
+    padding-left: max(2rem, env(safe-area-inset-left, 0px));
+    padding-right: max(2rem, env(safe-area-inset-right, 0px));
+    padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Full-screen centred views (login, loading) — 1rem all round, plus insets. */
+.safe-inset {
+  padding: 1rem;
+  padding-top: max(1rem, env(safe-area-inset-top, 0px));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  padding-left: max(1rem, env(safe-area-inset-left, 0px));
+  padding-right: max(1rem, env(safe-area-inset-right, 0px));
+}
+
+@media (max-width: 767px) {
+  /* Safari zooms the whole page whenever a focused field is under 16px.
+     The app's controls are 12–14px by design, so bump them on phones only. */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  /* Horizontal table scrollers should feel native and hint that they move. */
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .overflow-x-auto::-webkit-scrollbar {
+    height: 0;
+    width: 0;
+  }
+
+  /* The desktop scrollbar is too wide to sit next to phone-width content. */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+}
+
+/* Honour a reduced-motion preference — mobile browsers surface this setting
+   far more prominently than desktop ones do. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

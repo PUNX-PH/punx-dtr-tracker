@@ -105,9 +105,9 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
     const canAct = selectedSub && ['pending', 'pending_senior'].includes(selectedSub.status)
 
     return (
-        <div className="flex flex-col h-full gap-6 animate-in fade-in duration-500">
+        <div className="flex flex-col lg:h-full gap-4 sm:gap-6 animate-in fade-in duration-500">
             {/* Top Bar */}
-            <div className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                     <div className="p-3 bg-[var(--accent-amber)]/10 rounded-xl text-[var(--accent-amber)]">
                         <UserCheck size={20} />
@@ -118,7 +118,7 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
                     </div>
                 </div>
 
-                <div className="flex items-center gap-4 bg-[var(--surface-3)] p-2 rounded-xl border border-[var(--border-strong)]">
+                <div className="w-full md:w-auto flex flex-wrap md:flex-nowrap items-center gap-4 bg-[var(--surface-3)] p-2 rounded-xl border border-[var(--border-strong)]">
                     <div className="px-2">
                         <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-bold">Active Cutoff</p>
                         <select
@@ -140,11 +140,11 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
                 </div>
             </div>
 
-            <div className="flex flex-1 gap-6 overflow-hidden">
+            <div className="flex flex-col lg:flex-row flex-1 min-h-0 gap-4 lg:gap-6 lg:overflow-hidden">
                 {/* User List Panel */}
-                <div className="w-80 flex flex-col gap-4">
-                    <div className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] overflow-hidden flex flex-col h-full">
-                        <div className="p-6 border-b border-[var(--border)]">
+                <div className="w-full lg:w-80 shrink-0 flex flex-col gap-4">
+                    <div className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] overflow-hidden flex flex-col lg:h-full">
+                        <div className="p-4 sm:p-6 border-b border-[var(--border)]">
                             <h2 className="text-xl font-bold text-[var(--text-primary)] mb-1">Assigned Employees</h2>
                             <p className="text-xs text-[var(--text-muted)] mb-4">{users.length} total</p>
                             <div className="relative">
@@ -159,7 +159,7 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                        <div className="flex-1 max-h-[45dvh] lg:max-h-none overflow-y-auto overscroll-contain p-2 space-y-1">
                             {loading ? (
                                 <div className="flex justify-center py-8 text-[var(--text-muted)]">
                                     <Loader2 className="animate-spin" />
@@ -220,22 +220,22 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
                 </div>
 
                 {/* Right Panel: Selected User Detail */}
-                <div className="flex-1 flex flex-col h-full overflow-hidden">
+                <div className="flex-1 min-w-0 flex flex-col lg:h-full lg:overflow-hidden">
                     {selectedUser ? (
-                        <div className="h-full flex flex-col gap-6 overflow-y-auto pr-2 pb-6">
+                        <div className="flex flex-col gap-6 lg:h-full lg:overflow-y-auto lg:pr-2 pb-6">
                             {/* User Header */}
-                            <div className="flex flex-col md:flex-row justify-between items-start gap-4">
-                                <div>
-                                    <h2 className="text-3xl font-bold text-[var(--text-primary)] max-w-2xl truncate">{selectedUser.name}</h2>
-                                    <div className="flex items-center gap-3 text-[var(--text-muted)] mt-1">
-                                        <span className="text-sm">ID: {selectedUser.id}</span>
+                            <div className="flex flex-col lg:flex-row justify-between items-start gap-4">
+                                <div className="min-w-0 w-full lg:w-auto">
+                                    <h2 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)] max-w-full lg:max-w-2xl truncate">{selectedUser.name}</h2>
+                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[var(--text-muted)] mt-1">
+                                        <span className="text-xs sm:text-sm break-anywhere">ID: {selectedUser.id}</span>
                                     </div>
                                 </div>
 
                                 {/* Submission Status + Actions */}
                                 {selectedSub ? (
-                                    <div className="flex flex-col items-end gap-2">
-                                        <div className="flex items-center gap-4 mb-2">
+                                    <div className="w-full lg:w-auto flex flex-col items-start lg:items-end gap-2">
+                                        <div className="flex flex-wrap items-center gap-3 sm:gap-4 mb-2">
                                             {canAct ? (
                                                 <div className="flex gap-2">
                                                     <button
@@ -265,14 +265,14 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
 
                                         {/* Links */}
                                         {selectedSub.links && selectedSub.links.length > 0 && (
-                                            <div className="flex flex-col gap-1 items-end w-full max-w-sm mb-2">
+                                            <div className="flex flex-col gap-1 items-start lg:items-end w-full max-w-full lg:max-w-sm mb-2">
                                                 {selectedSub.links.map((link, idx) => (
                                                     <a
                                                         key={`link-${idx}`}
                                                         href={link}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
-                                                        className="text-xs text-[var(--accent-blue)] hover:text-[var(--accent-blue-hover)] underline break-all bg-[var(--surface-2)] p-2 rounded-lg border border-[var(--accent-blue)]/20 w-fit text-right"
+                                                        className="text-xs text-[var(--accent-blue)] hover:text-[var(--accent-blue-hover)] underline break-all bg-[var(--surface-2)] p-2 rounded-lg border border-[var(--accent-blue)]/20 max-w-full lg:w-fit lg:text-right"
                                                     >
                                                         {link}
                                                     </a>
@@ -285,7 +285,7 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
                                             const attachments = selectedSub.attachments || (selectedSub.attachmentUrl ? [selectedSub.attachmentUrl] : [])
                                             if (attachments.length === 0) return null
                                             return (
-                                                <div className="flex flex-wrap gap-2 justify-end max-w-sm">
+                                                <div className="flex flex-wrap gap-2 justify-start lg:justify-end max-w-full lg:max-w-sm">
                                                     {attachments.map((url, idx) => (
                                                         <button
                                                             key={idx}
@@ -322,7 +322,7 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
                                         })()}
 
                                         {selectedSub.attachmentComments && selectedSub.attachmentComments.length > 0 && (
-                                            <div className="mt-3 space-y-2 max-w-sm">
+                                            <div className="mt-3 space-y-2 w-full max-w-full lg:max-w-sm">
                                                 <p className="text-[10px] text-[var(--accent-purple)] font-bold uppercase tracking-wider flex items-center gap-1">
                                                     <span>💬</span> Attachment Comments ({selectedSub.attachmentComments.length})
                                                 </p>
@@ -366,9 +366,9 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
                             )}
                         </div>
                     ) : (
-                        <div className="h-full flex flex-col items-center justify-center bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] text-[var(--text-muted)]">
+                        <div className="h-full py-16 lg:py-0 px-6 text-center flex flex-col items-center justify-center bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] text-[var(--text-muted)]">
                             <UserIcon size={48} className="mb-4 opacity-20" />
-                            <p className="text-lg font-medium">
+                            <p className="text-base sm:text-lg font-medium">
                                 {users.length === 0
                                     ? 'No employees are assigned to you yet'
                                     : 'Select an employee to review their DTR'}
