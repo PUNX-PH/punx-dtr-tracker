@@ -515,10 +515,30 @@ export const api = {
             await updateDoc(doc(db, "cutoffs", cutoffId), {
                 submitBy: Timestamp.fromDate(new Date(submitBy)),
             });
+            // Read back rather than trusting the write. This value is broadcast
+            // to the whole team as fact, and a save that reports success it did
+            // not earn is how a Saturday deadline reached 22 people.
+            const after = await getDoc(doc(db, "cutoffs", cutoffId));
+            if (!after.exists() || !after.data().submitBy) {
+                return { success: false, message: "the write reported success but nothing was stored" };
+            }
             return { success: true };
         } catch (error) {
             console.error("Update cutoff deadline error", error);
-            return { success: false, message: error.message };
+            // permission-denied is the likely one and the least obvious: this is
+            // the FIRST thing in the app to update a cutoff — every other write
+            // to that collection is an addDoc — so punx-dtr's rules may simply
+            // have no update rule for `cutoffs`. The rules are not in this repo;
+            // they live in the Firebase console.
+            if (error.code === "permission-denied") {
+                return {
+                    success: false,
+                    message: "permission denied by Firestore rules. `cutoffs` has only ever been "
+                        + "CREATED by this app, so the rules likely allow create but not update. "
+                        + "Add an update rule for cutoffs in the Firebase console (punx-dtr).",
+                };
+            }
+            return { success: false, message: `${error.code || "error"}: ${error.message}` };
         }
     },
 
