@@ -166,6 +166,39 @@ await it('corrects an employee\'s log', () =>
 await it('reads the reminder settings', () =>
   assertSucceeds(getDoc(doc(as(ADMIN), 'settings', 'dtrReminder'))))
 
+console.log('\nsubmitting a DTR — the exact reads and writes api.submitDTR makes')
+// A first submission for a cutoff reads the doc before it exists (to merge
+// earlier attachments). A rule that reads resource.data errors on a missing
+// doc, which denies — and that is the "Missing or insufficient permissions"
+// employees hit on Send to Admin.
+await it('reads its own submission before it exists (first submit of a cutoff)', () =>
+  assertSucceeds(getDoc(doc(as(EMP2), 'submissions', `${EMP2}_${CUTOFF}`))))
+await it('Dashboard load: checks for a submission that does not exist yet', () =>
+  assertSucceeds(getDoc(doc(as(EMP2), 'submissions', `${EMP2}_cutoff2`))))
+await it('creates it', () =>
+  assertSucceeds(setDoc(doc(as(EMP2), 'submissions', `${EMP2}_${CUTOFF}`),
+    { userId: EMP2, cutoffId: CUTOFF, status: 'pending', submittedAt: new Date() })))
+await it('cannot probe for someone else\'s missing submission', () =>
+  assertFails(getDoc(doc(as(EMP2), 'submissions', `${EMP}_cutoff2`))))
+await it('cannot create a submission under someone else\'s id', () =>
+  assertFails(setDoc(doc(as(EMP2), 'submissions', `${EMP}_cutoff2`),
+    { userId: EMP2, cutoffId: 'cutoff2', status: 'pending' })))
+await it('cannot create their own submission already approved', () =>
+  assertFails(setDoc(doc(as(EMP2), 'submissions', `${EMP2}_cutoff3`),
+    { userId: EMP2, cutoffId: 'cutoff3', status: 'approved' })))
+await it('cannot cancel a submission once it is approved', async () => {
+  await testEnv.withSecurityRulesDisabled(ctx => setDoc(doc(ctx.firestore(), 'submissions', `${EMP2}_cutoff4`),
+    { userId: EMP2, cutoffId: 'cutoff4', status: 'approved' }))
+  await assertFails(deleteDoc(doc(as(EMP2), 'submissions', `${EMP2}_cutoff4`)))
+})
+// "Resubmit / Update" deletes the pending submission so it can be redone.
+await it('cancels their own pending submission (Resubmit / Update)', () =>
+  assertSucceeds(deleteDoc(doc(as(EMP2), 'submissions', `${EMP2}_${CUTOFF}`))))
+await it('cannot delete another employee\'s submission', () =>
+  assertFails(deleteDoc(doc(as(EMP2), 'submissions', `${EMP}_${CUTOFF}`))))
+await it('a removed person cannot probe for a missing submission', () =>
+  assertFails(getDoc(doc(as(GONE), 'submissions', `${GONE}_cutoff2`))))
+
 console.log('\nremoving people who have left')
 await it('a plain admin cannot remove anyone', () =>
   assertFails(updateDoc(doc(as(PLAIN_ADMIN), 'users', LEAVER), { removed: true, removedAt: new Date(), removedBy: PLAIN_ADMIN })))

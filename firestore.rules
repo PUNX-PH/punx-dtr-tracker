@@ -155,21 +155,47 @@ service cloud.firestore {
     // ---- submissions ----
     // Doc id is `{userId}_{cutoffId}`.
     match /submissions/{submissionId} {
-      allow read: if isStaff()
-        || (active() && resource.data.userId == myUid());
+      // The id is the only thing that says whose a MISSING doc would be.
+      // Firebase Auth UIDs are alphanumeric, so the prefix is regex-safe.
+      function isMyId() {
+        return submissionId.matches(myUid() + '_.+');
+      }
 
-      allow create: if isStaff()
-        || (active() && request.resource.data.userId == myUid());
+      function pending(data) {
+        return data.get('status', 'pending') in ['pending', 'pending_senior'];
+      }
+
+      // Split from list on purpose. Both Dashboard.getSubmission and
+      // api.submitDTR get their own doc BEFORE it exists (first submit of a
+      // cutoff), and resource.data on a missing doc is an error, which denies:
+      // that was "Missing or insufficient permissions" on Send to Admin.
+      // A missing doc is judged by its id instead.
+      allow get: if isStaff()
+        || (active() && (resource == null ? isMyId() : resource.data.userId == myUid()));
+
+      // Kept as a bare field read so an unfiltered listing still errors.
+      allow list: if isStaff()
+        || (active() && resource.data.userId == myUid());
 
       // An employee may submit and resubmit, but only into a pending state.
       // Without that clause the owner leg lets them approve their own DTR,
-      // which is the entire point of having a senior review it.
+      // which is the entire point of having a senior review it. Create needs
+      // it too: a first submission is a create, not an update.
+      allow create: if isStaff()
+        || (active()
+            && isMyId()
+            && request.resource.data.userId == myUid()
+            && pending(request.resource.data));
+
       allow update: if isStaff()
         || (active()
             && resource.data.userId == myUid()
-            && request.resource.data.get('status', 'pending') in ['pending', 'pending_senior']);
+            && pending(request.resource.data));
 
-      allow delete: if isStaff();
+      // "Resubmit / Update" on the Dashboard cancels a pending submission so
+      // it can be redone. Never an approved one.
+      allow delete: if isStaff()
+        || (active() && resource.data.userId == myUid() && pending(resource.data));
     }
 
     // ---- notifications ----

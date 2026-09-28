@@ -196,14 +196,24 @@ export default function Dashboard({ user }) {
                 localStorage.removeItem(submissionDraftKey)
                 window.location.reload()
             } else {
-                alert("Failed to submit: " + res.message)
+                await failSubmit("Failed to submit: " + res.message)
             }
         } catch (err) {
             console.error(err)
-            alert("Error submitting: " + err.message)
+            await failSubmit("Error submitting: " + err.message)
         } finally {
             setUploading(false)
         }
+    }
+
+    // Put the form back BEFORE the alert: alert() blocks the page, so setting
+    // state first alone would leave "Uploading and sending..." on screen behind
+    // the dialog. Yielding a tick lets React paint the reset. Attachments and
+    // links are deliberately kept, so the retry is one click.
+    const failSubmit = async (message) => {
+        setUploading(false)
+        await new Promise(resolve => setTimeout(resolve, 50))
+        alert(message + "\n\nNothing was sent. Your attachments are still here, so you can try again.")
     }
 
     return (

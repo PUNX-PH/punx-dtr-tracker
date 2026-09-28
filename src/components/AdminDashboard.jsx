@@ -462,8 +462,12 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
     return (
         <div className="flex flex-col lg:h-full gap-4 sm:gap-6 animate-in fade-in duration-500">
             {/* Top Bar: Cutoff Management */}
-            <div className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
+            {/* Wraps rather than squeezes: once the cutoff toolbar is wider
+                than the space beside the title it drops to its own line, and
+                only then wraps internally. Forbidding the wrap is what crushed
+                the title to three lines and pushed "Set New" off the edge. */}
+            <div className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] p-4 flex flex-col md:flex-row md:flex-wrap items-start md:items-center justify-between gap-4">
+                <div className="flex items-center gap-4 shrink-0">
                     <div className="p-3 bg-[var(--accent-purple)]/10 rounded-xl text-[var(--accent-purple)]">
                         <UserIcon size={20} />
                     </div>
@@ -473,7 +477,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                     </div>
                 </div>
 
-                <div className="w-full md:w-auto flex flex-wrap md:flex-nowrap items-center gap-y-3 gap-x-4 bg-[var(--surface-3)] p-2 rounded-xl border border-[var(--border-strong)]">
+                <div className="w-full md:w-auto min-w-0 flex flex-wrap items-center gap-y-3 gap-x-4 bg-[var(--surface-3)] p-2 rounded-xl border border-[var(--border-strong)]">
                     <div className="px-2">
                         <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-bold">Active Cutoff</p>
                         <select
@@ -525,35 +529,40 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                         </>
                     )}
 
-                    <div className="hidden md:block h-8 w-[1px] bg-[var(--border-strong)]"></div>
-                    <div className="flex flex-wrap md:flex-nowrap items-center gap-2">
-                        <input
-                            type="date"
-                            className="bg-[var(--surface-1)] text-[var(--text-primary)] text-xs px-2 py-1.5 rounded border border-[var(--border-strong)] focus:outline-none focus:border-[var(--accent-purple)]"
-                            value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
-                        />
-                        <span className="text-[var(--text-muted)] text-xs">to</span>
-                        <input
-                            type="date"
-                            className="bg-[var(--surface-1)] text-[var(--text-primary)] text-xs px-2 py-1.5 rounded border border-[var(--border-strong)] focus:outline-none focus:border-[var(--accent-purple)]"
-                            value={endDate}
-                            onChange={(e) => handleEndDateChange(e.target.value)}
-                        />
-                        <span className="text-[var(--text-muted)] text-xs">due</span>
-                        <input
-                            type="datetime-local"
-                            title="Deadline quoted in the DTR reminder. Defaults to 10:00 AM the day after the period ends."
-                            className="bg-[var(--surface-1)] text-[var(--text-primary)] text-xs px-2 py-1.5 rounded border border-[var(--border-strong)] focus:outline-none focus:border-[var(--accent-purple)]"
-                            value={submitBy}
-                            onChange={(e) => { setSubmitByTouched(true); setSubmitBy(e.target.value) }}
-                        />
-                        <button
-                            onClick={handleSetCutoff}
-                            className="px-3 py-1.5 bg-[var(--accent-purple)] hover:bg-[var(--accent-purple-hover)] text-white text-xs font-bold rounded-lg transition-colors"
-                        >
-                            Set New
-                        </button>
+                    {/* Labelled, not divided: this group is what wraps to a
+                        second row on narrower screens, where a divider before it
+                        would be left dangling at the end of the first row. */}
+                    <div className="px-2">
+                        <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-bold mb-1">New Cutoff</p>
+                        <div className="flex flex-wrap md:flex-nowrap items-center gap-2">
+                            <input
+                                type="date"
+                                className="bg-[var(--surface-1)] text-[var(--text-primary)] text-xs px-2 py-1.5 rounded border border-[var(--border-strong)] focus:outline-none focus:border-[var(--accent-purple)]"
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                            />
+                            <span className="text-[var(--text-muted)] text-xs">to</span>
+                            <input
+                                type="date"
+                                className="bg-[var(--surface-1)] text-[var(--text-primary)] text-xs px-2 py-1.5 rounded border border-[var(--border-strong)] focus:outline-none focus:border-[var(--accent-purple)]"
+                                value={endDate}
+                                onChange={(e) => handleEndDateChange(e.target.value)}
+                            />
+                            <span className="text-[var(--text-muted)] text-xs">due</span>
+                            <input
+                                type="datetime-local"
+                                title="Deadline quoted in the DTR reminder. Defaults to 10:00 AM the day after the period ends."
+                                className="bg-[var(--surface-1)] text-[var(--text-primary)] text-xs px-2 py-1.5 rounded border border-[var(--border-strong)] focus:outline-none focus:border-[var(--accent-purple)]"
+                                value={submitBy}
+                                onChange={(e) => { setSubmitByTouched(true); setSubmitBy(e.target.value) }}
+                            />
+                            <button
+                                onClick={handleSetCutoff}
+                                className="px-3 py-1.5 bg-[var(--accent-purple)] hover:bg-[var(--accent-purple-hover)] text-white text-xs font-bold rounded-lg transition-colors"
+                            >
+                                Set New
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
