@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Search, User as UserIcon, Loader2, FileSpreadsheet, Users, Folder } from 'lucide-react'
+import { Search, User as UserIcon, Loader2, FileSpreadsheet, Users, Folder, X, Square, CheckSquare, RotateCcw, Trash2 } from 'lucide-react'
+import { Timestamp } from 'firebase/firestore'
 import * as XLSX from 'xlsx'
 import { api, defaultSubmitBy, reminderApi } from '../services/api'
 import DTRTable from './DTRTable'
@@ -23,6 +24,12 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
     // editable because that default is only right until a holiday moves it.
     const [submitBy, setSubmitBy] = useState('')
     const [submissions, setSubmissions] = useState({}) // Map userId -> submission
+    // Offboarding (super_admin only). `showRemoved` swaps the list to the
+    // removed people so a mistaken removal can be restored.
+    const [selectMode, setSelectMode] = useState(false)
+    const [selectedIds, setSelectedIds] = useState(new Set())
+    const [showRemoved, setShowRemoved] = useState(false)
+    const [removing, setRemoving] = useState(false)
 
     useEffect(() => {
         loadUsers()
@@ -227,7 +234,10 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
         setLoadingHistory(false)
     }
 
+    const removedCount = users.filter(u => u.removed).length
+
     const filteredUsers = users
+        .filter(u => !!u.removed === showRemoved)
         .filter(u =>
             u.name?.toLowerCase().includes(search.toLowerCase()) ||
             u.email?.toLowerCase().includes(search.toLowerCase())
@@ -324,6 +334,83 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
         const fileName = `DTR_${selectedUser.name.replace(/\s+/g, '_')}_${start.toISOString().split('T')[0]}_to_${end.toISOString().split('T')[0]}.xlsx`;
 
         XLSX.writeFile(wb, fileName);
+    }
+
+    // Everyone visible except yourself — removing your own account would lock
+    // you out mid-click.
+    const selectableUsers = filteredUsers.filter(u => u.id !== currentUser.id)
+    const allSelected = selectableUsers.length > 0 && selectableUsers.every(u => selectedIds.has(u.id))
+
+    const toggleSelected = (userId) => {
+        if (userId === currentUser.id) return
+        setSelectedIds(prev => {
+            const next = new Set(prev)
+            if (next.has(userId)) next.delete(userId)
+            else next.add(userId)
+            return next
+        })
+    }
+
+    const exitSelectMode = () => {
+        setSelectMode(false)
+        setSelectedIds(new Set())
+    }
+
+    const handleRemoveUsers = async (targets) => {
+        targets = targets.filter(u => u.id !== currentUser.id)
+        if (targets.length === 0) return
+
+        const ids = new Set(targets.map(u => u.id))
+        const orphaned = users.filter(u => !ids.has(u.id) && !u.removed && ids.has(u.assignedSeniorId))
+        const label = (u) => u.name || u.email || u.id
+        const listed = targets.slice(0, 15).map(u => `  • ${label(u)}`).join('\n')
+            + (targets.length > 15 ? `\n  …and ${targets.length - 15} more` : '')
+
+        if (!window.confirm(
+            (targets.length === 1
+                ? `Remove ${label(targets[0])}${targets[0].email ? ` (${targets[0].email})` : ''}?`
+                : `Remove these ${targets.length} employees?\n\n${listed}`)
+            + '\n\nThey will no longer be able to sign in and will disappear from the employee list. '
+            + 'Their DTR records are kept, and they can be restored from "Removed".'
+            + (orphaned.length
+                ? `\n\n${orphaned.length} employee${orphaned.length !== 1 ? 's' : ''} assigned to `
+                  + `${targets.length === 1 ? 'them as senior' : 'a removed senior'} will be unassigned, `
+                  + 'so their DTRs come to a super admin instead.'
+                : '')
+        )) return
+
+        setRemoving(true)
+        try {
+            await api.removeUsers([...ids], currentUser.id, users)
+        } catch (error) {
+            setRemoving(false)
+            alert('Failed to remove: ' + error.message)
+            return
+        }
+        setRemoving(false)
+
+        // Mirror what the batch wrote rather than refetching, which would
+        // flash the whole list back to a spinner.
+        const removedAt = Timestamp.now()
+        const apply = (u) => ids.has(u.id)
+            ? { ...u, removed: true, removedAt, removedBy: currentUser.id }
+            : ids.has(u.assignedSeniorId) ? { ...u, assignedSeniorId: '' } : u
+        setUsers(prev => prev.map(apply))
+        setSelectedUser(prev => prev && (ids.has(prev.id) ? null : apply(prev)))
+        exitSelectMode()
+    }
+
+    const handleRestoreUser = async (user) => {
+        if (!window.confirm(`Restore ${user.name || user.email}? They will be able to sign in again and reappear in the employee list.`)) return
+        try {
+            await api.restoreUser(user.id)
+        } catch (error) {
+            alert('Failed to restore: ' + error.message)
+            return
+        }
+        const restored = (u) => u.id === user.id ? { ...u, removed: false, removedAt: null, removedBy: null } : u
+        setUsers(prev => prev.map(restored))
+        setSelectedUser(prev => prev && restored(prev))
     }
 
     const handleUpdateRole = async (newRole) => {
@@ -544,7 +631,33 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                 <div className="w-full lg:w-80 shrink-0 flex flex-col gap-4">
                     <div className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] overflow-hidden flex flex-col lg:h-full">
                         <div className="p-4 sm:p-6 border-b border-[var(--border)]">
-                            <h2 className="text-xl font-bold text-[var(--text-primary)] mb-4">Employees</h2>
+                            <div className="flex items-center justify-between gap-2 mb-4">
+                                <h2 className="text-xl font-bold text-[var(--text-primary)]">{showRemoved ? 'Removed' : 'Employees'}</h2>
+                                {isSuperAdmin && (
+                                    <div className="flex items-center gap-1.5">
+                                        {!showRemoved && (
+                                            <button
+                                                onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
+                                                className={`px-2.5 py-1 text-[11px] font-bold rounded-lg border transition-colors
+                                                    ${selectMode
+                                                        ? 'bg-[var(--accent-purple)] text-white border-[var(--accent-purple)]'
+                                                        : 'bg-[var(--surface-3)] text-[var(--text-secondary)] border-[var(--border-strong)] hover:text-[var(--text-primary)]'}`}
+                                            >
+                                                {selectMode ? 'Cancel' : 'Select'}
+                                            </button>
+                                        )}
+                                        {(removedCount > 0 || showRemoved) && (
+                                            <button
+                                                onClick={() => { exitSelectMode(); setSelectedUser(null); setShowRemoved(!showRemoved) }}
+                                                title={showRemoved ? 'Back to current employees' : 'People who have been removed'}
+                                                className="px-2.5 py-1 text-[11px] font-bold rounded-lg border bg-[var(--surface-3)] text-[var(--text-secondary)] border-[var(--border-strong)] hover:text-[var(--text-primary)] transition-colors"
+                                            >
+                                                {showRemoved ? 'Back' : `Removed (${removedCount})`}
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] h-4 w-4" />
                                 <input
@@ -555,6 +668,26 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                     onChange={(e) => setSearch(e.target.value)}
                                 />
                             </div>
+                            {selectMode && (
+                                <div className="flex items-center gap-2 mt-3">
+                                    <button
+                                        onClick={() => setSelectedIds(allSelected ? new Set() : new Set(selectableUsers.map(u => u.id)))}
+                                        disabled={selectableUsers.length === 0}
+                                        className="text-[11px] font-bold text-[var(--accent-purple)] hover:underline disabled:opacity-40"
+                                    >
+                                        {allSelected ? 'Clear all' : 'Select all'}
+                                    </button>
+                                    <span className="text-[11px] text-[var(--text-muted)]">{selectedIds.size} selected</span>
+                                    <button
+                                        onClick={() => handleRemoveUsers(users.filter(u => selectedIds.has(u.id)))}
+                                        disabled={selectedIds.size === 0 || removing}
+                                        className="ml-auto flex items-center gap-1.5 px-2.5 py-1 bg-[var(--accent-red)]/10 text-[var(--accent-red)] hover:bg-[var(--accent-red)]/20 border border-[var(--accent-red)]/20 disabled:opacity-40 disabled:hover:bg-[var(--accent-red)]/10 text-[11px] font-bold rounded-lg transition-colors"
+                                    >
+                                        <Trash2 size={12} />
+                                        {removing ? 'Removing…' : `Remove${selectedIds.size ? ` (${selectedIds.size})` : ''}`}
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex-1 max-h-[45dvh] lg:max-h-none overflow-y-auto overscroll-contain p-2 space-y-1">
@@ -563,7 +696,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                     <Loader2 className="animate-spin" />
                                 </div>
                             ) : filteredUsers.length === 0 ? (
-                                <div className="text-center py-8 text-[var(--text-muted)] text-sm">No users found</div>
+                                <div className="text-center py-8 text-[var(--text-muted)] text-sm">{showRemoved ? 'No removed users' : 'No users found'}</div>
                             ) : (
                                 filteredUsers.map(user => {
                                     const submission = getSubmissionStatus(user.id)
@@ -571,10 +704,23 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                     const isApproved = submission?.status === 'approved'
                                     const badgeColor = isApproved ? 'bg-[var(--accent-green)]/20 text-[var(--accent-green)] border-[var(--accent-green)]/20' : 'bg-[var(--accent-amber)]/20 text-[var(--accent-amber)] border-[var(--accent-amber)]/20'
 
+                                    const isChecked = selectedIds.has(user.id)
+                                    const isSelf = user.id === currentUser.id
+                                    // In select mode a click ticks the row instead of opening it.
+                                    const activate = () => selectMode ? toggleSelected(user.id) : setSelectedUser(user)
+
+                                    // A div, not a <button>: it now contains the remove
+                                    // button, and buttons cannot nest.
                                     return (
-                                        <button
+                                        <div
                                             key={user.id}
-                                            onClick={() => setSelectedUser(user)}
+                                            role="button"
+                                            tabIndex={0}
+                                            onClick={activate}
+                                            onKeyDown={(e) => {
+                                                if (e.target !== e.currentTarget) return
+                                                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate() }
+                                            }}
                                             className={`w-full text-left p-3 rounded-xl transition-all flex items-center gap-3 relative overflow-hidden group
                                                 ${selectedUser?.id === user.id
                                                     ? 'bg-[var(--accent-purple)] text-white shadow-lg shadow-purple-900/20'
@@ -586,10 +732,18 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                                 <div className={`absolute left-0 top-0 bottom-0 w-1 ${isApproved ? 'bg-[var(--accent-green)]' : 'bg-[var(--accent-amber)]'}`} />
                                             )}
 
-                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0
-                                                ${selectedUser?.id === user.id ? 'bg-white text-[var(--accent-purple)]' : 'bg-[var(--surface-3)] text-[var(--text-muted)]'}`}>
-                                                {user.name?.charAt(0) || '?'}
-                                            </div>
+                                            {selectMode ? (
+                                                <div className={`w-8 h-8 flex items-center justify-center flex-shrink-0
+                                                    ${isSelf ? 'opacity-30' : isChecked ? 'text-[var(--accent-red)]' : 'text-[var(--text-muted)]'}`}
+                                                    title={isSelf ? "You can't remove yourself" : undefined}>
+                                                    {isChecked ? <CheckSquare size={18} /> : <Square size={18} />}
+                                                </div>
+                                            ) : (
+                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0
+                                                    ${selectedUser?.id === user.id ? 'bg-white text-[var(--accent-purple)]' : 'bg-[var(--surface-3)] text-[var(--text-muted)]'}`}>
+                                                    {user.name?.charAt(0) || '?'}
+                                                </div>
+                                            )}
 
                                             <div className="overflow-hidden flex-1 flex flex-col justify-center">
                                                 <div className="flex items-center gap-2">
@@ -635,7 +789,30 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                                     SNR
                                                 </span>
                                             )}
-                                        </button>
+
+                                            {/* Per-row remove / restore. Always visible on touch
+                                                screens, hover-revealed on desktop so the list
+                                                doesn't read as a column of delete buttons. */}
+                                            {isSuperAdmin && !selectMode && !isSelf && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        showRemoved ? handleRestoreUser(user) : handleRemoveUsers([user])
+                                                    }}
+                                                    disabled={removing}
+                                                    title={`${showRemoved ? 'Restore' : 'Remove'} ${user.name || user.email}`}
+                                                    aria-label={`${showRemoved ? 'Restore' : 'Remove'} ${user.name || user.email}`}
+                                                    className={`ml-1 p-1 rounded-md flex-shrink-0 transition-all lg:opacity-0 lg:group-hover:opacity-100 focus:opacity-100
+                                                        ${selectedUser?.id === user.id
+                                                            ? 'text-white/80 hover:text-white hover:bg-white/20'
+                                                            : showRemoved
+                                                                ? 'text-[var(--text-muted)] hover:text-[var(--accent-green)] hover:bg-[var(--accent-green)]/10'
+                                                                : 'text-[var(--text-muted)] hover:text-[var(--accent-red)] hover:bg-[var(--accent-red)]/10'}`}
+                                                >
+                                                    {showRemoved ? <RotateCcw size={14} /> : <X size={14} />}
+                                                </button>
+                                            )}
+                                        </div>
                                     )
                                 })
                             )}
@@ -733,7 +910,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                             onChange={(e) => handleAssignSenior(e.target.value)}
                                         >
                                             <option value="">-- No Senior Assigned --</option>
-                                            {users.filter(u => u.isSenior && u.id !== selectedUser.id).map(senior => (
+                                            {users.filter(u => u.isSenior && !u.removed && u.id !== selectedUser.id).map(senior => (
                                                 <option key={senior.id} value={senior.id}>
                                                     {senior.name}
                                                 </option>

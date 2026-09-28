@@ -339,6 +339,38 @@ export const api = {
         }
     },
 
+    /**
+     * Offboard employees who have left. A SOFT removal: the profile is flagged,
+     * never deleted, because their logs and submissions are payroll records
+     * that must survive them — and because deleting the doc would not even
+     * work, since their next Google sign-in would recreate it as a fresh
+     * employee via ensureUserProfile.
+     *
+     * Anyone assigned to a removed senior is unassigned in the same batch, so
+     * their next DTR routes to the super admin instead of a reviewer who will
+     * never see it.
+     *
+     * Throws on failure (one batch, all or nothing).
+     */
+    removeUsers: async (userIds, removedById, allUsers) => {
+        const ids = new Set(userIds);
+        const batch = writeBatch(db);
+        userIds.forEach(id => batch.update(doc(db, "users", id), {
+            removed: true,
+            removedAt: Timestamp.now(),
+            removedBy: removedById,
+        }));
+        allUsers
+            .filter(u => !ids.has(u.id) && u.assignedSeniorId && ids.has(u.assignedSeniorId))
+            .forEach(u => batch.update(doc(db, "users", u.id), { assignedSeniorId: '' }));
+        await batch.commit();
+    },
+
+    /** Undo removeUsers for one person. Senior assignments it cleared stay cleared. Throws. */
+    restoreUser: async (userId) => {
+        await updateDoc(doc(db, "users", userId), { removed: false, removedAt: null, removedBy: null });
+    },
+
     getSeniors: async () => {
         try {
             const q = query(collection(db, "users"), where("isSenior", "==", true));

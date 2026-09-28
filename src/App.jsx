@@ -13,6 +13,7 @@ function App() {
     const [activeTab, setActiveTab] = useState('dashboard')
     const [loading, setLoading] = useState(true)
     const [notificationFocus, setNotificationFocus] = useState(null) // { employeeId, cutoffId }
+    const [authNotice, setAuthNotice] = useState('') // why a sign-in was turned away
 
     useEffect(() => {
         // Listen for Firebase Auth changes (Persistence)
@@ -31,6 +32,17 @@ function App() {
                 // Fetch or Create user profile in Firestore
                 const { api } = await import('./services/api');
                 const profile = await api.ensureUserProfile(firebaseUser);
+
+                // Offboarded by a super admin. The rules deny them data anyway;
+                // this is so they get told why instead of a dashboard of errors.
+                if (profile?.removed === true) {
+                    await auth.signOut()
+                    setAuthNotice('This account has been removed from the DTR tracker. Contact an admin if this is a mistake.')
+                    setUser(null)
+                    setLoading(false)
+                    return
+                }
+                setAuthNotice('')
 
                 // Merge Auth data with Firestore data
                 setUser({
@@ -119,7 +131,7 @@ function App() {
                 </Layout>
             ) : (
                 <div className="min-h-[100dvh] bg-[var(--surface-0)] flex flex-col items-center justify-center safe-inset">
-                    <Login onLogin={handleLogin} />
+                    <Login onLogin={handleLogin} notice={authNotice} />
                 </div>
             )}
         </>

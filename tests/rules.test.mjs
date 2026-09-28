@@ -38,6 +38,10 @@ const EMP2 = 'emp2'
 const SENIOR = 'senior1'
 const ADMIN = 'admin1'
 const OUTSIDER = 'outsider1'   // signed in, but has no DTR profile
+const PLAIN_ADMIN = 'padmin1'  // role admin, not super_admin
+const GONE = 'gone1'           // an employee who left and was removed
+const GONE_SENIOR = 'gonesen1' // a senior who left and was removed
+const LEAVER = 'leaver1'       // removed during the test run
 const CUTOFF = 'cutoff1'
 
 await testEnv.clearFirestore()
@@ -47,6 +51,13 @@ await testEnv.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(db, 'users', EMP2), { uid: EMP2, name: 'Emp2', email: 'emp2@punx.ai', role: 'employee', pin: '5678' })
   await setDoc(doc(db, 'users', SENIOR), { uid: SENIOR, name: 'Sen', email: 's@punx.ai', role: 'employee', isSenior: true })
   await setDoc(doc(db, 'users', ADMIN), { uid: ADMIN, name: 'Adm', email: 'a@punx.ai', role: 'super_admin' })
+  await setDoc(doc(db, 'users', PLAIN_ADMIN), { uid: PLAIN_ADMIN, name: 'PAdm', email: 'pa@punx.ai', role: 'admin' })
+  await setDoc(doc(db, 'users', GONE), { uid: GONE, name: 'Gone', email: 'g@punx.ai', role: 'employee', removed: true })
+  await setDoc(doc(db, 'users', GONE_SENIOR), { uid: GONE_SENIOR, name: 'GoneS', email: 'gs@punx.ai', role: 'admin', isSenior: true, removed: true })
+  await setDoc(doc(db, 'users', LEAVER), { uid: LEAVER, name: 'Leaver', email: 'l@punx.ai', role: 'employee' })
+  await setDoc(doc(db, 'logs', 'log_gone'), { employeeId: GONE, type: 'IN', timestamp: new Date() })
+  await setDoc(doc(db, 'submissions', `${GONE}_${CUTOFF}`), { userId: GONE, cutoffId: CUTOFF, status: 'pending' })
+  await setDoc(doc(db, 'notifications', 'n_gone'), { recipientId: GONE, type: 'X', read: false, createdAt: new Date() })
   await setDoc(doc(db, 'cutoffs', CUTOFF), { startDate: new Date(), endDate: new Date(), createdAt: new Date() })
   await setDoc(doc(db, 'logs', 'log_emp'), { employeeId: EMP, type: 'IN', timestamp: new Date() })
   await setDoc(doc(db, 'logs', 'log_emp2'), { employeeId: EMP2, type: 'IN', timestamp: new Date() })
@@ -154,6 +165,38 @@ await it('corrects an employee\'s log', () =>
   assertSucceeds(updateDoc(doc(as(ADMIN), 'logs', 'log_emp2'), { timestamp: new Date() })))
 await it('reads the reminder settings', () =>
   assertSucceeds(getDoc(doc(as(ADMIN), 'settings', 'dtrReminder'))))
+
+console.log('\nremoving people who have left')
+await it('a plain admin cannot remove anyone', () =>
+  assertFails(updateDoc(doc(as(PLAIN_ADMIN), 'users', LEAVER), { removed: true, removedAt: new Date(), removedBy: PLAIN_ADMIN })))
+await it('an employee cannot un-remove themselves', () =>
+  assertFails(updateDoc(doc(as(GONE), 'users', GONE), { removed: false })))
+await it('a super admin cannot remove themselves', () =>
+  assertFails(updateDoc(doc(as(ADMIN), 'users', ADMIN), { removed: true, removedAt: new Date(), removedBy: ADMIN })))
+await it('a super admin removes someone', () =>
+  assertSucceeds(updateDoc(doc(as(ADMIN), 'users', LEAVER), { removed: true, removedAt: new Date(), removedBy: ADMIN })))
+await it('a super admin restores them', () =>
+  assertSucceeds(updateDoc(doc(as(ADMIN), 'users', LEAVER), { removed: false, removedAt: null, removedBy: null })))
+await it('a plain admin can still change roles', () =>
+  assertSucceeds(updateDoc(doc(as(PLAIN_ADMIN), 'users', EMP2), { role: 'employee' })))
+await it('a removed person still reads their own profile (so the app can say why)', () =>
+  assertSucceeds(getDoc(doc(as(GONE), 'users', GONE))))
+await it('a removed person cannot read their logs', () =>
+  assertFails(getDocs(query(collection(as(GONE), 'logs'), where('employeeId', '==', GONE)))))
+await it('a removed person cannot clock in', () =>
+  assertFails(setDoc(doc(as(GONE), 'logs', 'gone_new'), { employeeId: GONE, type: 'IN', timestamp: new Date() })))
+await it('a removed person cannot edit their old logs', () =>
+  assertFails(updateDoc(doc(as(GONE), 'logs', 'log_gone'), { timestamp: new Date() })))
+await it('a removed person cannot resubmit a DTR', () =>
+  assertFails(setDoc(doc(as(GONE), 'submissions', `${GONE}_${CUTOFF}`), { userId: GONE, cutoffId: CUTOFF, status: 'pending' })))
+await it('a removed person cannot read their notifications', () =>
+  assertFails(getDoc(doc(as(GONE), 'notifications', 'n_gone'))))
+await it('a removed senior/admin loses staff access to users', () =>
+  assertFails(getDocs(collection(as(GONE_SENIOR), 'users'))))
+await it('a removed senior/admin loses staff access to logs', () =>
+  assertFails(getDoc(doc(as(GONE_SENIOR), 'logs', 'log_emp'))))
+await it('staff can still read a removed person\'s history (payroll)', () =>
+  assertSucceeds(getDocs(query(collection(as(ADMIN), 'logs'), where('employeeId', '==', GONE)))))
 
 console.log(`\n${pass} passed, ${fail} failed\n`)
 await testEnv.cleanup()

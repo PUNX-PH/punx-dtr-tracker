@@ -48,20 +48,39 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(myUid())).data;
     }
 
+    // Offboarded by a super admin (AdminDashboard "Remove"). The profile is
+    // kept — their logs are payroll history — but the person has left, so
+    // they get none of the access below. Someone with no profile yet (first
+    // sign-in, mid-create) is not removed.
+    function isRemoved() {
+      return hasProfile() && myProfile().get('removed', false) == true;
+    }
+
+    // Signed in AND still with the company. Every owner leg uses this rather
+    // than signedIn(), so a departed employee cannot keep editing their own
+    // DTR by talking to Firestore directly.
+    function active() {
+      return signedIn() && !isRemoved();
+    }
+
     // Defaults matter: documents predating a field must not error the rule.
     function myRole() {
-      return hasProfile() ? myProfile().get('role', 'employee') : 'none';
+      return hasProfile() && !isRemoved() ? myProfile().get('role', 'employee') : 'none';
     }
 
     function isAdmin() {
       return myRole() in ['admin', 'super_admin'];
     }
 
+    function isSuperAdmin() {
+      return myRole() == 'super_admin';
+    }
+
     // Senior is a FLAG, not a role — App.jsx routes on `isSenior === true`
     // independently of role. Seniors review their assigned employees' DTRs, so
     // they read the same collections admins do.
     function isSenior() {
-      return hasProfile() && myProfile().get('isSenior', false) == true;
+      return hasProfile() && !isRemoved() && myProfile().get('isSenior', false) == true;
     }
 
     function isStaff() {
@@ -76,6 +95,8 @@ service cloud.firestore {
     match /users/{userId} {
       // Own profile always — ordered first so it short-circuits before
       // isStaff(), which cannot resolve for someone who has no profile yet.
+      // Deliberately signedIn() and not active(): a removed person must still
+      // read their own `removed` flag, or App.jsx cannot tell them why.
       allow get: if signedIn() && (userId == myUid() || isStaff());
 
       // AdminDashboard, SeniorDashboard and CutoffsView list every user.
@@ -92,10 +113,14 @@ service cloud.firestore {
         && request.resource.data.get('role', 'employee') == 'employee'
         && request.resource.data.get('isSenior', false) == false;
 
-      // role / isSenior / assignedSeniorId are the only updates the app makes,
-      // and all three are admin actions. Nothing self-updates a profile, so
-      // allowing it would widen the surface for no caller.
-      allow update: if isAdmin();
+      // role / isSenior / assignedSeniorId are admin actions. Nothing
+      // self-updates a profile, so allowing it would widen the surface for no
+      // caller. Removing (or restoring) someone is super_admin only, and never
+      // yourself — that would be a one-click lockout of the last super admin.
+      allow update: if isAdmin()
+        && (!request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny(['removed', 'removedAt', 'removedBy'])
+            || (isSuperAdmin() && userId != myUid()));
       allow delete: if false;
     }
 
@@ -105,15 +130,15 @@ service cloud.firestore {
       // getHistory always filters by employeeId, which is what makes the owner
       // leg provable. An unfiltered list errors on that read and is denied.
       allow read: if isStaff()
-        || (signedIn() && resource.data.employeeId == myUid());
+        || (active() && resource.data.employeeId == myUid());
 
       // Admins create logs for others when correcting a DTR (api.createLog).
       allow create: if isStaff()
-        || (signedIn() && request.resource.data.employeeId == myUid());
+        || (active() && request.resource.data.employeeId == myUid());
 
       // Employees edit their own before submitting (DTRTable / saveDTRBatch).
       allow update, delete: if isStaff()
-        || (signedIn() && resource.data.employeeId == myUid());
+        || (active() && resource.data.employeeId == myUid());
     }
 
     // ---- cutoffs ----
@@ -131,16 +156,16 @@ service cloud.firestore {
     // Doc id is `{userId}_{cutoffId}`.
     match /submissions/{submissionId} {
       allow read: if isStaff()
-        || (signedIn() && resource.data.userId == myUid());
+        || (active() && resource.data.userId == myUid());
 
       allow create: if isStaff()
-        || (signedIn() && request.resource.data.userId == myUid());
+        || (active() && request.resource.data.userId == myUid());
 
       // An employee may submit and resubmit, but only into a pending state.
       // Without that clause the owner leg lets them approve their own DTR,
       // which is the entire point of having a senior review it.
       allow update: if isStaff()
-        || (signedIn()
+        || (active()
             && resource.data.userId == myUid()
             && request.resource.data.get('status', 'pending') in ['pending', 'pending_senior']);
 
@@ -152,15 +177,15 @@ service cloud.firestore {
       // Filtered by recipientId at every call site, which is what makes this
       // provable — and what refuses an unfiltered sweep of everyone's alerts.
       allow read: if isAdmin()
-        || (signedIn() && resource.data.recipientId == myUid());
+        || (active() && resource.data.recipientId == myUid());
 
       // Anyone signed in may notify: submitting a DTR creates one addressed to
       // the reviewing senior, so the sender is not the recipient.
-      allow create: if signedIn();
+      allow create: if active();
 
       // Marking read.
       allow update: if isAdmin()
-        || (signedIn() && resource.data.recipientId == myUid());
+        || (active() && resource.data.recipientId == myUid());
 
       allow delete: if isAdmin();
     }

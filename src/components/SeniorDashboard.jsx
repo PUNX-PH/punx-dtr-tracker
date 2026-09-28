@@ -50,7 +50,7 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
         // Only employees assigned to this senior. Super-admins viewing this
         // dashboard will see only the people who have *them* set as senior;
         // if none, the list is intentionally empty.
-        const assigned = data.filter(u => u.assignedSeniorId === currentUser.id)
+        const assigned = data.filter(u => u.assignedSeniorId === currentUser.id && !u.removed)
         setUsers(assigned)
         setLoading(false)
     }

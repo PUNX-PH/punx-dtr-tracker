@@ -39,6 +39,12 @@ export default function CutoffsView() {
         )
         .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
 
+    // Someone removed after leaving still belongs in the periods they worked —
+    // those are payroll history — just not in any period that began after.
+    const usersForCutoff = (cutoff) => filteredUsers.filter(u =>
+        !u.removed || (u.removedAt && u.removedAt.toMillis() > cutoff.startDate.toMillis())
+    )
+
     const ensureHistoriesLoaded = async (userList) => {
         const missing = userList.filter(u => !(u.id in historyByUser) && !loadingUserIds.has(u.id))
         if (missing.length === 0) return
@@ -74,7 +80,7 @@ export default function CutoffsView() {
             return next
         })
         if (!isCurrentlyExpanded) {
-            ensureHistoriesLoaded(filteredUsers)
+            ensureHistoriesLoaded(usersForCutoff(cutoff))
             ensureSubmissionsLoaded(cutoff.id)
         }
     }
@@ -192,6 +198,7 @@ export default function CutoffsView() {
                         const isOpen = expanded.has(cutoff.id)
                         const isCurrent = activeCutoff?.id === cutoff.id
                         const cutoffSubs = submissionsByCutoff[cutoff.id] || {}
+                        const cutoffUsers = usersForCutoff(cutoff)
 
                         return (
                             <div key={cutoff.id} className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] overflow-hidden">
@@ -210,7 +217,7 @@ export default function CutoffsView() {
                                                     </span>
                                                 )}
                                             </div>
-                                            <p className="text-xs text-[var(--text-muted)] mt-0.5">{filteredUsers.length} employee{filteredUsers.length !== 1 ? 's' : ''}</p>
+                                            <p className="text-xs text-[var(--text-muted)] mt-0.5">{cutoffUsers.length} employee{cutoffUsers.length !== 1 ? 's' : ''}</p>
                                         </div>
                                     </div>
                                     {isOpen ? <ChevronDown size={18} className="text-[var(--text-muted)] shrink-0" /> : <ChevronRight size={18} className="text-[var(--text-muted)] shrink-0" />}
@@ -218,10 +225,10 @@ export default function CutoffsView() {
 
                                 {isOpen && (
                                     <div className="border-t border-[var(--border)] p-3 sm:p-5 space-y-8">
-                                        {filteredUsers.length === 0 ? (
+                                        {cutoffUsers.length === 0 ? (
                                             <p className="text-sm text-[var(--text-muted)] text-center py-6">No employees found</p>
                                         ) : (
-                                            filteredUsers.map(user => {
+                                            cutoffUsers.map(user => {
                                                 const history = historyByUser[user.id]
                                                 const isLoadingHistory = loadingUserIds.has(user.id)
                                                 const submission = cutoffSubs[user.id]
@@ -234,7 +241,10 @@ export default function CutoffsView() {
                                                                     {user.name?.charAt(0) || '?'}
                                                                 </div>
                                                                 <div className="min-w-0">
-                                                                    <p className="text-sm font-bold text-[var(--text-primary)] truncate">{user.name || 'Unknown'}</p>
+                                                                    <p className="text-sm font-bold text-[var(--text-primary)] truncate">
+                                                                        {user.name || 'Unknown'}
+                                                                        {user.removed && <span className="ml-2 text-[9px] text-[var(--text-muted)] font-bold uppercase">Removed</span>}
+                                                                    </p>
                                                                     <p className="text-xs text-[var(--text-muted)] truncate">{user.email}</p>
                                                                 </div>
                                                                 {submission && (

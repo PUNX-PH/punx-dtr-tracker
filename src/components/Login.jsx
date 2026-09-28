@@ -3,7 +3,7 @@ import { auth, googleProvider } from '../firebase'
 import { signInWithPopup } from 'firebase/auth'
 import { Lock, User } from 'lucide-react'
 
-export default function Login({ onLogin }) {
+export default function Login({ onLogin, notice }) {
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
 
@@ -56,9 +56,9 @@ export default function Login({ onLogin }) {
             </div>
 
             <div className="space-y-6">
-                {error && (
+                {(error || notice) && (
                     <div className="text-[var(--accent-red)] text-sm text-center bg-[var(--accent-red)]/10 border border-[var(--accent-red)]/20 p-3 rounded-xl">
-                        {error}
+                        {error || notice}
                     </div>
                 )}
 
