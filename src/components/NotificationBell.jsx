@@ -21,7 +21,12 @@ export default function NotificationBell({
     onDecline,
     onMarkRead,
     onMarkAllRead,
-    onNotificationClick
+    onNotificationClick,
+    // Set by Layout rather than read off a CSS breakpoint: a phone on its
+    // side is wider than `md` yet still gets the phone layout, so width alone
+    // no longer says which chrome is on screen.
+    inHeader = false, // sit inside the sticky top bar instead of the page corner
+    phone = false,    // full-width dropdown pinned under the bar
 }) {
     const [open, setOpen] = useState(false)
     const wrapRef = useRef(null)
@@ -38,7 +43,7 @@ export default function NotificationBell({
     const unreadCount = notifications.filter(n => !n.read).length
 
     return (
-        <div ref={wrapRef} className="fixed top-[calc(0.75rem+env(safe-area-inset-top,0px))] right-3 md:top-8 md:right-8 md:mt-0 z-40">
+        <div ref={wrapRef} className={`fixed z-40 ${inHeader ? 'top-[calc(0.75rem+env(safe-area-inset-top,0px))] right-3' : 'top-8 right-8 mt-0'}`}>
             <button
                 onClick={() => setOpen(o => !o)}
                 className="relative w-11 h-11 bg-[var(--surface-1)] border border-[var(--border)] rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors flex items-center justify-center shadow-lg"
@@ -54,7 +59,7 @@ export default function NotificationBell({
             </button>
 
             {open && (
-                <div className="fixed left-3 right-3 top-[calc(3.75rem+env(safe-area-inset-top,0px))] md:absolute md:left-auto md:right-0 md:top-auto md:mt-2 w-auto md:w-96 bg-[var(--surface-1)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden">
+                <div className={`${phone ? 'fixed left-3 right-3 top-[calc(3.75rem+env(safe-area-inset-top,0px))] w-auto' : 'absolute left-auto right-0 top-auto mt-2 w-96'} bg-[var(--surface-1)] border border-[var(--border)] rounded-2xl shadow-2xl overflow-hidden`}>
                     <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
                         <h3 className="text-sm font-bold text-[var(--text-primary)]">Notifications</h3>
                         {unreadCount > 0 && (

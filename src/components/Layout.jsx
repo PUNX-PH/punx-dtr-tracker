@@ -6,14 +6,19 @@ import NotificationBell from './NotificationBell'
 import { api } from '../services/api'
 
 export default function Layout({ children, user, onLogout, activeTab, onTabChange, onNotificationNavigate }) {
-    const [isSidebarOpen, setSidebarOpen] = useState(true)
-    const [isMobile, setIsMobile] = useState(false)
+    // Phone layout below `md`, and also on any screen too short for the
+    // desktop chrome — a phone turned sideways is ~850px wide but ~390px tall,
+    // and used to get the desktop layout, whose menu button scrolled away
+    // over the page title. Read synchronously so the first paint is right.
+    const isCompact = () => window.innerWidth < 768 || window.innerHeight < 500
+    const [isMobile, setIsMobile] = useState(isCompact)
+    const [isSidebarOpen, setSidebarOpen] = useState(() => !isCompact())
     const [notification, setNotification] = useState(null)
     const [notifications, setNotifications] = useState([])
 
     useEffect(() => {
         const checkMobile = () => {
-            const mobile = window.innerWidth < 768
+            const mobile = isCompact()
             setIsMobile(mobile)
             if (mobile) setSidebarOpen(false)
             else setSidebarOpen(true)
@@ -104,6 +109,10 @@ export default function Layout({ children, user, onLogout, activeTab, onTabChang
         onNotificationNavigate?.(focus)
     }
 
+    // The sticky bar carries the menu button whenever the sidebar is not on
+    // screen — on phones, and on desktop once it has been collapsed.
+    const showTopBar = isMobile || !isSidebarOpen
+
     return (
         <div className="flex h-[100dvh] bg-[var(--surface-0)] overflow-hidden relative">
             {/* Persistent bell — always visible across every dashboard */}
@@ -114,6 +123,8 @@ export default function Layout({ children, user, onLogout, activeTab, onTabChang
                 onMarkRead={handleMarkRead}
                 onMarkAllRead={handleMarkAllRead}
                 onNotificationClick={handleNotificationClick}
+                inHeader={showTopBar}
+                phone={isMobile}
             />
 
             {/* Notification Toast (auto-pop for latest unread) */}
@@ -137,19 +148,22 @@ export default function Layout({ children, user, onLogout, activeTab, onTabChang
 
             {/* Sidebar Wrapper */}
             <div className={`
-                fixed md:relative z-50 h-full max-w-[85vw] md:max-w-none
-                transition-transform md:transition-all duration-300 ease-in-out
-                ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0 md:w-0 md:overflow-hidden'}
+                z-50 h-full duration-300 ease-in-out
+                ${isMobile
+                    ? `fixed max-w-[85vw] transition-transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`
+                    : `relative max-w-none transition-all translate-x-0 ${isSidebarOpen ? '' : 'w-0 overflow-hidden'}`}
             `}>
                 <div className="h-full relative">
                     {/* Close Button for Mobile */}
+                    {isMobile && (
                     <button
                         onClick={() => setSidebarOpen(false)}
                         aria-label="Close menu"
-                        className="md:hidden absolute top-3 right-3 p-2 -m-0.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] active:bg-[var(--surface-3)] z-50"
+                        className="absolute top-3 right-3 p-2 -m-0.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] active:bg-[var(--surface-3)] z-50"
                     >
                         <X size={24} />
                     </button>
+                    )}
 
                     <Sidebar
                         user={user}
@@ -166,7 +180,8 @@ export default function Layout({ children, user, onLogout, activeTab, onTabChang
 
             <main className="flex-1 overflow-auto relative">
                 {/* Header / Toggle Area — sticky so the menu stays reachable */}
-                <header className="md:hidden sticky top-0 z-30 pt-safe px-safe bg-[var(--surface-0)]/90 backdrop-blur-md border-b border-[var(--border)]">
+                {showTopBar && (
+                <header className="sticky top-0 z-30 pt-safe px-safe bg-[var(--surface-0)]/90 backdrop-blur-md border-b border-[var(--border)]">
                     <div className="flex items-center gap-3 px-4 py-3 pr-16">
                         <button
                             onClick={() => setSidebarOpen(true)}
@@ -181,17 +196,6 @@ export default function Layout({ children, user, onLogout, activeTab, onTabChang
                         </div>
                     </div>
                 </header>
-
-                {/* Toggle Button for Desktop (Optional, if user wants to hide sidebar on desktop too) */}
-                {!isMobile && !isSidebarOpen && (
-                    <div className="absolute top-8 left-8 z-30">
-                        <button
-                            onClick={() => setSidebarOpen(true)}
-                            className="p-3 bg-[var(--surface-1)] border border-[var(--border)] rounded-xl text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors shadow-xl"
-                        >
-                            <Menu size={20} />
-                        </button>
-                    </div>
                 )}
 
                 <div className="max-w-7xl mx-auto content-gutter">
