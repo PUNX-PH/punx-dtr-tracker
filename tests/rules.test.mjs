@@ -135,6 +135,32 @@ await it('a brand-new Google account self-creates its profile', () =>
   assertSucceeds(setDoc(doc(as(OUTSIDER), 'users', OUTSIDER),
     { uid: OUTSIDER, name: 'New', email: 'outsider1@punx.ai', role: 'employee' })))
 
+// api.ensureUserProfile does NOT go straight to setDoc. For an account with no
+// profile it reads users/{uid}, then runs the legacy `where('uid','==',uid)`
+// list query, and only then creates the profile. If that list query is denied
+// the whole function throws into its catch, which returns an in-memory profile
+// and never writes — the person works normally (their own logs are allowed
+// without a profile) but never appears in the admin's employee list.
+console.log('\nfirst sign-in — the exact sequence api.ensureUserProfile runs')
+const NEWBIE = 'newbie1'
+await it('reads its own missing profile', () =>
+  assertSucceeds(getDoc(doc(as(NEWBIE), 'users', NEWBIE))))
+await it('runs the legacy lookup by its own uid', () =>
+  assertSucceeds(getDocs(query(collection(as(NEWBIE), 'users'), where('uid', '==', NEWBIE)))))
+await it('then creates the profile', () =>
+  assertSucceeds(setDoc(doc(as(NEWBIE), 'users', NEWBIE),
+    { uid: NEWBIE, name: 'Newbie', email: 'newbie1@punx.ai', role: 'employee' })))
+await it('the new profile is then visible to an admin listing users', async () => {
+  const snap = await assertSucceeds(getDocs(collection(as(ADMIN), 'users')))
+  if (!snap.docs.some(d => d.id === NEWBIE)) throw new Error('profile not in the admin list')
+})
+await it('the legacy lookup cannot be pointed at someone else\'s uid', () =>
+  assertFails(getDocs(query(collection(as(NEWBIE), 'users'), where('uid', '==', EMP)))))
+await it('the legacy lookup cannot be used to harvest pins via the admin\'s uid', () =>
+  assertFails(getDocs(query(collection(as(NEWBIE), 'users'), where('uid', '==', ADMIN)))))
+await it('a removed person can still run the lookup on themselves', () =>
+  assertSucceeds(getDocs(query(collection(as(GONE), 'users'), where('uid', '==', GONE)))))
+
 console.log('\nthe app must still work — senior (SeniorDashboard.jsx)')
 await it('lists all users', () =>
   assertSucceeds(getDocs(collection(as(SENIOR), 'users'))))

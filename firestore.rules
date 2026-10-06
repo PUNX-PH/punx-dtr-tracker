@@ -100,9 +100,15 @@ service cloud.firestore {
       allow get: if signedIn() && (userId == myUid() || isStaff());
 
       // AdminDashboard, SeniorDashboard and CutoffsView list every user.
-      // Employees never do. The unfiltered list is exactly what must not work
-      // for them, so there is no owner leg here to make provable.
-      allow list: if isStaff();
+      // Employees never do — an unfiltered list must stay denied for them.
+      //
+      // The owner leg is for ONE query: api.ensureUserProfile's legacy lookup,
+      // `where('uid','==',myUid)`, which runs on every first sign-in BEFORE the
+      // profile exists (so isStaff() cannot pass). It is provable only because
+      // the filter pins `resource.data.uid`; an unfiltered or other-uid query
+      // errors/fails and is denied. Do not guard this read with `.get()`.
+      allow list: if isStaff()
+        || (signedIn() && resource.data.uid == myUid());
 
       // First Google sign-in self-creates (api.ensureUserProfile). Pinned to
       // `employee`: without this, a new account creates itself as super_admin

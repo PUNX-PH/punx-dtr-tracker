@@ -273,12 +273,21 @@ export const api = {
                 return { id: userSnap.id, ...userSnap.data() };
             }
 
-            // Double check query if we used to store random IDs (legacy check)
-            const q = query(collection(db, "users"), where("uid", "==", uid));
-            const querySnapshot = await getDocs(q);
-            if (!querySnapshot.empty) {
-                const doc = querySnapshot.docs[0];
-                return { id: doc.id, ...doc.data() };
+            // Double check query if we used to store random IDs (legacy check).
+            // Its own try/catch on purpose: a refused lookup must fall through to
+            // the create below, not abort it. Before this, a denial landed in the
+            // outer catch, which returns an unsaved stand-in profile — the person
+            // worked normally (their own logs need no profile) but never got a
+            // users doc, so no admin could ever see them.
+            try {
+                const q = query(collection(db, "users"), where("uid", "==", uid));
+                const querySnapshot = await getDocs(q);
+                if (!querySnapshot.empty) {
+                    const doc = querySnapshot.docs[0];
+                    return { id: doc.id, ...doc.data() };
+                }
+            } catch (legacyError) {
+                console.warn("Legacy profile lookup refused; creating a profile for", uid, legacyError.code || legacyError.message);
             }
 
             // If not found, create new 'employee' profile
