@@ -257,6 +257,130 @@ await it('a removed senior/admin loses staff access to logs', () =>
 await it('staff can still read a removed person\'s history (payroll)', () =>
   assertSucceeds(getDocs(query(collection(as(ADMIN), 'logs'), where('employeeId', '==', GONE)))))
 
+console.log('\nleave & offset (leaveRequests / leaveBalances / leaveAdjustments)')
+const SENIOR2 = 'senior2'  // a senior who is NOT emp1's senior
+await testEnv.withSecurityRulesDisabled(async (ctx) => {
+  const db = ctx.firestore()
+  await updateDoc(doc(db, 'users', EMP), { assignedSeniorId: SENIOR })
+  await setDoc(doc(db, 'users', SENIOR2), { uid: SENIOR2, name: 'Sen2', email: 's2@punx.ai', role: 'employee', isSenior: true })
+  await setDoc(doc(db, 'leaveRequests', 'lr_emp'), { userId: EMP, userName: 'Emp', type: 'sick', startDate: '2026-10-12', endDate: '2026-10-12', days: 1, hours: 0, reason: '', status: 'pending', createdAt: new Date() })
+  await setDoc(doc(db, 'leaveRequests', 'lr_emp2'), { userId: EMP2, userName: 'Emp2', type: 'sick', startDate: '2026-10-12', endDate: '2026-10-12', days: 1, hours: 0, reason: '', status: 'pending', createdAt: new Date() })
+  await setDoc(doc(db, 'leaveRequests', 'lr_done'), { userId: EMP, userName: 'Emp', type: 'vacation', startDate: '2026-10-13', endDate: '2026-10-13', days: 1, hours: 0, reason: '', status: 'approved', createdAt: new Date() })
+  await setDoc(doc(db, 'leaveRequests', 'lr_padmin'), { userId: PLAIN_ADMIN, userName: 'PAdm', type: 'sick', startDate: '2026-10-14', endDate: '2026-10-14', days: 1, hours: 0, reason: '', status: 'pending', createdAt: new Date() })
+  await setDoc(doc(db, 'leaveBalances', EMP), { sick: 5, vacation: 5, offset: 8 })
+  await setDoc(doc(db, 'leaveBalances', EMP2), { sick: 5, vacation: 5, offset: 0 })
+  await setDoc(doc(db, 'leaveAdjustments', 'adj_emp'), { userId: EMP, type: 'offset', delta: 8, before: 0, after: 8, reason: 'x', byId: ADMIN, createdAt: new Date() })
+  await setDoc(doc(db, 'leaveAdjustments', 'adj_emp2'), { userId: EMP2, type: 'offset', delta: 8, before: 0, after: 8, reason: 'x', byId: ADMIN, createdAt: new Date() })
+})
+const newReq = (uid, over = {}) => ({
+  userId: uid, userName: 'x', type: 'sick', startDate: '2026-11-02', endDate: '2026-11-03',
+  days: 2, hours: 0, reason: '', status: 'pending', createdAt: new Date(), ...over,
+})
+const review = (uid, extra = {}) => ({ status: 'approved', reviewerId: uid, reviewerName: 'R', reviewedAt: new Date(), reviewNote: '', ...extra })
+
+console.log('  employee')
+await it('files a pending request of their own', () =>
+  assertSucceeds(setDoc(doc(as(EMP), 'leaveRequests', 'lr_new'), newReq(EMP))))
+await it('reads their own requests (filtered by userId)', () =>
+  assertSucceeds(getDocs(query(collection(as(EMP), 'leaveRequests'), where('userId', '==', EMP)))))
+await it('cannot list requests unfiltered', () =>
+  assertFails(getDocs(collection(as(EMP), 'leaveRequests'))))
+await it('cannot read another employee\'s request', () =>
+  assertFails(getDoc(doc(as(EMP), 'leaveRequests', 'lr_emp2'))))
+await it('cannot file a request as someone else', () =>
+  assertFails(setDoc(doc(as(EMP), 'leaveRequests', 'lr_spoof'), newReq(EMP2))))
+await it('cannot file a request already approved', () =>
+  assertFails(setDoc(doc(as(EMP), 'leaveRequests', 'lr_pre'), newReq(EMP, { status: 'approved' }))))
+await it('cannot smuggle in review fields on create', () =>
+  assertFails(setDoc(doc(as(EMP), 'leaveRequests', 'lr_smug'), { ...newReq(EMP), reviewerId: ADMIN })))
+await it('cannot file an unknown type', () =>
+  assertFails(setDoc(doc(as(EMP), 'leaveRequests', 'lr_type'), newReq(EMP, { type: 'sabbatical' }))))
+await it('cannot file more than 8 offset hours in one request', () =>
+  assertFails(setDoc(doc(as(EMP), 'leaveRequests', 'lr_big'), newReq(EMP, { type: 'offset', hours: 40, days: 0 }))))
+await it('cannot approve their own request', () =>
+  assertFails(updateDoc(doc(as(EMP), 'leaveRequests', 'lr_emp'), review(EMP))))
+await it('cannot edit their own request (withdraw and refile instead)', () =>
+  assertFails(updateDoc(doc(as(EMP), 'leaveRequests', 'lr_emp'), { days: 99 })))
+await it('withdraws their own pending request', () =>
+  assertSucceeds(deleteDoc(doc(as(EMP), 'leaveRequests', 'lr_new'))))
+await it('cannot withdraw an approved request', () =>
+  assertFails(deleteDoc(doc(as(EMP), 'leaveRequests', 'lr_done'))))
+await it('cannot withdraw someone else\'s request', () =>
+  assertFails(deleteDoc(doc(as(EMP), 'leaveRequests', 'lr_emp2'))))
+await it('a removed person cannot file a request', () =>
+  assertFails(setDoc(doc(as(GONE), 'leaveRequests', 'lr_gone'), newReq(GONE))))
+
+console.log('  approval workflow')
+await it('the assigned senior approves their employee\'s request', () =>
+  assertSucceeds(updateDoc(doc(as(SENIOR), 'leaveRequests', 'lr_emp'), review(SENIOR))))
+await it('...and cannot flip it back once decided', () =>
+  assertFails(updateDoc(doc(as(SENIOR), 'leaveRequests', 'lr_emp'), review(SENIOR, { status: 'rejected' }))))
+await it('a senior who is not assigned cannot decide it', () =>
+  assertFails(updateDoc(doc(as(SENIOR2), 'leaveRequests', 'lr_emp2'), review(SENIOR2))))
+await it('a senior cannot decide their own request', async () => {
+  await testEnv.withSecurityRulesDisabled(ctx => setDoc(doc(ctx.firestore(), 'leaveRequests', 'lr_sen'),
+    newReq(SENIOR, { userName: 'Sen' })))
+  await assertFails(updateDoc(doc(as(SENIOR), 'leaveRequests', 'lr_sen'), review(SENIOR)))
+})
+await it('an admin decides anyone\'s request', () =>
+  assertSucceeds(updateDoc(doc(as(PLAIN_ADMIN), 'leaveRequests', 'lr_emp2'), review(PLAIN_ADMIN, { status: 'rejected', reviewNote: 'no cover' }))))
+await it('an admin cannot decide their own request', () =>
+  assertFails(updateDoc(doc(as(PLAIN_ADMIN), 'leaveRequests', 'lr_padmin'), review(PLAIN_ADMIN))))
+await it('a decision cannot claim to come from someone else', () =>
+  assertFails(updateDoc(doc(as(ADMIN), 'leaveRequests', 'lr_padmin'), review(ADMIN, { reviewerId: PLAIN_ADMIN }))))
+await it('a decision cannot also rewrite the request', () =>
+  assertFails(updateDoc(doc(as(ADMIN), 'leaveRequests', 'lr_padmin'), { ...review(ADMIN), days: 0 })))
+await it('a decision must be approved or rejected, not pending', () =>
+  assertFails(updateDoc(doc(as(ADMIN), 'leaveRequests', 'lr_padmin'), review(ADMIN, { status: 'pending' }))))
+await it('a removed senior/admin cannot decide anything', () =>
+  assertFails(updateDoc(doc(as(GONE_SENIOR), 'leaveRequests', 'lr_padmin'), review(GONE_SENIOR))))
+await it('another admin can decide that admin\'s request', () =>
+  assertSucceeds(updateDoc(doc(as(ADMIN), 'leaveRequests', 'lr_padmin'), review(ADMIN))))
+await it('an admin can revoke an approved request', () =>
+  assertSucceeds(updateDoc(doc(as(ADMIN), 'leaveRequests', 'lr_done'), review(ADMIN, { status: 'rejected' }))))
+await it('staff read the queue (status filter, as LeaveApprovals loads it)', () =>
+  assertSucceeds(getDocs(query(collection(as(SENIOR), 'leaveRequests'), where('status', '==', 'pending')))))
+await it('staff read the recent list (orderBy createdAt, as getRequests loads it)', () =>
+  assertSucceeds(getDocs(query(collection(as(PLAIN_ADMIN), 'leaveRequests'), orderBy('createdAt', 'desc'), limit(500)))))
+
+console.log('  balances (HR/admin)')
+await it('an employee reads their own balance doc', () =>
+  assertSucceeds(getDoc(doc(as(EMP), 'leaveBalances', EMP))))
+await it('an employee can read "nothing here" for themselves (no doc yet)', () =>
+  assertSucceeds(getDoc(doc(as(OUTSIDER), 'leaveBalances', OUTSIDER))))
+await it('an employee cannot read someone else\'s balance', () =>
+  assertFails(getDoc(doc(as(EMP), 'leaveBalances', EMP2))))
+await it('an employee cannot list all balances', () =>
+  assertFails(getDocs(collection(as(EMP), 'leaveBalances'))))
+await it('an employee cannot grant themselves more leave', () =>
+  assertFails(updateDoc(doc(as(EMP), 'leaveBalances', EMP), { sick: 999 })))
+await it('an employee cannot create their own balance doc', () =>
+  assertFails(setDoc(doc(as(OUTSIDER), 'leaveBalances', OUTSIDER), { sick: 999, vacation: 999, offset: 999 })))
+await it('a senior cannot change balances', () =>
+  assertFails(updateDoc(doc(as(SENIOR), 'leaveBalances', EMP), { sick: 99 })))
+await it('an admin lists all balances', () =>
+  assertSucceeds(getDocs(collection(as(PLAIN_ADMIN), 'leaveBalances'))))
+await it('an admin adjusts a balance', () =>
+  assertSucceeds(setDoc(doc(as(PLAIN_ADMIN), 'leaveBalances', EMP), { sick: 6, vacation: 5, offset: 8 })))
+await it('an admin creates the balance doc for someone on defaults', () =>
+  assertSucceeds(setDoc(doc(as(ADMIN), 'leaveBalances', LEAVER), { sick: 5, vacation: 5, offset: 4 })))
+await it('balance docs cannot be deleted', () =>
+  assertFails(deleteDoc(doc(as(ADMIN), 'leaveBalances', EMP))))
+
+console.log('  adjustment audit trail')
+await it('an admin writes an adjustment', () =>
+  assertSucceeds(setDoc(doc(as(ADMIN), 'leaveAdjustments', 'adj_new'), { userId: EMP, type: 'sick', delta: 1, before: 5, after: 6, reason: 'r', byId: ADMIN, createdAt: new Date() })))
+await it('an employee cannot write an adjustment', () =>
+  assertFails(setDoc(doc(as(EMP), 'leaveAdjustments', 'adj_self'), { userId: EMP, type: 'sick', delta: 50, before: 5, after: 55, reason: 'r', byId: EMP, createdAt: new Date() })))
+await it('an employee reads their own adjustments (filtered by userId)', () =>
+  assertSucceeds(getDocs(query(collection(as(EMP), 'leaveAdjustments'), where('userId', '==', EMP)))))
+await it('an employee cannot read someone else\'s adjustments', () =>
+  assertFails(getDocs(query(collection(as(EMP), 'leaveAdjustments'), where('userId', '==', EMP2)))))
+await it('adjustments are append-only, even for admins', async () => {
+  await assertFails(updateDoc(doc(as(ADMIN), 'leaveAdjustments', 'adj_emp'), { delta: 100 }))
+  await assertFails(deleteDoc(doc(as(ADMIN), 'leaveAdjustments', 'adj_emp')))
+})
+
 console.log(`\n${pass} passed, ${fail} failed\n`)
 await testEnv.cleanup()
 process.exit(fail ? 1 : 0)

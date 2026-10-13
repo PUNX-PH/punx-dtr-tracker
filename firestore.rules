@@ -222,6 +222,83 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ---- leaveRequests ----
+    // Sick / vacation leave and offset hours (src/services/api.js leaveApi).
+    // The approval workflow lives HERE, not in the UI: whoever can flip `status`
+    // is whoever these rules say can.
+    match /leaveRequests/{requestId} {
+      // Who may DECIDE this request: an admin, or the senior currently assigned
+      // to the requester — read off the requester's profile at decision time, so
+      // reassigning someone moves the approval with them. Never your own request,
+      // which is what stops an admin or senior approving themselves.
+      function seniorOf(uid) {
+        return get(/databases/$(database)/documents/users/$(uid)).data.get('assignedSeniorId', '');
+      }
+
+      function canReview() {
+        return resource.data.userId != myUid()
+          && (isAdmin()
+              || (isSenior() && seniorOf(resource.data.userId) == myUid()));
+      }
+
+      // The employee screen filters by userId, which is what makes the owner leg
+      // provable and refuses an unfiltered sweep. Staff read the queue.
+      allow read: if isStaff()
+        || (active() && resource.data.userId == myUid());
+
+      // A request starts life pending and is the requester's own. Fixed key set
+      // so nothing can be smuggled in (reviewerId, a pre-set reviewedAt...).
+      allow create: if active()
+        && request.resource.data.userId == myUid()
+        && request.resource.data.status == 'pending'
+        && request.resource.data.type in ['sick', 'vacation', 'offset']
+        && request.resource.data.keys().hasOnly(
+             ['userId', 'userName', 'type', 'startDate', 'endDate', 'days', 'hours', 'reason', 'status', 'createdAt'])
+        && request.resource.data.startDate is string
+        && request.resource.data.endDate is string
+        && request.resource.data.days is number
+        && request.resource.data.hours is number
+        && request.resource.data.days >= 0 && request.resource.data.days <= 366
+        && request.resource.data.hours >= 0 && request.resource.data.hours <= 8;
+
+      // A decision touches only the review fields, and only to approved or
+      // rejected. A senior decides pending requests; an admin can also revoke an
+      // approved one (HR correcting a mistake). The requester cannot update at
+      // all — to change a request they withdraw it and file again.
+      allow update: if active() && canReview()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status', 'reviewerId', 'reviewerName', 'reviewedAt', 'reviewNote'])
+        && request.resource.data.status in ['approved', 'rejected']
+        && request.resource.data.reviewerId == myUid()
+        && (isAdmin() || resource.data.status == 'pending');
+
+      // Withdrawing is for requests nobody has decided yet; an approved leave
+      // is a record, and only an admin may remove it.
+      allow delete: if (active() && resource.data.userId == myUid() && resource.data.status == 'pending')
+        || isAdmin();
+    }
+
+    // ---- leaveBalances ----
+    // What HR has granted, per person. Admin-written only — employees see their
+    // own, and nothing here can be self-served into a bigger balance.
+    match /leaveBalances/{userId} {
+      // get is split from list so a person with no balance doc yet (the default
+      // case) can still read "nothing here" for themselves.
+      allow get: if isStaff() || (active() && userId == myUid());
+      allow list: if isStaff();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // ---- leaveAdjustments ----
+    // Append-only audit trail of balance changes. Nobody edits history.
+    match /leaveAdjustments/{adjustmentId} {
+      allow read: if isAdmin()
+        || (active() && resource.data.userId == myUid());
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
+
     // ---- settings ----
     // The DTR reminder's kill switch. Written only by the Cloudflare Worker via
     // a service account, which bypasses rules entirely — so the client needs no

@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { Search, User as UserIcon, Loader2, FileSpreadsheet, Users, Folder, X, Square, CheckSquare, RotateCcw, Trash2 } from 'lucide-react'
 import { Timestamp } from 'firebase/firestore'
 import * as XLSX from 'xlsx'
-import { api, defaultSubmitBy, reminderApi } from '../services/api'
+import { api, defaultSubmitBy, reminderApi, leaveApi } from '../services/api'
+import { leaveForDate, dtrLabel, LEAVE_TYPES } from '../services/leave'
 import DTRTable from './DTRTable'
 import RecentActivityTable from './RecentActivityTable'
 import CutoffsView from './CutoffsView'
@@ -15,6 +16,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
     const [search, setSearch] = useState('')
     const [selectedUser, setSelectedUser] = useState(null)
     const [userHistory, setUserHistory] = useState([])
+    const [userLeaves, setUserLeaves] = useState([])
     const [loadingHistory, setLoadingHistory] = useState(false)
     const [cutoff, setCutoff] = useState(null)
     const [cutoffs, setCutoffs] = useState([]) // List of all available cutoffs
@@ -229,8 +231,9 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
 
     const loadHistory = async (userId) => {
         setLoadingHistory(true)
-        const data = await api.getHistory(userId)
+        const [data, leaves] = await Promise.all([api.getHistory(userId), leaveApi.getUserRequests(userId)])
         setUserHistory(data)
+        setUserLeaves(leaves)
         setLoadingHistory(false)
     }
 
@@ -311,6 +314,11 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                 "Time In": formatTime(findLog('IN')),
                 "Time Out": formatTime(findLog('OUT')),
                 "Overtime": otSessions,
+                // Approved leave / offset for the day, same overlay the DTR screen draws.
+                "Leave": (() => {
+                    const leave = leaveForDate(userLeaves, date);
+                    return leave ? (leave.type === 'offset' ? dtrLabel(leave) : LEAVE_TYPES[leave.type].label) : '';
+                })(),
                 "Notes": findAnyLog()?.reason || ''
             };
         });
@@ -325,6 +333,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
             { wch: 15 }, // In
             { wch: 15 }, // Out
             { wch: 30 }, // Overtime
+            { wch: 18 }, // Leave
             { wch: 30 }  // Notes
         ];
         ws['!cols'] = wscols;
@@ -1073,6 +1082,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                     <DTRTable
                                         user={selectedUser} // Pass selected user so table saves to THEIR log
                                         history={userHistory}
+                                        leaves={userLeaves}
                                         onRefresh={() => loadHistory(selectedUser.id)}
                                         initialDate={cutoff ? cutoff.startDate.toDate() : null}
                                         periodEnd={cutoff ? cutoff.endDate.toDate() : null}

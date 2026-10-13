@@ -1,5 +1,8 @@
 import { auth, db } from '../firebase';
-import { collection, query, where, getDocs, getDoc, setDoc, addDoc, updateDoc, doc, Timestamp, orderBy, limit, onSnapshot, writeBatch } from "firebase/firestore";
+import { collection, query, where, getDocs, getDoc, setDoc, addDoc, updateDoc, deleteDoc, doc, Timestamp, orderBy, limit, onSnapshot, writeBatch, runTransaction } from "firebase/firestore";
+import { DEFAULT_ALLOTMENT, LEAVE_TYPE_KEYS, LEAVE_TYPES, STATUS, summarize, validateRequest, formatAmount, formatRange, requestAmount } from './leave';
+
+const millis = (ts) => (ts && typeof ts.toMillis === 'function' ? ts.toMillis() : 0);
 
 /**
  * The deadline a cutoff gets unless someone changes it: 10:00 AM the day after
@@ -743,6 +746,261 @@ export const api = {
             return { success: false, message: error.message };
         }
     }
+};
+
+// ---- Leave & offset ----
+//
+// Three collections, all behind rules in firestore.rules:
+//   leaveRequests/{id}      one request: type, startDate/endDate (YYYY-MM-DD
+//                           strings, never Timestamps — see leave.js), days or
+//                           hours, status pending|approved|rejected.
+//   leaveBalances/{userId}  what HR has GRANTED per type. Absent = defaults.
+//                           "Used" is derived from approved requests, not kept
+//                           here — see summarize() in leave.js.
+//   leaveAdjustments/{id}   append-only audit trail of every HR change.
+//
+// Approved requests are not copied into `logs`. The DTR overlays them at read
+// time (DTRTable `leaves` prop), so revoking a leave takes it off the DTR with
+// no cleanup, and payroll's own log records are never touched by this feature.
+
+const round2 = (n) => Math.round(n * 100) / 100;
+
+// These throw; the public wrappers below decide what a failure looks like.
+// submit() and review() must NOT fall back to an empty list on a read error,
+// or an outage would quietly turn off the overlap and balance checks.
+async function fetchAllotted(userId) {
+    const snap = await getDoc(doc(db, "leaveBalances", userId));
+    const data = snap.exists() ? snap.data() : {};
+    const out = { ...DEFAULT_ALLOTMENT };
+    LEAVE_TYPE_KEYS.forEach(k => { if (Number.isFinite(Number(data[k]))) out[k] = Number(data[k]); });
+    return out;
+}
+
+async function fetchUserRequests(userId) {
+    // Single-field filter only: a composite index (userId + createdAt) would
+    // have to be created by hand in the console before this screen worked.
+    const snap = await getDocs(query(collection(db, "leaveRequests"), where("userId", "==", userId)));
+    return snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => millis(b.createdAt) - millis(a.createdAt));
+}
+
+export const leaveApi = {
+    /** Balances + requests + the derived summary for one person. Throws. */
+    getOverview: async (userId) => {
+        const [allotted, requests] = await Promise.all([fetchAllotted(userId), fetchUserRequests(userId)]);
+        return { allotted, requests, summary: summarize(allotted, requests) };
+    },
+
+    /** Just the requests — what the DTR needs to overlay. [] on failure so the DTR still renders. */
+    getUserRequests: async (userId) => {
+        try {
+            return await fetchUserRequests(userId);
+        } catch (error) {
+            console.error("Get leave requests error", error);
+            return [];
+        }
+    },
+
+    /**
+     * Staff queue. `status` narrows it (the approval queue asks for 'pending');
+     * without it, the most recent 500, newest first. Callers filter by employee
+     * themselves — a senior only acts on their own assigned people, and the
+     * rules enforce that on write.
+     */
+    getRequests: async (status = null) => {
+        const col = collection(db, "leaveRequests");
+        const q = status
+            ? query(col, where("status", "==", status))
+            : query(col, orderBy("createdAt", "desc"), limit(500));
+        const snap = await getDocs(q);
+        return snap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => millis(b.createdAt) - millis(a.createdAt));
+    },
+
+    /** { [userId]: { sick, vacation, offset } } for everyone HR has set a balance for. */
+    getAllAllotted: async () => {
+        const snap = await getDocs(collection(db, "leaveBalances"));
+        const map = {};
+        snap.docs.forEach(d => {
+            const out = { ...DEFAULT_ALLOTMENT };
+            LEAVE_TYPE_KEYS.forEach(k => { if (Number.isFinite(Number(d.data()[k]))) out[k] = Number(d.data()[k]); });
+            map[d.id] = out;
+        });
+        return map;
+    },
+
+    getAdjustments: async (userId) => {
+        const snap = await getDocs(query(collection(db, "leaveAdjustments"), where("userId", "==", userId)));
+        return snap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => millis(b.createdAt) - millis(a.createdAt));
+    },
+
+    /**
+     * File a request. Validated against the live balance and the person's other
+     * requests here, not just in the form: the form can be stale, and this is
+     * the one place every request passes through.
+     */
+    submit: async (user, input) => {
+        try {
+            const [allotted, requests, userSnap] = await Promise.all([
+                fetchAllotted(user.id),
+                fetchUserRequests(user.id),
+                getDoc(doc(db, "users", user.id)),
+            ]);
+            const v = validateRequest(input, summarize(allotted, requests), requests);
+            if (v.error) return { success: false, message: v.error };
+
+            const isOffset = input.type === 'offset';
+            const request = {
+                userId: user.id,
+                userName: user.name || '',
+                type: input.type,
+                startDate: v.startDate,
+                endDate: v.endDate,
+                days: isOffset ? 0 : v.amount,
+                hours: isOffset ? v.amount : 0,
+                reason: (input.reason || '').trim().slice(0, 500),
+                status: STATUS.PENDING,
+                createdAt: Timestamp.now(),
+            };
+            const ref = await addDoc(collection(db, "leaveRequests"), request);
+
+            // Only the assigned senior can be told: employees cannot list users,
+            // so they cannot find the admins either (same limit as submitDTR).
+            // Admins find it in the Leave tab's queue.
+            const seniorId = userSnap.exists() ? userSnap.data().assignedSeniorId : null;
+            if (seniorId) {
+                await api.createNotification(
+                    seniorId,
+                    'LEAVE_APPROVAL',
+                    'Leave Approval Required',
+                    `${request.userName || 'An employee'} requested ${LEAVE_TYPES[request.type].label} for ${formatRange(request)} (${formatAmount(request.type, v.amount)}).`,
+                    { requestId: ref.id, employeeId: user.id, employeeName: request.userName }
+                );
+            }
+            return { success: true, id: ref.id };
+        } catch (error) {
+            console.error("Submit leave request error", error);
+            return { success: false, message: error.message };
+        }
+    },
+
+    /** Withdraw a request that has not been decided yet (the rules refuse anything else). */
+    cancel: async (requestId) => {
+        try {
+            await deleteDoc(doc(db, "leaveRequests", requestId));
+            return { success: true };
+        } catch (error) {
+            console.error("Cancel leave request error", error);
+            return { success: false, message: error.message };
+        }
+    },
+
+    /**
+     * Approve or reject. Approval re-checks the balance at the moment of
+     * approving — a request that fitted when filed may not after HR deducted
+     * something — so a decision can never push anyone below zero. Every approver
+     * path (queue, notification toast) goes through here for that reason.
+     */
+    review: async (requestId, status, reviewer, note = '') => {
+        try {
+            const ref = doc(db, "leaveRequests", requestId);
+            const snap = await getDoc(ref);
+            if (!snap.exists()) return { success: false, message: "That request no longer exists." };
+            const req = { id: snap.id, ...snap.data() };
+
+            if (req.userId === reviewer.id) return { success: false, message: "You can't decide your own request." };
+            if (req.status === status) return { success: false, message: `It is already ${status}.` };
+
+            if (status === STATUS.APPROVED) {
+                const [allotted, requests] = await Promise.all([fetchAllotted(req.userId), fetchUserRequests(req.userId)]);
+                const bucket = summarize(allotted, requests.filter(r => r.id !== requestId))[req.type];
+                const amount = requestAmount(req);
+                if (amount > bucket.remaining) {
+                    return {
+                        success: false,
+                        message: `Can't approve: ${req.userName || 'this employee'} has ${formatAmount(req.type, Math.max(0, bucket.remaining))} of ${LEAVE_TYPES[req.type].label.toLowerCase()} left and this asks for ${formatAmount(req.type, amount)}. Adjust their balance first if that is intended.`,
+                    };
+                }
+            }
+
+            await updateDoc(ref, {
+                status,
+                reviewerId: reviewer.id,
+                reviewerName: reviewer.name || '',
+                reviewedAt: Timestamp.now(),
+                reviewNote: (note || '').trim().slice(0, 500),
+            });
+
+            await api.createNotification(
+                req.userId,
+                status === STATUS.APPROVED ? 'LEAVE_APPROVED' : 'LEAVE_REJECTED',
+                status === STATUS.APPROVED ? 'Request Approved' : 'Request Rejected',
+                `${reviewer.name || 'Your reviewer'} ${status} your ${LEAVE_TYPES[req.type].label} request for ${formatRange(req)}.${note ? ` Note: ${note.trim()}` : ''}`,
+                { requestId, employeeId: req.userId }
+            );
+            return { success: true, request: { ...req, status } };
+        } catch (error) {
+            console.error("Review leave request error", error);
+            // The rules decide who may decide whose request; say so plainly.
+            if (error.code === 'permission-denied') {
+                return { success: false, message: "You aren't allowed to decide this request. Only the employee's assigned senior or an admin can." };
+            }
+            return { success: false, message: error.message };
+        }
+    },
+
+    /**
+     * HR/admin: credit or deduct one balance. `delta` is signed, in the type's
+     * own unit (days or hours). The balance write and its audit row commit
+     * together or not at all, and the read-modify-write is a transaction so two
+     * admins adjusting at once cannot lose one of the changes.
+     */
+    adjustBalance: async (userId, type, delta, reason, admin) => {
+        try {
+            if (!LEAVE_TYPES[type]) return { success: false, message: "Unknown balance type." };
+            if (!Number.isFinite(delta) || delta === 0) return { success: false, message: "Enter an amount to credit or deduct." };
+            if (!reason || !reason.trim()) return { success: false, message: "A reason is required — it is the audit trail." };
+
+            let result;
+            await runTransaction(db, async (tx) => {
+                const balRef = doc(db, "leaveBalances", userId);
+                const snap = await tx.get(balRef);
+                const current = { ...DEFAULT_ALLOTMENT };
+                if (snap.exists()) {
+                    LEAVE_TYPE_KEYS.forEach(k => { if (Number.isFinite(Number(snap.data()[k]))) current[k] = Number(snap.data()[k]); });
+                }
+                const before = current[type];
+                const after = round2(before + delta);
+                if (after < 0) throw new Error(`That would take the balance below zero (it is ${before}).`);
+
+                tx.set(balRef, { ...current, [type]: after, updatedAt: Timestamp.now(), updatedBy: admin.id });
+                tx.set(doc(collection(db, "leaveAdjustments")), {
+                    userId, type, delta: round2(delta), before, after,
+                    reason: reason.trim().slice(0, 500),
+                    byId: admin.id,
+                    byName: admin.name || '',
+                    createdAt: Timestamp.now(),
+                });
+                result = { before, after };
+            });
+
+            await api.createNotification(
+                userId,
+                'LEAVE_ADJUSTED',
+                'Leave Balance Updated',
+                `${admin.name || 'HR'} ${delta > 0 ? 'credited' : 'deducted'} ${formatAmount(type, Math.abs(delta))} ${delta > 0 ? 'to' : 'from'} your ${LEAVE_TYPES[type].label}. Reason: ${reason.trim()}`,
+                { employeeId: userId }
+            );
+            return { success: true, ...result };
+        } catch (error) {
+            console.error("Adjust leave balance error", error);
+            return { success: false, message: error.message };
+        }
+    },
 };
 
 // ---- DTR reminder (punx-messenger Worker) ----

@@ -1,4 +1,4 @@
-import { LayoutDashboard, FileSpreadsheet, LogOut, Settings, Users, UserCheck, ChevronLeft, Send } from 'lucide-react'
+import { LayoutDashboard, FileSpreadsheet, LogOut, Settings, Users, UserCheck, ChevronLeft, Send, CalendarDays } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
 
 export default function Sidebar({ activeTab, onTabChange, onLogout, user, onClose }) {
@@ -6,6 +6,8 @@ export default function Sidebar({ activeTab, onTabChange, onLogout, user, onClos
 
     const menuItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+
+        { id: 'leave', label: 'Leave & Offset', icon: CalendarDays },
 
         { id: 'admin', label: 'Admin Dashboard', icon: Users, disabled: !['admin', 'super_admin'].includes(user.role) },
 

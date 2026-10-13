@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { CheckCircle2, Clock, CheckCircle, XCircle, Send, Upload, MessageSquare, X, Save, Pencil, ChevronLeft, ChevronRight, Eye, Link as LinkIcon } from 'lucide-react'
-import { api } from '../services/api'
+import { api, leaveApi } from '../services/api'
 import ClockComp from './Clock'
 import DTRTable from './DTRTable'
 import RecentActivityTable from './RecentActivityTable'
@@ -28,6 +28,7 @@ export default function Dashboard({ user }) {
     const initialAttachmentComment = initialSubmissionDraft?.attachmentComment || ''
 
     const [history, setHistory] = useState([])
+    const [leaves, setLeaves] = useState([]) // leave/offset requests; DTRTable draws the approved ones
     const [processing, setProcessing] = useState(false)
     const [showSuccess, setShowSuccess] = useState(false)
     const [activeCutoff, setActiveCutoff] = useState(null)
@@ -51,6 +52,7 @@ export default function Dashboard({ user }) {
     useEffect(() => {
         loadHistory()
         checkCutoff()
+        leaveApi.getUserRequests(user.id).then(setLeaves)
     }, [user.id])
 
     // Keep the draft in sync so an accidental refresh doesn't lose it.
@@ -340,6 +342,7 @@ export default function Dashboard({ user }) {
                     <DTRTable
                         user={user}
                         history={history}
+                        leaves={leaves}
                         onRefresh={loadHistory}
                         initialDate={activeCutoff ? activeCutoff.startDate.toDate() : null}
                         periodEnd={activeCutoff ? activeCutoff.endDate.toDate() : null}

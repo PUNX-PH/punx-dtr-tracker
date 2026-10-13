@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
 import { Bell, Clock, XCircle, CheckCircle } from 'lucide-react'
 
-const ACTIONABLE_TYPES = new Set(['OT_APPROVAL', 'DTR_APPROVAL'])
+const ACTIONABLE_TYPES = new Set(['OT_APPROVAL', 'DTR_APPROVAL', 'LEAVE_APPROVAL'])
 
 const typeIcon = (type) => {
-    if (type === 'DTR_REJECTED') return <XCircle size={16} className="text-[var(--accent-red)]" />
-    if (type === 'DTR_APPROVED' || type === 'OT_APPROVED') return <CheckCircle size={16} className="text-[var(--accent-green)]" />
+    if (type === 'DTR_REJECTED' || type === 'LEAVE_REJECTED') return <XCircle size={16} className="text-[var(--accent-red)]" />
+    if (type === 'DTR_APPROVED' || type === 'OT_APPROVED' || type === 'LEAVE_APPROVED') return <CheckCircle size={16} className="text-[var(--accent-green)]" />
     return <Clock size={16} className="text-[var(--accent-yellow)]" />
 }
 

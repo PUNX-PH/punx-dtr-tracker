@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Search, User as UserIcon, Loader2, UserCheck } from 'lucide-react'
-import { api } from '../services/api'
+import { api, leaveApi } from '../services/api'
 import DTRTable from './DTRTable'
 import RecentActivityTable from './RecentActivityTable'
 
@@ -10,6 +10,7 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
     const [search, setSearch] = useState('')
     const [selectedUser, setSelectedUser] = useState(null)
     const [userHistory, setUserHistory] = useState([])
+    const [userLeaves, setUserLeaves] = useState([])
     const [loadingHistory, setLoadingHistory] = useState(false)
     const [cutoff, setCutoff] = useState(null)
     const [cutoffs, setCutoffs] = useState([])
@@ -73,8 +74,9 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
 
     const loadHistory = async (userId) => {
         setLoadingHistory(true)
-        const data = await api.getHistory(userId)
+        const [data, leaves] = await Promise.all([api.getHistory(userId), leaveApi.getUserRequests(userId)])
         setUserHistory(data)
+        setUserLeaves(leaves)
         setLoadingHistory(false)
     }
 
@@ -356,6 +358,7 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
                                     <DTRTable
                                         user={selectedUser}
                                         history={userHistory}
+                                        leaves={userLeaves}
                                         onRefresh={() => loadHistory(selectedUser.id)}
                                         initialDate={cutoff ? cutoff.startDate.toDate() : null}
                                         periodEnd={cutoff ? cutoff.endDate.toDate() : null}

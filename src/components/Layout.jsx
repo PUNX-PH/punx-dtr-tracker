@@ -3,7 +3,7 @@ import { Menu, X } from 'lucide-react'
 import Sidebar from './Sidebar'
 import NotificationToast from './NotificationToast'
 import NotificationBell from './NotificationBell'
-import { api } from '../services/api'
+import { api, leaveApi } from '../services/api'
 
 export default function Layout({ children, user, onLogout, activeTab, onTabChange, onNotificationNavigate }) {
     // Phone layout below `md`, and also on any screen too short for the
@@ -47,13 +47,29 @@ export default function Layout({ children, user, onLogout, activeTab, onTabChang
     const handleDismiss = async (notif) => {
         setNotification(null);
         // Only permanently auto-dismiss read status if it's an informational alert, not an actionable workflow
-        if (notif.type !== 'OT_APPROVAL' && notif.type !== 'DTR_APPROVAL') {
+        if (notif.type !== 'OT_APPROVAL' && notif.type !== 'DTR_APPROVAL' && notif.type !== 'LEAVE_APPROVAL') {
             await api.markNotificationRead(notif.id);
         }
     }
 
+    // Goes through leaveApi.review — the same path as the Leave tab's queue — so
+    // approving from a toast re-checks the balance and obeys the same rules. On
+    // failure the notification is left unread and actionable, with the reason.
+    const decideLeave = async (notif, status) => {
+        const res = await leaveApi.review(notif.data.requestId, status, user);
+        if (!res.success) {
+            alert(res.message);
+            return;
+        }
+        await api.markNotificationRead(notif.id);
+        handleDismiss(notif);
+        alert(`Request ${status} for ${notif.data.employeeName}`);
+    }
+
     const handleApprove = async (notif) => {
-        if (notif.type === 'OT_APPROVAL') {
+        if (notif.type === 'LEAVE_APPROVAL') {
+            await decideLeave(notif, 'approved');
+        } else if (notif.type === 'OT_APPROVAL') {
             await api.updateOTStatus(notif.data.submissionId, 'approved');
             await api.markNotificationRead(notif.id);
             handleDismiss(notif);
@@ -67,7 +83,9 @@ export default function Layout({ children, user, onLogout, activeTab, onTabChang
     }
 
     const handleDecline = async (notif) => {
-        if (notif.type === 'OT_APPROVAL') {
+        if (notif.type === 'LEAVE_APPROVAL') {
+            await decideLeave(notif, 'rejected');
+        } else if (notif.type === 'OT_APPROVAL') {
             await api.updateOTStatus(notif.data.submissionId, 'declined');
             await api.markNotificationRead(notif.id);
             handleDismiss(notif);
@@ -103,6 +121,12 @@ export default function Layout({ children, user, onLogout, activeTab, onTabChang
     }
 
     const handleNotificationClick = (notif) => {
+        // Leave notifications land on the Leave tab, not a dashboard + cutoff.
+        if (notif?.type?.startsWith('LEAVE_')) {
+            if (!notif.read && notif.type !== 'LEAVE_APPROVAL') api.markNotificationRead(notif.id)
+            onNotificationNavigate?.({ tab: 'leave' })
+            return
+        }
         const focus = getNotificationFocus(notif)
         if (!focus) return
         if (!notif.read) api.markNotificationRead(notif.id)

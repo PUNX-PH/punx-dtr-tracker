@@ -1,8 +1,13 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Pencil, Save, X, Loader2, Zap, Trash2, Plus } from 'lucide-react'
 import { api } from '../services/api'
+import { leaveForDate, dtrLabel, LEAVE_TYPES } from '../services/leave'
 
-export default function DTRTable({ user, history, onRefresh, initialDate, periodEnd, canEdit = true }) {
+// `leaves` is the person's leave/offset requests (any status — only approved
+// ones are drawn). They are overlaid at read time rather than written into
+// `logs`, so a revoked leave simply stops showing and payroll's own records are
+// never touched by the leave feature.
+export default function DTRTable({ user, history, onRefresh, initialDate, periodEnd, canEdit = true, leaves = [] }) {
     const draftStorageKey = `dtr_draft_${user.id}`
 
     // Reads a non-empty draft for `key`, or null. Read-only views (canEdit=false)
@@ -280,8 +285,9 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
             const isFuture = date > limitDate
 
             // Only skip if it's strictly beyond the defined period end (if it exists)
-            // or if it's a weekend
-            if (!isWeekend && !isFuture) {
+            // or if it's a weekend. An approved leave/offset day is skipped too:
+            // 9-to-6 would be wrong for someone who was off (or off part of it).
+            if (!isWeekend && !isFuture && !leaveForDate(leaves, date)) {
                 // key generators
                 const keyIn = getCellKey(date, 'IN')
                 const keyOut = getCellKey(date, 'OUT')
@@ -627,11 +633,29 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                         </tr>
                     </thead>
                     <tbody className="text-sm">
-                        {rows.map((date, i) => (
+                        {rows.map((date, i) => {
+                            const leave = leaveForDate(leaves, date)
+                            // A whole-day leave with nothing clocked reads "SL"/"VL" in
+                            // the time cells instead of a bare dash. Offset is partial,
+                            // so it keeps the dash and shows only the badge.
+                            const dayOffLabel = leave && leave.type !== 'offset' ? LEAVE_TYPES[leave.type].short : null
+                            const dayOffCell = dayOffLabel
+                                ? <span className="font-bold text-xs tracking-wider" style={{ color: LEAVE_TYPES[leave.type].color }} title={LEAVE_TYPES[leave.type].label}>{dayOffLabel}</span>
+                                : '-'
+                            return (
                             <tr key={i} className="border-b border-[var(--border)] group hover:bg-white/5 transition-colors">
                                 {/* Day */}
                                 <td className="py-4 text-[var(--text-primary)] border-r border-[var(--border)] font-bold text-left px-4 text-base">
                                     {date.toLocaleDateString('en-GB', { weekday: 'long' })}
+                                    {leave && (
+                                        <span
+                                            className="block mt-1 w-fit px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider"
+                                            style={{ color: LEAVE_TYPES[leave.type].color, background: `color-mix(in srgb, ${LEAVE_TYPES[leave.type].color} 14%, transparent)` }}
+                                            title={`${LEAVE_TYPES[leave.type].label} — approved${leave.reviewerName ? ` by ${leave.reviewerName}` : ''}`}
+                                        >
+                                            {leave.type === 'offset' ? dtrLabel(leave) : LEAVE_TYPES[leave.type].label}
+                                        </span>
+                                    )}
                                 </td>
                                 {/* Date */}
                                 <td className="py-4 text-[var(--text-primary)] border-r border-[var(--border)] font-mono text-center text-base">
@@ -648,7 +672,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                             ringColor="var(--accent-green)"
                                         />
                                     ) : (
-                                        <div className="py-3 text-[var(--text-primary)]">{getDisplayValue(date, 'IN') || '-'}</div>
+                                        <div className="py-3 text-[var(--text-primary)]">{getDisplayValue(date, 'IN') || dayOffCell}</div>
                                     )}
                                 </td>
 
@@ -662,7 +686,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                             ringColor="var(--accent-green)"
                                         />
                                     ) : (
-                                        <div className="py-3 text-[var(--text-primary)]">{getDisplayValue(date, 'OUT') || '-'}</div>
+                                        <div className="py-3 text-[var(--text-primary)]">{getDisplayValue(date, 'OUT') || dayOffCell}</div>
                                     )}
                                 </td>
 
@@ -735,11 +759,12 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                             onChange={(e) => handleEditChange(date, 'REASON', e.target.value)}
                                         />
                                     ) : (
-                                        <div className="py-3 px-2 text-xs text-[var(--text-primary)] whitespace-pre-wrap break-words" title={getDisplayValue(date, 'REASON')}>{getDisplayValue(date, 'REASON') || ''}</div>
+                                        <div className="py-3 px-2 text-xs text-[var(--text-primary)] whitespace-pre-wrap break-words" title={getDisplayValue(date, 'REASON')}>{getDisplayValue(date, 'REASON') || leave?.reason || ''}</div>
                                     )}
                                 </td>
                             </tr>
-                        ))}
+                            )
+                        })}
                     </tbody>
                 </table>
             </div>
