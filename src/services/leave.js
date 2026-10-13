@@ -168,6 +168,12 @@ export const formatRange = (req) => req.startDate === req.endDate
     ? formatYMD(req.startDate)
     : `${formatYMD(req.startDate)} – ${formatYMD(req.endDate)}`
 
+/** The DTR notes line: "Sick Leave — Fever" / "Offset · 4 hrs — Offsetting Saturday OT". Reason is optional. */
+export function leaveNote(req) {
+    const head = req.type === 'offset' ? `Offset · ${dtrLabel(req).replace('OFFSET · ', '')}` : LEAVE_TYPES[req.type].label
+    return req.reason ? `${head} — ${req.reason}` : head
+}
+
 /** Short DTR badge text: "SL", "VL", "OFFSET · 4 hrs". */
 export function dtrLabel(req) {
     if (req.type === 'offset') return `OFFSET · ${round2(req.hours)} hr${Number(req.hours) === 1 ? '' : 's'}`

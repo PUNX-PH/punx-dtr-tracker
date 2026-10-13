@@ -3,7 +3,7 @@ import { Search, User as UserIcon, Loader2, FileSpreadsheet, Users, Folder, X, S
 import { Timestamp } from 'firebase/firestore'
 import * as XLSX from 'xlsx'
 import { api, defaultSubmitBy, reminderApi, leaveApi } from '../services/api'
-import { leaveForDate, dtrLabel, LEAVE_TYPES } from '../services/leave'
+import { leaveForDate, leaveNote } from '../services/leave'
 import DTRTable from './DTRTable'
 import RecentActivityTable from './RecentActivityTable'
 import CutoffsView from './CutoffsView'
@@ -317,7 +317,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                 // Approved leave / offset for the day, same overlay the DTR screen draws.
                 "Leave": (() => {
                     const leave = leaveForDate(userLeaves, date);
-                    return leave ? (leave.type === 'offset' ? dtrLabel(leave) : LEAVE_TYPES[leave.type].label) : '';
+                    return leave ? leaveNote(leave) : '';
                 })(),
                 "Notes": findAnyLog()?.reason || ''
             };
@@ -333,7 +333,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
             { wch: 15 }, // In
             { wch: 15 }, // Out
             { wch: 30 }, // Overtime
-            { wch: 18 }, // Leave
+            { wch: 40 }, // Leave (type + reason)
             { wch: 30 }  // Notes
         ];
         ws['!cols'] = wscols;

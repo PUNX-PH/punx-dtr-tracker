@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Pencil, Save, X, Loader2, Zap, Trash2, Plus } from 'lucide-react'
 import { api } from '../services/api'
-import { leaveForDate, dtrLabel, LEAVE_TYPES } from '../services/leave'
+import { leaveForDate, dtrLabel, leaveNote, LEAVE_TYPES } from '../services/leave'
 
 // `leaves` is the person's leave/offset requests (any status — only approved
 // ones are drawn). They are overlaid at read time rather than written into
@@ -753,13 +753,22 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                     {editMode ? (
                                         <input
                                             type="text"
-                                            placeholder="..."
+                                            placeholder={leave ? leaveNote(leave) : '...'}
                                             className="w-full h-full bg-black/50 text-white px-2 py-1 text-xs focus:outline-none focus:bg-black focus:ring-1 ring-slate-500"
                                             value={getInputValue(date, 'REASON')}
                                             onChange={(e) => handleEditChange(date, 'REASON', e.target.value)}
                                         />
                                     ) : (
-                                        <div className="py-3 px-2 text-xs text-[var(--text-primary)] whitespace-pre-wrap break-words" title={getDisplayValue(date, 'REASON')}>{getDisplayValue(date, 'REASON') || leave?.reason || ''}</div>
+                                        <div className="py-3 px-2 text-xs text-[var(--text-primary)] whitespace-pre-wrap break-words" title={getDisplayValue(date, 'REASON')}>
+                                            {/* The leave line is always shown with its reason, above
+                                                whatever note the day already has, so neither hides the other. */}
+                                            {leave && (
+                                                <span className="block font-bold" style={{ color: LEAVE_TYPES[leave.type].color }}>
+                                                    {leaveNote(leave)}
+                                                </span>
+                                            )}
+                                            {getDisplayValue(date, 'REASON')}
+                                        </div>
                                     )}
                                 </td>
                             </tr>
