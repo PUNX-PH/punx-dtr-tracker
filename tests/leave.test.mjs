@@ -8,7 +8,7 @@
 import assert from 'node:assert/strict'
 import {
   parseYMD, toYMD, workdaysBetween, countWorkdays, summarize, validateRequest,
-  findOverlap, leaveForDate, requestAmount, dtrLabel, leaveNote, DEFAULT_ALLOTMENT,
+  findOverlap, leaveForDate, requestAmount, dtrLabel, leaveNote, canUseLeave, DEFAULT_ALLOTMENT,
 } from '../src/services/leave.js'
 
 let pass = 0, fail = 0
@@ -133,6 +133,13 @@ it('the DTR note carries the type and the reason, and survives a missing reason'
   assert.equal(leaveNote(req({ reason: '' })), 'Sick Leave')
   assert.equal(leaveNote(req({ type: 'offset', hours: 4, days: 0, reason: 'Saturday OT' })), 'Offset · 4 hrs — Saturday OT')
   assert.equal(leaveNote(req({ type: 'vacation', reason: undefined })), 'Vacation Leave')
+})
+it('the Leave tab is limited to admins and super admins for now', () => {
+  assert.equal(canUseLeave({ role: 'admin' }), true)
+  assert.equal(canUseLeave({ role: 'super_admin' }), true)
+  assert.equal(canUseLeave({ role: 'employee' }), false)
+  assert.equal(canUseLeave({ role: 'employee', isSenior: true }), false)
+  assert.equal(canUseLeave(null), false)
 })
 it('handles an empty or missing list', () => {
   assert.equal(leaveForDate([], d('2026-10-12')), null)

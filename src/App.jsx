@@ -8,6 +8,7 @@ import Layout from './components/Layout'
 import AdminDashboard from './components/AdminDashboard'
 import SeniorDashboard from './components/SeniorDashboard'
 import LeaveManagement from './components/LeaveManagement'
+import { canUseLeave } from './services/leave'
 
 function App() {
     const [user, setUser] = useState(null)
@@ -87,7 +88,7 @@ function App() {
         // Leave notifications open the Leave tab, which every role has; DTR ones
         // below pick the admin/senior dashboard instead.
         if (user && focus?.tab === 'leave') {
-            setActiveTab('leave')
+            if (canUseLeave(user)) setActiveTab('leave')
             return
         }
         if (!user || !focus?.employeeId) return
@@ -120,7 +121,7 @@ function App() {
                 >
                     {activeTab === 'dashboard' && <Dashboard user={user} />}
 
-                    {activeTab === 'leave' && <LeaveManagement user={user} />}
+                    {activeTab === 'leave' && canUseLeave(user) && <LeaveManagement user={user} />}
 
                     {activeTab === 'admin' && ['admin', 'super_admin'].includes(user.role) && (
                         <AdminDashboard

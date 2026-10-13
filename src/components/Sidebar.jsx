@@ -1,5 +1,6 @@
 import { LayoutDashboard, FileSpreadsheet, LogOut, Settings, Users, UserCheck, ChevronLeft, Send, CalendarDays } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
+import { canUseLeave } from '../services/leave'
 
 export default function Sidebar({ activeTab, onTabChange, onLogout, user, onClose }) {
     const canSeeSenior = user.isSenior || user.role === 'super_admin'
@@ -7,7 +8,7 @@ export default function Sidebar({ activeTab, onTabChange, onLogout, user, onClos
     const menuItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
 
-        { id: 'leave', label: 'Leave & Offset', icon: CalendarDays },
+        ...(canUseLeave(user) ? [{ id: 'leave', label: 'Leave & Offset', icon: CalendarDays }] : []),
 
         { id: 'admin', label: 'Admin Dashboard', icon: Users, disabled: !['admin', 'super_admin'].includes(user.role) },
 
