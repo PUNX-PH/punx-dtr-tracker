@@ -180,6 +180,13 @@ await it('lists all users', () =>
   assertSucceeds(getDocs(collection(as(ADMIN), 'users'))))
 await it('changes a role', () =>
   assertSucceeds(updateDoc(doc(as(ADMIN), 'users', EMP), { role: 'admin' })))
+// …and back, which is load-bearing rather than tidy. EMP is the stand-in
+// employee for every section below, so leaving them promoted made nine later
+// assertFails pass for the wrong reason — the rule allowed the write because
+// EMP really was an admin by then — and broke two admin assertions as
+// collateral, because one of those nine deleted a fixture a later test needed.
+await it('and back again, so the sections below still have an employee', () =>
+  assertSucceeds(updateDoc(doc(as(ADMIN), 'users', EMP), { role: 'employee' })))
 await it('assigns a senior', () =>
   assertSucceeds(updateDoc(doc(as(ADMIN), 'users', EMP2), { assignedSeniorId: SENIOR })))
 await it('creates a cutoff', () =>
