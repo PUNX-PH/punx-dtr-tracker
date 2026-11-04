@@ -16,11 +16,15 @@ export const DEFAULT_ALLOTMENT = { sick: 5, vacation: 5, offset: 0 }
 
 export const HOURS_PER_DAY = 8
 
-// Who sees the Leave & Offset tab. Admins and super admins only while it is
-// being rolled out. To open it to everyone, make this return true. This hides
-// the screen; it is not a security boundary — firestore.rules still decides
-// who can read and write requests.
-export const canUseLeave = (user) => ['admin', 'super_admin'].includes(user?.role)
+// Master switch for the Leave & Offset tab. OFF = hidden from everyone,
+// admins included. Turn it on and only admins and super admins get it (see
+// canUseLeave); to open it to everyone, change that function. This hides the
+// screen; it is not a security boundary — firestore.rules still decides who can
+// read and write requests.
+export const LEAVE_TAB_ENABLED = false
+
+export const canUseLeave = (user, enabled = LEAVE_TAB_ENABLED) =>
+    enabled && ['admin', 'super_admin'].includes(user?.role)
 
 export const STATUS = { PENDING: 'pending', APPROVED: 'approved', REJECTED: 'rejected' }
 
