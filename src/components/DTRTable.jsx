@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { Pencil, Save, X, Loader2, Zap, Trash2, Plus } from 'lucide-react'
 import { api } from '../services/api'
 import { leaveForDate, dtrLabel, leaveNote, LEAVE_TYPES } from '../services/leave'
+import { parseTime, toTime24, isComplete, isEmpty, formatHHMM } from '../services/time'
 
 // `leaves` is the person's leave/offset requests (any status — only approved
 // ones are drawn). They are overlaid at read time rather than written into
@@ -176,7 +177,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
 
         const log = findLog(date, type, session)
         if (log) {
-            return new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+            return formatHHMM(new Date(log.timestamp))
         }
         return ''
     }
@@ -677,7 +678,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                 </td>
 
                                 {/* Regular OUT */}
-                                <td className="p-0 border-r border-[var(--border)] bg-[var(--accent-green)]/5 font-mono">
+                                <td className="p-0 border-r border-[var(--border)] bg-[var(--accent-green)]/5 font-mono h-12">
                                     {editMode ? (
                                         <TimeCellEditor
                                             value={getInputValue(date, 'OUT')}
@@ -697,7 +698,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                         <div className="flex flex-col divide-y divide-[var(--border)]/60">
                                             {getOTSessionsForDate(date).map(session => (
                                                 <div key={session} className="h-12 flex items-center gap-2 px-2">
-                                                    <div className="w-24 h-8 shrink-0">
+                                                    <div className="w-32 h-8 shrink-0">
                                                         <TimeCellEditor
                                                             value={getInputValue(date, 'OT_IN', session)}
                                                             onChange={(v) => handleEditChange(date, 'OT_IN', v, session)}
@@ -706,7 +707,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                                         />
                                                     </div>
                                                     <span className="text-[var(--text-muted)] text-xs shrink-0">-</span>
-                                                    <div className="w-24 h-8 shrink-0">
+                                                    <div className="w-32 h-8 shrink-0">
                                                         <TimeCellEditor
                                                             value={getInputValue(date, 'OT_OUT', session)}
                                                             onChange={(v) => handleEditChange(date, 'OT_OUT', v, session)}
@@ -781,6 +782,61 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
     )
 }
 
+const HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i + 1))
+const MINUTE_OPTIONS = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'))
+
+// Hour / minute / AM-PM dropdowns instead of <input type="time">. Safari's
+// native time field commits a value as soon as hour and minute are typed —
+// before AM/PM is chosen, so "9:00 PM" could save as 9:00 AM — and reports ''
+// while a person is mid-typing, which this table's save treats as "delete".
+// Selects have neither problem. The parent only hears a time once all three
+// parts are chosen (or '' once all three are cleared); a half-picked time
+// stays here, highlighted, and never reaches the save.
+function TimeSelect({ value, onChange, ringColor }) {
+    const [parts, setParts] = useState(() => parseTime(value))
+
+    // Follow the value when it changes from outside (Save, Cancel, Smart Fill,
+    // a restored draft). A half-picked time leaves `value` untouched, so this
+    // does not fire mid-entry and wipe it.
+    useEffect(() => { setParts(parseTime(value)) }, [value])
+
+    const update = (patch) => {
+        const next = { ...parts, ...patch }
+        // Picking an hour with no minute yet starts the minute at :00, one fewer
+        // thing to do. AM/PM is deliberately never defaulted.
+        if (patch.h && !next.m) next.m = '00'
+        setParts(next)
+        if (isComplete(next)) onChange(toTime24(next))
+        else if (isEmpty(next)) onChange('')
+    }
+
+    const incomplete = !isComplete(parts) && !isEmpty(parts)
+    const selectClass = 'min-w-0 flex-1 h-full bg-transparent text-white text-center text-xs appearance-none cursor-pointer focus:outline-none focus:bg-black px-0'
+
+    return (
+        <div
+            className="flex items-center w-full h-full bg-black/50 pr-6 focus-within:ring-1"
+            style={{ '--tw-ring-color': incomplete ? 'var(--accent-amber)' : ringColor, ...(incomplete ? { boxShadow: 'inset 0 0 0 1px var(--accent-amber)' } : null) }}
+            title={incomplete ? 'Pick the hour, minute and AM/PM — nothing is saved until all three are set' : undefined}
+        >
+            <select aria-label="Hour" className={selectClass} value={parts.h} onChange={(e) => update({ h: e.target.value })}>
+                <option value="">--</option>
+                {HOUR_OPTIONS.map(h => <option key={h} value={h}>{h}</option>)}
+            </select>
+            <span className="text-white/60 text-xs">:</span>
+            <select aria-label="Minute" className={selectClass} value={parts.m} onChange={(e) => update({ m: e.target.value })}>
+                <option value="">--</option>
+                {MINUTE_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+            <select aria-label="AM or PM" className={selectClass} value={parts.p} onChange={(e) => update({ p: e.target.value })}>
+                <option value="">--</option>
+                <option value="AM">AM</option>
+                <option value="PM">PM</option>
+            </select>
+        </div>
+    )
+}
+
 // Time input with an explicit delete button. Clicking × calls onDelete which
 // removes the matching Firestore log immediately (no batched-save dance).
 function TimeCellEditor({ value, onChange, onDelete, ringColor }) {
@@ -799,13 +855,7 @@ function TimeCellEditor({ value, onChange, onDelete, ringColor }) {
 
     return (
         <div className="relative w-full h-full">
-            <input
-                type="time"
-                className="w-full h-full bg-black/50 text-white text-center focus:outline-none focus:bg-black focus:ring-1 pr-6"
-                style={{ '--tw-ring-color': ringColor }}
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-            />
+            <TimeSelect value={value} onChange={onChange} ringColor={ringColor} />
             {hasValue && (
                 <button
                     type="button"
