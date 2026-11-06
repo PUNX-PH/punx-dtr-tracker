@@ -135,9 +135,11 @@ it('the DTR note carries the type and the reason, and survives a missing reason'
   assert.equal(leaveNote(req({ type: 'vacation', reason: undefined })), 'Vacation Leave')
 })
 it('the Leave tab is hidden from everyone while the master switch is off', () => {
-  assert.equal(LEAVE_TAB_ENABLED, false)
-  assert.equal(canUseLeave({ role: 'admin' }), false)
-  assert.equal(canUseLeave({ role: 'super_admin' }), false)
+  for (const role of ['admin', 'super_admin', 'employee']) assert.equal(canUseLeave({ role }, false), false)
+})
+it('the shipped default follows the switch: admins and super admins only', () => {
+  assert.equal(canUseLeave({ role: 'admin' }), LEAVE_TAB_ENABLED)
+  assert.equal(canUseLeave({ role: 'super_admin' }), LEAVE_TAB_ENABLED)
   assert.equal(canUseLeave({ role: 'employee' }), false)
 })
 it('with the switch on, only admins and super admins get it', () => {

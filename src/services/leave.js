@@ -21,7 +21,7 @@ export const HOURS_PER_DAY = 8
 // canUseLeave); to open it to everyone, change that function. This hides the
 // screen; it is not a security boundary — firestore.rules still decides who can
 // read and write requests.
-export const LEAVE_TAB_ENABLED = false
+export const LEAVE_TAB_ENABLED = true
 
 export const canUseLeave = (user, enabled = LEAVE_TAB_ENABLED) =>
     enabled && ['admin', 'super_admin'].includes(user?.role)
