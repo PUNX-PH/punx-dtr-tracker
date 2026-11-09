@@ -17,7 +17,7 @@
 import { readFileSync } from 'node:fs'
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing'
 import {
-  doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, query, where, orderBy, limit,
+  doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, query, where, orderBy, limit, writeBatch,
 } from 'firebase/firestore'
 
 const PROJECT = 'punx-dtr-rules-test'
@@ -387,6 +387,175 @@ await it('adjustments are append-only, even for admins', async () => {
   await assertFails(updateDoc(doc(as(ADMIN), 'leaveAdjustments', 'adj_emp'), { delta: 100 }))
   await assertFails(deleteDoc(doc(as(ADMIN), 'leaveAdjustments', 'adj_emp')))
 })
+
+console.log('\ndepartments, managers and the company calendar')
+const MGR = 'mgr1'          // manages Engineering
+const DIRECTOR = 'dir1'     // directs Engineering and Operations
+const MGR_GONE = 'mgrgone1' // a manager who left
+await testEnv.withSecurityRulesDisabled(async (ctx) => {
+  const db = ctx.firestore()
+  await setDoc(doc(db, 'departments', 'eng'), { name: 'Engineering' })
+  await setDoc(doc(db, 'departments', 'ops'), { name: 'Operations' })
+  await updateDoc(doc(db, 'users', EMP), { departmentId: 'eng' })
+  await updateDoc(doc(db, 'users', EMP2), { departmentId: 'ops' })
+  await setDoc(doc(db, 'users', MGR), { uid: MGR, name: 'Mgr', email: 'm@punx.ai', role: 'employee', departmentId: 'eng', isManager: true, managedDepartmentIds: ['eng'] })
+  await setDoc(doc(db, 'users', DIRECTOR), { uid: DIRECTOR, name: 'Dir', email: 'd@punx.ai', role: 'employee', departmentId: 'ops', isDirector: true, directorDepartmentIds: ['eng', 'ops'], managedDepartmentIds: ['eng', 'ops'] })
+  await setDoc(doc(db, 'users', MGR_GONE), { uid: MGR_GONE, name: 'MgrGone', email: 'mg@punx.ai', role: 'employee', departmentId: 'eng', isManager: true, managedDepartmentIds: ['eng'], removed: true })
+  await setDoc(doc(db, 'leaveRequests', 'lr_eng'), { userId: EMP, userName: 'Emp', departmentId: 'eng', type: 'sick', startDate: '2026-10-20', endDate: '2026-10-20', days: 1, hours: 0, reason: 'private', status: 'approved', createdAt: new Date() })
+  await setDoc(doc(db, 'leaveRequests', 'lr_ops'), { userId: EMP2, userName: 'Emp2', departmentId: 'ops', type: 'sick', startDate: '2026-10-20', endDate: '2026-10-20', days: 1, hours: 0, reason: 'private', status: 'approved', createdAt: new Date() })
+})
+const logsOf = (db, uid) => getDocs(query(collection(db, 'logs'), where('employeeId', '==', uid)))
+const usersIn = (db, dept) => getDocs(query(collection(db, 'users'), where('departmentId', '==', dept)))
+const reqsIn = (db, dept) => getDocs(query(collection(db, 'leaveRequests'), where('departmentId', '==', dept)))
+
+console.log('  a manager sees their own department, read-only')
+await it('reads a DTR in their department', () => assertSucceeds(logsOf(as(MGR), EMP)))
+await it('cannot read a DTR in another department', () => assertFails(logsOf(as(MGR), EMP2)))
+await it('cannot list every log unfiltered', () => assertFails(getDocs(collection(as(MGR), 'logs'))))
+await it('cannot edit, add or delete a DTR entry', async () => {
+  await assertFails(updateDoc(doc(as(MGR), 'logs', 'log_emp'), { reason: 'x' }))
+  await assertFails(setDoc(doc(as(MGR), 'logs', 'log_new'), { employeeId: EMP, type: 'IN', timestamp: new Date() }))
+  await assertFails(deleteDoc(doc(as(MGR), 'logs', 'log_emp')))
+})
+await it('opens a person in their department', () => assertSucceeds(getDoc(doc(as(MGR), 'users', EMP))))
+await it('cannot open a person in another department', () => assertFails(getDoc(doc(as(MGR), 'users', EMP2))))
+await it('lists their department (where departmentId == eng)', () => assertSucceeds(usersIn(as(MGR), 'eng')))
+await it('cannot list another department', () => assertFails(usersIn(as(MGR), 'ops')))
+await it('cannot list every user', () => assertFails(getDocs(collection(as(MGR), 'users'))))
+await it('reads their department\'s leave requests, reasons included', () => assertSucceeds(reqsIn(as(MGR), 'eng')))
+await it('cannot read another department\'s leave requests', () => assertFails(reqsIn(as(MGR), 'ops')))
+await it('cannot decide a leave request', () =>
+  assertFails(updateDoc(doc(as(MGR), 'leaveRequests', 'lr_eng'), review(MGR, { status: 'rejected' }))))
+await it('cannot give themselves more scope', async () => {
+  await assertFails(updateDoc(doc(as(MGR), 'users', MGR), { managedDepartmentIds: ['eng', 'ops'] }))
+  await assertFails(updateDoc(doc(as(MGR), 'users', MGR), { role: 'admin' }))
+})
+await it('cannot change their own department or manager flag', () =>
+  assertFails(updateDoc(doc(as(MGR), 'users', MGR), { departmentId: 'ops', isManager: false })))
+
+console.log('  a director sees every department they direct')
+await it('reads a DTR in each of their departments', async () => {
+  await assertSucceeds(logsOf(as(DIRECTOR), EMP))
+  await assertSucceeds(logsOf(as(DIRECTOR), EMP2))
+})
+await it('lists both departments', async () => {
+  await assertSucceeds(usersIn(as(DIRECTOR), 'eng'))
+  await assertSucceeds(usersIn(as(DIRECTOR), 'ops'))
+})
+await it('reads leave requests of both departments', async () => {
+  await assertSucceeds(reqsIn(as(DIRECTOR), 'eng'))
+  await assertSucceeds(reqsIn(as(DIRECTOR), 'ops'))
+})
+await it('but not a department outside their list', () => assertFails(usersIn(as(DIRECTOR), 'hr')))
+
+console.log('  nobody else gets this')
+await it('an ordinary employee cannot list a department', () => assertFails(usersIn(as(EMP), 'eng')))
+await it('an ordinary employee cannot read a colleague\'s department leave requests', () => assertFails(reqsIn(as(EMP), 'eng')))
+await it('a manager who has left gets nothing', async () => {
+  await assertFails(logsOf(as(MGR_GONE), EMP))
+  await assertFails(usersIn(as(MGR_GONE), 'eng'))
+  await assertFails(reqsIn(as(MGR_GONE), 'eng'))
+})
+await it('an outsider with no profile gets nothing', () => assertFails(usersIn(as(OUTSIDER), 'eng')))
+await it('the legacy first-sign-in lookup (where uid == me) still works', () =>
+  assertSucceeds(getDocs(query(collection(as(OUTSIDER), 'users'), where('uid', '==', OUTSIDER)))))
+
+console.log('  filing a request stamps the department')
+await it('an employee files with their own department', () =>
+  assertSucceeds(setDoc(doc(as(EMP), 'leaveRequests', 'lr_dept_ok'), newReq(EMP, { departmentId: 'eng' }))))
+await it('an old client with no departmentId still files', () =>
+  assertSucceeds(setDoc(doc(as(EMP), 'leaveRequests', 'lr_dept_none'), newReq(EMP, { startDate: '2026-12-07', endDate: '2026-12-07', days: 1 }))))
+await it('cannot address a request to another department\'s manager', () =>
+  assertFails(setDoc(doc(as(EMP), 'leaveRequests', 'lr_dept_bad'), newReq(EMP, { departmentId: 'ops' }))))
+
+console.log('  departments and holidays')
+await it('everyone signed in reads the departments', () => assertSucceeds(getDocs(collection(as(EMP), 'departments'))))
+await it('nobody signed out does', () => assertFails(getDocs(collection(anon(), 'departments'))))
+await it('an employee cannot create, rename or delete a department', async () => {
+  await assertFails(setDoc(doc(as(EMP), 'departments', 'x'), { name: 'X' }))
+  await assertFails(updateDoc(doc(as(EMP), 'departments', 'eng'), { name: 'Hacked' }))
+  await assertFails(deleteDoc(doc(as(EMP), 'departments', 'eng')))
+})
+await it('a manager cannot either', () => assertFails(updateDoc(doc(as(MGR), 'departments', 'eng'), { name: 'Hacked' })))
+await it('an admin manages departments', async () => {
+  await assertSucceeds(setDoc(doc(as(PLAIN_ADMIN), 'departments', 'design'), { name: 'Design' }))
+  await assertSucceeds(updateDoc(doc(as(PLAIN_ADMIN), 'departments', 'design'), { name: 'Product Design' }))
+  await assertSucceeds(deleteDoc(doc(as(PLAIN_ADMIN), 'departments', 'design')))
+})
+await it('an admin places someone in a department and makes them a manager', () =>
+  assertSucceeds(updateDoc(doc(as(PLAIN_ADMIN), 'users', EMP2), { departmentId: 'ops', isManager: true, managedDepartmentIds: ['ops'] })))
+await it('everyone reads holidays; only admins write them', async () => {
+  await assertSucceeds(getDocs(collection(as(EMP), 'holidays')))
+  await assertFails(setDoc(doc(as(EMP), 'holidays', 'h1'), { date: '2026-12-01', name: 'Free day', type: 'company' }))
+  await assertFails(setDoc(doc(as(MGR), 'holidays', 'h1'), { date: '2026-12-01', name: 'Free day', type: 'company' }))
+  await assertSucceeds(setDoc(doc(as(PLAIN_ADMIN), 'holidays', 'h1'), { date: '2026-12-01', name: 'Foundation Day', type: 'company' }))
+  await assertSucceeds(deleteDoc(doc(as(PLAIN_ADMIN), 'holidays', 'h1')))
+})
+
+console.log('  the company calendar (calendarEvents)')
+await testEnv.withSecurityRulesDisabled(async (ctx) => {
+  const db = ctx.firestore()
+  await setDoc(doc(db, 'leaveRequests', 'lr_cal'), { userId: EMP, userName: 'Emp', departmentId: 'eng', type: 'sick', startDate: '2026-11-10', endDate: '2026-11-11', days: 2, hours: 0, reason: 'private', status: 'pending', createdAt: new Date() })
+  await setDoc(doc(db, 'leaveRequests', 'lr_cal2'), { userId: EMP, userName: 'Emp', departmentId: 'eng', type: 'sick', startDate: '2026-11-17', endDate: '2026-11-17', days: 1, hours: 0, reason: 'private', status: 'pending', createdAt: new Date() })
+  await setDoc(doc(db, 'calendarEvents', 'ev_old'), { userId: EMP2, userName: 'Emp2', departmentId: 'ops', type: 'vacation', startDate: '2026-11-02', endDate: '2026-11-03', hours: 0 })
+})
+const eventFor = (over = {}) => ({ userId: EMP, userName: 'Emp', departmentId: 'eng', type: 'sick', startDate: '2026-11-10', endDate: '2026-11-11', hours: 0, ...over })
+await it('everyone signed in reads the calendar, whatever their department', async () => {
+  await assertSucceeds(getDocs(collection(as(EMP), 'calendarEvents')))
+  await assertSucceeds(getDocs(query(collection(as(EMP2), 'calendarEvents'), where('endDate', '>=', '2026-11-01'))))
+})
+await it('nobody signed out does', () => assertFails(getDocs(collection(anon(), 'calendarEvents'))))
+await it('a removed person does not', () => assertFails(getDocs(collection(as(GONE), 'calendarEvents'))))
+await it('an employee cannot write to the calendar', async () => {
+  await assertFails(setDoc(doc(as(EMP), 'calendarEvents', 'lr_cal'), eventFor()))
+  await assertFails(deleteDoc(doc(as(EMP2), 'calendarEvents', 'ev_old')))
+})
+await it('a manager cannot write to the calendar either', () => assertFails(setDoc(doc(as(MGR), 'calendarEvents', 'lr_cal'), eventFor())))
+await it('an event cannot be made for a request that is only pending', () =>
+  assertFails(setDoc(doc(as(ADMIN), 'calendarEvents', 'lr_cal'), eventFor())))
+await it('an event cannot invent a request that does not exist', () =>
+  assertFails(setDoc(doc(as(ADMIN), 'calendarEvents', 'no_such_request'), eventFor())))
+await it('the senior approves and the event lands in the SAME batch', async () => {
+  const db = as(SENIOR)
+  const b = writeBatch(db)
+  b.update(doc(db, 'leaveRequests', 'lr_cal'), review(SENIOR))
+  b.set(doc(db, 'calendarEvents', 'lr_cal'), eventFor())
+  await assertSucceeds(b.commit())
+})
+await it('...but the event cannot carry different dates than the request', async () => {
+  const db = as(SENIOR)
+  const b = writeBatch(db)
+  b.update(doc(db, 'leaveRequests', 'lr_cal2'), review(SENIOR))
+  b.set(doc(db, 'calendarEvents', 'lr_cal2'), eventFor({ startDate: '2026-11-17', endDate: '2026-11-30' }))
+  await assertFails(b.commit())
+})
+await it('...or a different person, type or department', async () => {
+  const db = as(SENIOR)
+  for (const over of [{ userId: EMP2 }, { type: 'vacation' }, { departmentId: 'ops' }]) {
+    const b = writeBatch(db)
+    b.update(doc(db, 'leaveRequests', 'lr_cal2'), review(SENIOR))
+    b.set(doc(db, 'calendarEvents', 'lr_cal2'), eventFor({ startDate: '2026-11-17', endDate: '2026-11-17', ...over }))
+    await assertFails(b.commit())
+  }
+})
+await it('...and carries no reason or any other extra field', async () => {
+  const db = as(SENIOR)
+  const b = writeBatch(db)
+  b.update(doc(db, 'leaveRequests', 'lr_cal2'), review(SENIOR))
+  b.set(doc(db, 'calendarEvents', 'lr_cal2'), eventFor({ startDate: '2026-11-17', endDate: '2026-11-17', reason: 'private' }))
+  await assertFails(b.commit())
+})
+await it('an event cannot be removed while its request is still approved', () =>
+  assertFails(deleteDoc(doc(as(ADMIN), 'calendarEvents', 'lr_cal'))))
+await it('revoking removes the event in the same batch', async () => {
+  const db = as(ADMIN)
+  const b = writeBatch(db)
+  b.update(doc(db, 'leaveRequests', 'lr_cal'), review(ADMIN, { status: 'rejected' }))
+  b.delete(doc(db, 'calendarEvents', 'lr_cal'))
+  await assertSucceeds(b.commit())
+})
+await it('an admin can rebuild an event for a request that is approved right now', () =>
+  assertSucceeds(setDoc(doc(as(ADMIN), 'calendarEvents', 'lr_eng'), eventFor({ startDate: '2026-10-20', endDate: '2026-10-20' }))))
 
 console.log(`\n${pass} passed, ${fail} failed\n`)
 await testEnv.cleanup()

@@ -8,7 +8,8 @@ import Layout from './components/Layout'
 import AdminDashboard from './components/AdminDashboard'
 import SeniorDashboard from './components/SeniorDashboard'
 import LeaveManagement from './components/LeaveManagement'
-import { canUseLeave } from './services/leave'
+import DepartmentHub from './components/department/DepartmentHub'
+import { canUseLeave, canUseDepartment } from './services/leave'
 
 function App() {
     const [user, setUser] = useState(null)
@@ -53,7 +54,12 @@ function App() {
                     email: firebaseUser.email,
                     photoURL: firebaseUser.photoURL,
                     role: profile?.role || 'employee',
-                    isSenior: profile?.isSenior === true
+                    isSenior: profile?.isSenior === true,
+                    // Where they sit in the org; scopeFor() turns these into what they may see.
+                    departmentId: profile?.departmentId || '',
+                    isManager: profile?.isManager === true,
+                    isDirector: profile?.isDirector === true,
+                    managedDepartmentIds: Array.isArray(profile?.managedDepartmentIds) ? profile.managedDepartmentIds : []
                 })
             } else {
                 setUser(null)
@@ -122,6 +128,8 @@ function App() {
                     {activeTab === 'dashboard' && <Dashboard user={user} />}
 
                     {activeTab === 'leave' && canUseLeave(user) && <LeaveManagement user={user} />}
+
+                    {activeTab === 'department' && canUseDepartment(user) && <DepartmentHub user={user} />}
 
                     {activeTab === 'admin' && ['admin', 'super_admin'].includes(user.role) && (
                         <AdminDashboard

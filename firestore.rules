@@ -87,6 +87,32 @@ service cloud.firestore {
       return isAdmin() || isSenior();
     }
 
+    // ---- departments & managers ----
+    // A manager or director is anyone whose profile lists departments in
+    // `managedDepartmentIds`. That field is DERIVED from isManager / isDirector /
+    // departmentId / directorDepartmentIds and stored by an admin
+    // (src/services/org.js orgFields), so the rules read one field instead of
+    // re-deriving it on every request. Only an admin can write a user profile,
+    // which is what stops anyone granting themselves a department.
+    function managedDepts() {
+      return hasProfile() && !isRemoved() ? myProfile().get('managedDepartmentIds', []) : [];
+    }
+
+    function deptOfUser(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data.get('departmentId', '');
+    }
+
+    // May the caller see this person's records? Used by `get`s and by queries
+    // pinned to one person (where employeeId == X), where X is provable.
+    function managesUser(uid) {
+      return active() && deptOfUser(uid) != '' && deptOfUser(uid) in managedDepts();
+    }
+
+    // Same, for a department id the document or query itself carries.
+    function managesDept(deptId) {
+      return active() && deptId != '' && deptId in managedDepts();
+    }
+
     // ---- users ----
     // Holds `pin`, which is a credential: the app's legacy login() authenticates
     // with `where('pin','==',pin)` alone. Under the old rules any signed-in
@@ -99,6 +125,11 @@ service cloud.firestore {
       // read their own `removed` flag, or App.jsx cannot tell them why.
       allow get: if signedIn() && (userId == myUid() || isStaff());
 
+      // A manager/director opens someone in their own department. Its own
+      // `allow` so the user-id legs above can never error it away (separate
+      // allow statements are OR'd, and an error in one only fails that one).
+      allow get: if managesUser(userId);
+
       // AdminDashboard, SeniorDashboard and CutoffsView list every user.
       // Employees never do — an unfiltered list must stay denied for them.
       //
@@ -109,6 +140,11 @@ service cloud.firestore {
       // errors/fails and is denied. Do not guard this read with `.get()`.
       allow list: if isStaff()
         || (signedIn() && resource.data.uid == myUid());
+
+      // A manager lists their department: where('departmentId','==',X). Pinned
+      // to ONE department per query, which is what makes `resource.data.
+      // departmentId` provable; a query across departments errors and is denied.
+      allow list: if managesDept(resource.data.departmentId);
 
       // First Google sign-in self-creates (api.ensureUserProfile). Pinned to
       // `employee`: without this, a new account creates itself as super_admin
@@ -137,6 +173,10 @@ service cloud.firestore {
       // leg provable. An unfiltered list errors on that read and is denied.
       allow read: if isStaff()
         || (active() && resource.data.employeeId == myUid());
+
+      // A manager/director reads their department's DTRs (read-only: nothing
+      // below grants them a write). Needs the query pinned to one employee.
+      allow read: if managesUser(resource.data.employeeId);
 
       // Admins create logs for others when correcting a DTR (api.createLog).
       allow create: if isStaff()
@@ -246,14 +286,25 @@ service cloud.firestore {
       allow read: if isStaff()
         || (active() && resource.data.userId == myUid());
 
+      // A manager/director reads their department's requests — the leave
+      // history and the reasons. `departmentId` is stamped on the request when
+      // it is filed (and checked against the filer's profile below); the query
+      // is pinned to one department: where('departmentId','==',X).
+      allow read: if managesDept(resource.data.departmentId);
+
       // A request starts life pending and is the requester's own. Fixed key set
       // so nothing can be smuggled in (reviewerId, a pre-set reviewedAt...).
+      // departmentId is optional so a client from before departments existed
+      // still files; when present it must be the filer's own department, or a
+      // request could be addressed to some other department's manager.
       allow create: if active()
         && request.resource.data.userId == myUid()
         && request.resource.data.status == 'pending'
         && request.resource.data.type in ['sick', 'vacation', 'offset']
+        && (!('departmentId' in request.resource.data)
+            || request.resource.data.departmentId == myProfile().get('departmentId', ''))
         && request.resource.data.keys().hasOnly(
-             ['userId', 'userName', 'type', 'startDate', 'endDate', 'days', 'hours', 'reason', 'status', 'createdAt'])
+             ['userId', 'userName', 'departmentId', 'type', 'startDate', 'endDate', 'days', 'hours', 'reason', 'status', 'createdAt'])
         && request.resource.data.startDate is string
         && request.resource.data.endDate is string
         && request.resource.data.days is number
@@ -297,6 +348,59 @@ service cloud.firestore {
         || (active() && resource.data.userId == myUid());
       allow create: if isAdmin();
       allow update, delete: if false;
+    }
+
+    // ---- departments ----
+    // The list HR maintains in the portal. Everyone reads it (the calendar shows
+    // department names to employees); only admins change it.
+    match /departments/{departmentId} {
+      allow read: if active();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ---- holidays ----
+    // HR's edits on top of the built-in Philippine list (src/services/holidays.js):
+    // company holidays, and `ph-…` overrides / hides of built-in ones.
+    match /holidays/{holidayId} {
+      allow read: if active();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ---- calendarEvents ----
+    // What the whole-company calendar reads: one small doc per APPROVED leave,
+    // id == the leaveRequests id. It is a copy on purpose — leaveRequests hold
+    // the reason (a sick-leave reason is not for the whole company) and are not
+    // readable across the company; this doc has the dates and the person and
+    // nothing else.
+    //
+    // Written in the SAME batch as the status change (api.leaveApi.review), and
+    // these rules read the request's state AFTER that batch (getAfter), so an
+    // event can only exist for a request that really is approved, with the dates
+    // and person that request has — a client cannot paint a fake leave.
+    match /calendarEvents/{eventId} {
+      function requestAfter() {
+        return getAfter(/databases/$(database)/documents/leaveRequests/$(eventId)).data;
+      }
+
+      function stillApproved() {
+        return existsAfter(/databases/$(database)/documents/leaveRequests/$(eventId))
+          && requestAfter().status == 'approved';
+      }
+
+      allow read: if active() && hasProfile();
+
+      allow create, update: if active() && isStaff()
+        && stillApproved()
+        && request.resource.data.keys().hasOnly(
+             ['userId', 'userName', 'departmentId', 'type', 'startDate', 'endDate', 'hours'])
+        && request.resource.data.userId == requestAfter().userId
+        && request.resource.data.type == requestAfter().type
+        && request.resource.data.startDate == requestAfter().startDate
+        && request.resource.data.endDate == requestAfter().endDate
+        && request.resource.data.departmentId == deptOfUser(requestAfter().userId);
+
+      // Gone when the request stops being approved (revoked) or is removed.
+      allow delete: if active() && isStaff() && !stillApproved();
     }
 
     // ---- settings ----

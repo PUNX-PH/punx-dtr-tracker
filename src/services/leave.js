@@ -26,6 +26,14 @@ export const LEAVE_TAB_ENABLED = true
 export const canUseLeave = (user, enabled = LEAVE_TAB_ENABLED) =>
     enabled && user?.role === 'super_admin'
 
+// The Department tab (company calendar, attendance monitoring, leave history,
+// org setup). Its own gate rather than a reuse of canUseLeave so it can be
+// released on its own schedule: when it opens up, everyone gets the calendar
+// and what else they see follows their department scope (services/org.js).
+// Same master switch, and super admins only while this is being tested.
+export const canUseDepartment = (user, enabled = LEAVE_TAB_ENABLED) =>
+    enabled && user?.role === 'super_admin'
+
 export const STATUS = { PENDING: 'pending', APPROVED: 'approved', REJECTED: 'rejected' }
 
 const pad = (n) => String(n).padStart(2, '0')

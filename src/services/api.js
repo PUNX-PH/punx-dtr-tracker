@@ -1,6 +1,8 @@
 import { auth, db } from '../firebase';
 import { collection, query, where, getDocs, getDoc, setDoc, addDoc, updateDoc, deleteDoc, doc, Timestamp, orderBy, limit, onSnapshot, writeBatch, runTransaction } from "firebase/firestore";
 import { DEFAULT_ALLOTMENT, LEAVE_TYPE_KEYS, LEAVE_TYPES, STATUS, summarize, validateRequest, formatAmount, formatRange, requestAmount } from './leave';
+import { orgFields } from './org';
+import { calendarEventFrom } from './calendar';
 
 const millis = (ts) => (ts && typeof ts.toMillis === 'function' ? ts.toMillis() : 0);
 
@@ -114,6 +116,35 @@ export const api = {
                 console.error("Get history fallback error:", fallbackErr);
                 return [];
             }
+        }
+    },
+
+    /**
+     * One person's logs between two Dates (inclusive). The attendance screen
+     * reads a month for MANY people, so it asks for a month, not their last 1000
+     * entries. Uses the same (employeeId, timestamp) index getHistory does, and
+     * falls back to a client-side filter if that index is not built yet.
+     * Throws on any other failure: an attendance report that silently shows
+     * "absent" because a read failed would be worse than an error.
+     */
+    getLogsBetween: async (userId, start, end) => {
+        const toLog = (d) => ({ id: d.id, ...d.data(), timestamp: d.data().timestamp.toDate().toISOString() });
+        try {
+            const snap = await getDocs(query(
+                collection(db, "logs"),
+                where("employeeId", "==", userId),
+                where("timestamp", ">=", Timestamp.fromDate(start)),
+                where("timestamp", "<=", Timestamp.fromDate(end)),
+                orderBy("timestamp", "asc")
+            ));
+            return snap.docs.map(toLog);
+        } catch (error) {
+            if (!(error.code === 'failed-precondition' || /index/i.test(error.message || ''))) throw error;
+            const snap = await getDocs(query(collection(db, "logs"), where("employeeId", "==", userId)));
+            return snap.docs.map(toLog).filter(l => {
+                const t = new Date(l.timestamp);
+                return t >= start && t <= end;
+            });
         }
     },
 
@@ -819,6 +850,20 @@ export const leaveApi = {
             .sort((a, b) => millis(b.createdAt) - millis(a.createdAt));
     },
 
+    /**
+     * Requests for a scope: HR gets the usual company-wide list; a manager gets
+     * their departments', one query each (the rules need the query pinned to a
+     * single department). Newest first. Throws.
+     */
+    getRequestsInScope: async (scope) => {
+        if (scope.all) return leaveApi.getRequests();
+        const parts = await Promise.all(scope.departmentIds.map(async (deptId) => {
+            const snap = await getDocs(query(collection(db, "leaveRequests"), where("departmentId", "==", deptId)));
+            return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        }));
+        return parts.flat().sort((a, b) => millis(b.createdAt) - millis(a.createdAt));
+    },
+
     /** { [userId]: { sick, vacation, offset } } for everyone HR has set a balance for. */
     getAllAllotted: async () => {
         const snap = await getDocs(collection(db, "leaveBalances"));
@@ -857,6 +902,8 @@ export const leaveApi = {
             const request = {
                 userId: user.id,
                 userName: user.name || '',
+                // Stamped so the filer's department manager can read it (rules: managesDept).
+                departmentId: (userSnap.exists() && userSnap.data().departmentId) || '',
                 type: input.type,
                 startDate: v.startDate,
                 endDate: v.endDate,
@@ -927,13 +974,27 @@ export const leaveApi = {
                 }
             }
 
-            await updateDoc(ref, {
+            // The decision and its calendar entry commit together. The calendar
+            // is what the whole company reads, so it must never show a leave that
+            // is not approved (a stale entry after a revoke) or miss one that is —
+            // and the rules check the request's state AFTER this batch, which only
+            // works when both writes are in it.
+            const userSnap = await getDoc(doc(db, "users", req.userId));
+            const batch = writeBatch(db);
+            batch.update(ref, {
                 status,
                 reviewerId: reviewer.id,
                 reviewerName: reviewer.name || '',
                 reviewedAt: Timestamp.now(),
                 reviewNote: (note || '').trim().slice(0, 500),
             });
+            const eventRef = doc(db, "calendarEvents", requestId);
+            if (status === STATUS.APPROVED) {
+                batch.set(eventRef, calendarEventFrom({ ...req, departmentId: (userSnap.exists() && userSnap.data().departmentId) || '' }));
+            } else {
+                batch.delete(eventRef); // no-op when it was only pending
+            }
+            await batch.commit();
 
             await api.createNotification(
                 req.userId,
@@ -998,6 +1059,175 @@ export const leaveApi = {
             return { success: true, ...result };
         } catch (error) {
             console.error("Adjust leave balance error", error);
+            return { success: false, message: error.message };
+        }
+    },
+};
+
+// ---- Departments, holidays and the company calendar ----
+//
+//   departments/{id}     { name }                       HR-managed list
+//   holidays/{id}        HR's edits on the built-in PH list — see holidays.js
+//   calendarEvents/{id}  one per APPROVED leave, id == the leave request id.
+//                        Dates + person only, no reason: the whole company reads it.
+//   users/{id}           + departmentId, isManager, isDirector,
+//                        directorDepartmentIds, managedDepartmentIds (org.js)
+//
+// A manager's reads are scoped by department, one query per department, because
+// the rules can only prove a query that is pinned to a single department.
+
+const sortByName = (a, b) => (a.name || '').localeCompare(b.name || '');
+
+export const orgApi = {
+    getDepartments: async () => {
+        const snap = await getDocs(collection(db, "departments"));
+        return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort(sortByName);
+    },
+
+    /** Create (id = null) or rename. Names are unique, case-insensitively, so "Design" and "design" cannot both exist. */
+    saveDepartment: async (id, name, existing = []) => {
+        try {
+            const clean = (name || '').trim().replace(/\s+/g, ' ').slice(0, 60);
+            if (!clean) return { success: false, message: "Give the department a name." };
+            if (existing.some(d => d.id !== id && d.name.toLowerCase() === clean.toLowerCase())) {
+                return { success: false, message: `There is already a department called "${clean}".` };
+            }
+            if (id) {
+                await updateDoc(doc(db, "departments", id), { name: clean });
+                return { success: true, id };
+            }
+            const ref = await addDoc(collection(db, "departments"), { name: clean, createdAt: Timestamp.now() });
+            return { success: true, id: ref.id };
+        } catch (error) {
+            console.error("Save department error", error);
+            return { success: false, message: error.message };
+        }
+    },
+
+    /** Refuses while anyone is still in it: deleting would silently strand them with no department. */
+    deleteDepartment: async (id, users = []) => {
+        try {
+            const members = users.filter(u => !u.removed && (u.departmentId === id || (u.directorDepartmentIds || []).includes(id)));
+            if (members.length > 0) {
+                return { success: false, message: `${members.length} ${members.length === 1 ? 'person is' : 'people are'} still in or directing this department. Move them first.` };
+            }
+            await deleteDoc(doc(db, "departments", id));
+            return { success: true };
+        } catch (error) {
+            console.error("Delete department error", error);
+            return { success: false, message: error.message };
+        }
+    },
+
+    /** An admin placing someone in the org. Writes the derived managedDepartmentIds with it (org.js orgFields). */
+    setUserOrg: async (userId, input) => {
+        try {
+            await updateDoc(doc(db, "users", userId), orgFields(input));
+            return { success: true };
+        } catch (error) {
+            console.error("Set user org error", error);
+            return { success: false, message: error.message };
+        }
+    },
+
+    /** Everyone a scope can see. HR: the whole company. A manager: one query per department. Throws. */
+    getUsersInScope: async (scope) => {
+        if (scope.all) {
+            const snap = await getDocs(collection(db, "users"));
+            return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        }
+        const parts = await Promise.all(scope.departmentIds.map(async (deptId) => {
+            const snap = await getDocs(query(collection(db, "users"), where("departmentId", "==", deptId)));
+            return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        }));
+        return parts.flat();
+    },
+};
+
+export const holidayApi = {
+    /** What HR has stored (overrides, hides, company holidays). Merge with the built-in list via holidays.js. */
+    list: async () => {
+        const snap = await getDocs(collection(db, "holidays"));
+        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    },
+
+    /**
+     * Add a company holiday (id = null) or save an edit. Editing a built-in
+     * holiday writes a doc under its own `ph-…` id, which overrides it.
+     */
+    save: async (id, { date, name, type }) => {
+        try {
+            const clean = (name || '').trim().slice(0, 80);
+            if (!clean) return { success: false, message: "Give the holiday a name." };
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return { success: false, message: "Pick a date." };
+            const data = { date, name: clean, type, hidden: false, updatedAt: Timestamp.now() };
+            if (id) await setDoc(doc(db, "holidays", id), data);
+            else await addDoc(collection(db, "holidays"), data);
+            return { success: true };
+        } catch (error) {
+            console.error("Save holiday error", error);
+            return { success: false, message: error.message };
+        }
+    },
+
+    /** Take a holiday off the calendar. A built-in one is hidden (a flag), because deleting it would let the built-in list put it straight back. */
+    remove: async (holiday) => {
+        try {
+            if (holiday.id.startsWith('ph-')) {
+                await setDoc(doc(db, "holidays", holiday.id), { hidden: true, date: holiday.date, name: holiday.name, type: holiday.type, updatedAt: Timestamp.now() });
+            } else {
+                await deleteDoc(doc(db, "holidays", holiday.id));
+            }
+            return { success: true };
+        } catch (error) {
+            console.error("Remove holiday error", error);
+            return { success: false, message: error.message };
+        }
+    },
+
+    /** Undo HR's edit/hide of a built-in holiday: deleting the override brings the original back. */
+    restore: async (id) => {
+        try {
+            await deleteDoc(doc(db, "holidays", id));
+            return { success: true };
+        } catch (error) {
+            console.error("Restore holiday error", error);
+            return { success: false, message: error.message };
+        }
+    },
+};
+
+export const calendarApi = {
+    /** Approved leave overlapping [startYMD, endYMD], for everyone. Dates and names only. Throws. */
+    getEvents: async (startYMD, endYMD) => {
+        const snap = await getDocs(query(collection(db, "calendarEvents"), where("endDate", ">=", startYMD)));
+        return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(e => e.startDate <= endYMD);
+    },
+
+    /**
+     * Admin repair: (re)create the calendar entry for every approved request.
+     * Leave approved before the calendar existed has none, and this is how it
+     * gets one. Safe to run any time — it only ever writes entries for requests
+     * that are approved right now.
+     */
+    rebuild: async () => {
+        try {
+            const [reqSnap, userSnap] = await Promise.all([
+                getDocs(query(collection(db, "leaveRequests"), where("status", "==", STATUS.APPROVED))),
+                getDocs(collection(db, "users")),
+            ]);
+            const dept = Object.fromEntries(userSnap.docs.map(d => [d.id, d.data().departmentId || '']));
+            const docs = reqSnap.docs;
+            for (let i = 0; i < docs.length; i += 400) {
+                const batch = writeBatch(db);
+                docs.slice(i, i + 400).forEach(d => {
+                    batch.set(doc(db, "calendarEvents", d.id), calendarEventFrom({ ...d.data(), departmentId: dept[d.data().userId] || '' }));
+                });
+                await batch.commit();
+            }
+            return { success: true, count: docs.length };
+        } catch (error) {
+            console.error("Rebuild calendar error", error);
             return { success: false, message: error.message };
         }
     },
