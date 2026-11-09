@@ -2,11 +2,11 @@
 // and the month grid. No Firebase: these are the rules the Department Calendar,
 // Attendance and Leave history screens all lean on.
 import assert from 'node:assert/strict'
-import { easterSunday, phHolidays, mergeHolidays, holidaysByDate, holidaysForYears } from '../src/services/holidays.js'
+import { easterSunday, phHolidays, mergeHolidays, holidaysByDate, holidaysForYears, HOLIDAY_TYPES } from '../src/services/holidays.js'
 import { deriveManaged, scopeFor, inScope, usersInScope, orgFields, orgTitle, departmentsInScope } from '../src/services/org.js'
 import { DAY_STATUS, workedDays, isLate, dayStatus, classifyRange, summarizeDays } from '../src/services/attendance.js'
 import { monthGrid, monthBounds, addMonths, leavesOnDate, eventsForDate, calendarEventFrom } from '../src/services/calendar.js'
-import { toYMD, canUseDepartment } from '../src/services/leave.js'
+import { toYMD, canUseDepartment, LEAVE_TYPES } from '../src/services/leave.js'
 
 let pass = 0, fail = 0
 function it(name, fn) {
@@ -20,6 +20,14 @@ it('known Easter Sundays', () => {
   assert.equal(toYMD(easterSunday(2026)), '2026-04-05')
   assert.equal(toYMD(easterSunday(2027)), '2027-03-28')
 })
+
+console.log('\ncolours the calendar legend relies on')
+it('no holiday type shares a colour with a leave type, and none repeat', () => {
+  const colours = [...Object.values(HOLIDAY_TYPES), ...Object.values(LEAVE_TYPES)].map(t => t.color)
+  assert.equal(new Set(colours).size, colours.length)
+})
+it('a holiday on the attendance strip is not drawn in the Offset colour', () =>
+  assert.notEqual(DAY_STATUS.holiday.color, DAY_STATUS.offset.color))
 
 console.log('\nbuilt-in Philippine holidays')
 const byName = (year) => Object.fromEntries(phHolidays(year).map(h => [h.name, h.date]))

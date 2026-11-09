@@ -26,6 +26,9 @@
   --accent-yellow: #a16207;
   --accent-blue: #1d4ed8;
   --accent-blue-hover: #1e40af;
+  /* Holidays get their own hues so they never read as a kind of leave. */
+  --accent-teal: #0f766e;
+  --accent-pink: #be185d;
 }
 
 .dark {
@@ -52,6 +55,8 @@
   --accent-yellow: #f6e05e;
   --accent-blue: #3b82f6;
   --accent-blue-hover: #2563eb;
+  --accent-teal: #2dd4bf;
+  --accent-pink: #f472b6;
 }
 
 @layer base {

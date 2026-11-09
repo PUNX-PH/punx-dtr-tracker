@@ -25,7 +25,7 @@ export const DAY_STATUS = {
     late: { label: 'Late', short: 'L', color: 'var(--accent-amber)' },
     leave: { label: 'On leave', short: 'LV', color: 'var(--accent-blue)' },
     offset: { label: 'Offset', short: 'OS', color: 'var(--accent-purple)' },
-    holiday: { label: 'Holiday', short: 'H', color: 'var(--accent-purple)' },
+    holiday: { label: 'Holiday', short: 'H', color: 'var(--accent-teal)' }, // not purple: that is Offset
     weekend: { label: 'Weekend', short: '', color: 'var(--text-muted)' },
     noentry: { label: 'No entry', short: '', color: 'var(--text-muted)' },
     upcoming: { label: 'Not yet', short: '', color: 'var(--text-muted)' },

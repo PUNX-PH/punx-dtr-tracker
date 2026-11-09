@@ -9,12 +9,16 @@ import { MONTH_NAMES, MonthSwitcher, DepartmentSelect, ErrorNote } from './contr
 const tint = (color, pct = 14) => `color-mix(in srgb, ${color} ${pct}%, transparent)`
 const MAX_CHIPS = 3
 
-function Chip({ color, children, title }) {
+// Holidays are drawn SOLID and people's leave TINTED, so a holiday can never be
+// mistaken for someone's leave even where their hues sit close together. The
+// text on a solid chip is the page surface colour, which flips with the theme and
+// so stays readable on both the light and the dark version of every hue.
+function Chip({ color, children, title, solid = false }) {
     return (
         <span
             title={title}
             className="block truncate rounded px-1.5 py-0.5 text-[10px] leading-4 font-semibold"
-            style={{ color, background: tint(color) }}
+            style={solid ? { color: 'var(--surface-1)', background: color } : { color, background: tint(color) }}
         >
             {children}
         </span>
@@ -86,7 +90,7 @@ export default function DepartmentCalendar({
                         {grid.map((cell, i) => {
                             const ev = dayEvents(cell.ymd)
                             const items = [
-                                ...ev.holidays.map(h => ({ key: `h${h.id}`, color: HOLIDAY_TYPES[h.type].color, text: h.name, title: `${h.name} — ${HOLIDAY_TYPES[h.type].label}` })),
+                                ...ev.holidays.map(h => ({ key: `h${h.id}`, color: HOLIDAY_TYPES[h.type].color, text: h.name, solid: true, title: `${h.name} — ${HOLIDAY_TYPES[h.type].label}` })),
                                 ...ev.leaves.map(l => ({ key: `l${l.id}`, color: LEAVE_TYPES[l.type].color, text: `${l.userName} · ${leaveTag(l.type)}`, title: `${l.userName} — ${LEAVE_TYPES[l.type].label}` })),
                             ]
                             const isSelected = selected === cell.ymd
@@ -108,11 +112,11 @@ export default function DepartmentCalendar({
                                     </span>
                                     {/* Chips from sm up; dots below it, where a cell is too narrow for text. */}
                                     <span className="hidden sm:flex flex-col gap-0.5 w-full min-w-0">
-                                        {items.slice(0, MAX_CHIPS).map(it => <Chip key={it.key} color={it.color} title={it.title}>{it.text}</Chip>)}
+                                        {items.slice(0, MAX_CHIPS).map(it => <Chip key={it.key} color={it.color} title={it.title} solid={it.solid}>{it.text}</Chip>)}
                                         {items.length > MAX_CHIPS && <span className="text-[10px] font-semibold text-[var(--text-muted)] px-1">+{items.length - MAX_CHIPS} more</span>}
                                     </span>
                                     <span className="flex sm:hidden flex-wrap gap-0.5 px-0.5">
-                                        {items.slice(0, 6).map(it => <span key={it.key} className="w-1.5 h-1.5 rounded-full" style={{ background: it.color }} />)}
+                                        {items.slice(0, 6).map(it => <span key={it.key} className={`w-1.5 h-1.5 ${it.solid ? 'rounded-[2px]' : 'rounded-full'}`} style={{ background: it.color }} />)}
                                     </span>
                                 </button>
                             )
@@ -183,7 +187,7 @@ export default function DepartmentCalendar({
 
                     {/* Legend */}
                     <section aria-label="Legend" className="flex flex-wrap gap-x-4 gap-y-1.5 px-1 text-[10px] font-semibold text-[var(--text-muted)]">
-                        {Object.values(HOLIDAY_TYPES).map(t => <span key={t.label} className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: t.color }} />{t.short} holiday</span>)}
+                        {Object.values(HOLIDAY_TYPES).map(t => <span key={t.label} className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-[2px]" style={{ background: t.color }} />{t.short} holiday</span>)}
                         {Object.values(LEAVE_TYPES).map(t => <span key={t.label} className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: t.color }} />{t.label}</span>)}
                     </section>
                 </div>

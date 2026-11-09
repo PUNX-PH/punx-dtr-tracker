@@ -19,9 +19,11 @@
 import { parseYMD, toYMD } from './leave.js'
 
 export const HOLIDAY_TYPES = {
-    regular: { label: 'Regular Holiday', short: 'Regular', color: 'var(--accent-red)' },
+    // Hues chosen so no holiday shares one with a leave type (sick red, vacation
+    // blue, offset purple — see LEAVE_TYPES), or the legend and chips are ambiguous.
+    regular: { label: 'Regular Holiday', short: 'Regular', color: 'var(--accent-teal)' },
     special: { label: 'Special Non-Working Day', short: 'Special', color: 'var(--accent-amber)' },
-    company: { label: 'Company Holiday', short: 'Company', color: 'var(--accent-purple)' },
+    company: { label: 'Company Holiday', short: 'Company', color: 'var(--accent-pink)' },
 }
 
 const pad = (n) => String(n).padStart(2, '0')
