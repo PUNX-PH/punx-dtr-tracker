@@ -1,8 +1,9 @@
 import { auth, db } from '../firebase';
 import { collection, query, where, getDocs, getDoc, setDoc, addDoc, updateDoc, deleteDoc, doc, Timestamp, orderBy, limit, onSnapshot, writeBatch, runTransaction } from "firebase/firestore";
-import { DEFAULT_ALLOTMENT, LEAVE_TYPE_KEYS, LEAVE_TYPES, STATUS, summarize, validateRequest, formatAmount, formatRange, requestAmount } from './leave';
+import { DEFAULT_ALLOTMENT, LEAVE_TYPE_KEYS, LEAVE_TYPES, STATUS, summarize, validateRequest, formatAmount, formatRange, requestAmount, canSeeOvertimeOffset } from './leave';
 import { orgFields } from './org';
 import { calendarEventFrom } from './calendar';
+import { otHoursFromLogs, splitOT, cutoffWindow, offsetEarnedByUser, OT_THRESHOLD_HOURS } from './overtime';
 
 const millis = (ts) => (ts && typeof ts.toMillis === 'function' ? ts.toMillis() : 0);
 
@@ -530,7 +531,50 @@ export const api = {
     updateDTRStatus: async (submissionId, status, employeeId, seniorName) => {
         try {
             const subRef = doc(db, "submissions", submissionId);
-            await updateDoc(subRef, { status: status }); // 'approved' or 'rejected'
+            const fields = { status: status }; // 'approved' or 'rejected'
+            let converted = 0;
+
+            // Approving a cutoff's DTR is where overtime past OT_THRESHOLD_HOURS
+            // becomes offset (see services/overtime.js for the rule). It is worked
+            // out HERE, from the logs as they stand at the moment of approval, and
+            // stored on the submission as a snapshot: people can edit their own
+            // logs afterwards, so recalculating later would let them rewrite what
+            // was approved. Replacing (not adding to) the stored value is what
+            // makes approving twice harmless.
+            //
+            // If the numbers cannot be worked out, the approval does not go through:
+            // approving without converting would quietly short the employee.
+            if (status === 'approved') {
+                const subSnap = await getDoc(subRef);
+                if (!subSnap.exists()) return { success: false, message: "That submission no longer exists." };
+                const sub = subSnap.data();
+                const cutoffSnap = await getDoc(doc(db, "cutoffs", sub.cutoffId));
+                if (!cutoffSnap.exists()) return { success: false, message: "Couldn't find this DTR's cutoff, so its overtime can't be worked out. Nothing was approved." };
+                const win = cutoffWindow(cutoffSnap.data());
+                const logs = await api.getLogsBetween(sub.userId, win.from, win.to);
+                const ot = otHoursFromLogs(logs);
+                converted = splitOT(ot.hours).excess;
+                fields.otHours = ot.hours;
+                fields.otSessionsSkipped = ot.skipped;
+                fields.offsetEarned = converted;
+                fields.offsetConvertedAt = Timestamp.now();
+            }
+
+            await updateDoc(subRef, fields);
+
+            // Told only if they can see the feature: while it is super-admin-only, an
+            // alert about a balance they cannot look at would just be noise.
+            const employeeSnap = converted > 0 ? await getDoc(doc(db, "users", employeeId || "_")) : null;
+            if (converted > 0 && employeeId && employeeSnap?.exists() && canSeeOvertimeOffset({ role: employeeSnap.data().role })) {
+                await api.createNotification(
+                    employeeId,
+                    'LEAVE_ADJUSTED',
+                    'Overtime Converted to Offset',
+                    `${converted} hour${converted === 1 ? '' : 's'} of overtime past ${OT_THRESHOLD_HOURS} in this cutoff were added to your offset balance.`,
+                    { employeeId, submissionId }
+                );
+            }
+
             
             // If rejected, notify the original user
             if (status === 'rejected' && employeeId) {
@@ -799,12 +843,26 @@ const round2 = (n) => Math.round(n * 100) / 100;
 // These throw; the public wrappers below decide what a failure looks like.
 // submit() and review() must NOT fall back to an empty list on a read error,
 // or an outage would quietly turn off the overlap and balance checks.
-async function fetchAllotted(userId) {
-    const snap = await getDoc(doc(db, "leaveBalances", userId));
+// Offset hours someone has earned from overtime: the sum of the snapshots on
+// their APPROVED cutoffs. Derived, not a counter — see services/overtime.js.
+async function fetchOffsetEarned(userId) {
+    const snap = await getDocs(query(collection(db, "submissions"), where("userId", "==", userId)));
+    return offsetEarnedByUser(snap.docs.map(d => ({ id: d.id, ...d.data() })))[userId] || 0;
+}
+
+// { manual, earned }: what HR has granted, and what overtime has added to offset.
+async function fetchAllottedParts(userId) {
+    const [snap, earned] = await Promise.all([getDoc(doc(db, "leaveBalances", userId)), fetchOffsetEarned(userId)]);
     const data = snap.exists() ? snap.data() : {};
-    const out = { ...DEFAULT_ALLOTMENT };
-    LEAVE_TYPE_KEYS.forEach(k => { if (Number.isFinite(Number(data[k]))) out[k] = Number(data[k]); });
-    return out;
+    const manual = { ...DEFAULT_ALLOTMENT };
+    LEAVE_TYPE_KEYS.forEach(k => { if (Number.isFinite(Number(data[k]))) manual[k] = Number(data[k]); });
+    return { manual, earned };
+}
+
+// Everything a person can draw on. Offset = HR's grants + converted overtime.
+async function fetchAllotted(userId) {
+    const { manual, earned } = await fetchAllottedParts(userId);
+    return { ...manual, offset: round2(manual.offset + earned) };
 }
 
 async function fetchUserRequests(userId) {
@@ -819,8 +877,9 @@ async function fetchUserRequests(userId) {
 export const leaveApi = {
     /** Balances + requests + the derived summary for one person. Throws. */
     getOverview: async (userId) => {
-        const [allotted, requests] = await Promise.all([fetchAllotted(userId), fetchUserRequests(userId)]);
-        return { allotted, requests, summary: summarize(allotted, requests) };
+        const [{ manual, earned }, requests] = await Promise.all([fetchAllottedParts(userId), fetchUserRequests(userId)]);
+        const allotted = { ...manual, offset: round2(manual.offset + earned) };
+        return { allotted, offsetFromOT: earned, requests, summary: summarize(allotted, requests) };
     },
 
     /** Just the requests — what the DTR needs to overlay. [] on failure so the DTR still renders. */
@@ -862,6 +921,12 @@ export const leaveApi = {
             return snap.docs.map(d => ({ id: d.id, ...d.data() }));
         }));
         return parts.flat().sort((a, b) => millis(b.createdAt) - millis(a.createdAt));
+    },
+
+    /** { [userId]: hours } offset everyone has earned from approved overtime (staff only). */
+    getOffsetEarned: async () => {
+        const snap = await getDocs(query(collection(db, "submissions"), where("status", "==", "approved")));
+        return offsetEarnedByUser(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     },
 
     /** { [userId]: { sick, vacation, offset } } for everyone HR has set a balance for. */
@@ -999,8 +1064,9 @@ export const leaveApi = {
             await api.createNotification(
                 req.userId,
                 status === STATUS.APPROVED ? 'LEAVE_APPROVED' : 'LEAVE_REJECTED',
-                status === STATUS.APPROVED ? 'Request Approved' : 'Request Rejected',
-                `${reviewer.name || 'Your reviewer'} ${status} your ${LEAVE_TYPES[req.type].label} request for ${formatRange(req)}.${note ? ` Note: ${note.trim()}` : ''}`,
+                status === STATUS.APPROVED ? 'Request Approved' : (req.status === STATUS.APPROVED ? 'Leave Cancelled' : 'Request Rejected'),
+                // Withdrawing an APPROVED leave is "cancelled", not "rejected": it was theirs.
+                `${reviewer.name || 'Your reviewer'} ${status === STATUS.APPROVED ? 'approved' : (req.status === STATUS.APPROVED ? 'cancelled' : 'rejected')} your ${LEAVE_TYPES[req.type].label} request for ${formatRange(req)}.${note ? ` Note: ${note.trim()}` : ''}`,
                 { requestId, employeeId: req.userId }
             );
             return { success: true, request: { ...req, status } };
@@ -1061,6 +1127,43 @@ export const leaveApi = {
             console.error("Adjust leave balance error", error);
             return { success: false, message: error.message };
         }
+    },
+};
+
+// ---- Overtime counter and conversion history ----
+
+export const overtimeApi = {
+    /**
+     * This cutoff's overtime so far, for the counter on Leave & Offset. It is the
+     * ACTIVE cutoff's window, so the counter starts again at zero by itself each
+     * time a new cutoff is set. Throws on a failed read so the card can say so
+     * instead of showing "0 hours".
+     */
+    getCounter: async (userId) => {
+        const cutoff = await api.getActiveCutoff();
+        if (!cutoff) return { cutoff: null };
+        const win = cutoffWindow(cutoff);
+        const logs = await api.getLogsBetween(userId, win.from, win.to);
+        const ot = otHoursFromLogs(logs);
+        return { cutoff, window: win, ...ot, ...splitOT(ot.hours) };
+    },
+
+    /**
+     * Every cutoff conversion for one person, newest first: how much OT, what
+     * stayed OT, what became offset. This is the history super admins use to see
+     * where an offset balance came from. Throws.
+     */
+    getConversions: async (userId) => {
+        const [snap, cutoffs] = await Promise.all([
+            getDocs(query(collection(db, "submissions"), where("userId", "==", userId))),
+            api.getAllCutoffs(),
+        ]);
+        const byId = Object.fromEntries(cutoffs.map(c => [c.id, c]));
+        return snap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .filter(sub => sub.offsetConvertedAt || Number.isFinite(Number(sub.offsetEarned)))
+            .map(sub => ({ ...sub, cutoff: byId[sub.cutoffId] || null }))
+            .sort((a, b) => millis(b.offsetConvertedAt) - millis(a.offsetConvertedAt));
     },
 };
 

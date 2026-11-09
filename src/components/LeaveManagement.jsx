@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Mail, Loader2, X } from 'lucide-react'
 import { api, leaveApi } from '../services/api'
-import { STATUS } from '../services/leave'
+import { STATUS, canSeeOvertimeOffset } from '../services/leave'
 import LeaveBalanceCards from './leave/LeaveBalanceCards'
 import LeaveRequestForm from './leave/LeaveRequestForm'
 import LeaveApprovals from './leave/LeaveApprovals'
 import LeaveBalancesAdmin from './leave/LeaveBalancesAdmin'
+import HowItWorks from './leave/HowItWorks'
+import OvertimeCounter from './leave/OvertimeCounter'
 import { RequestCard } from './leave/shared'
 
 /**
@@ -18,6 +20,8 @@ import { RequestCard } from './leave/shared'
 export default function LeaveManagement({ user }) {
     const isAdmin = ['admin', 'super_admin'].includes(user.role)
     const isApprover = isAdmin || user.isSenior === true
+    const isSuperAdmin = user.role === 'super_admin'
+    const showOT = canSeeOvertimeOffset(user) // OT counter, Info dialog and the "from OT" breakdown
 
     const [tab, setTab] = useState('my')
     const [mine, setMine] = useState(null)      // { allotted, requests, summary }
@@ -39,12 +43,13 @@ export default function LeaveManagement({ user }) {
     const loadStaff = useCallback(async () => {
         if (!isApprover) return
         try {
-            const [requests, users, allotted] = await Promise.all([
+            const [requests, users, allotted, earned] = await Promise.all([
                 leaveApi.getRequests(),
                 api.getAllUsers(),
                 isAdmin ? leaveApi.getAllAllotted() : Promise.resolve({}),
+                isAdmin ? leaveApi.getOffsetEarned() : Promise.resolve({}),
             ])
-            setStaff({ requests, users, allotted })
+            setStaff({ requests, users, allotted, earned })
         } catch (e) {
             console.error('Load approvals failed', e)
             setError(`Could not load approvals: ${e.message}`)
@@ -87,7 +92,10 @@ export default function LeaveManagement({ user }) {
                     <Mail size={22} />
                 </div>
                 <div>
-                    <h2 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">Leave & Offset</h2>
+                    <div className="flex items-center gap-1">
+                        <h2 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">Leave & Offset</h2>
+                        {showOT && <HowItWorks isSuperAdmin={isSuperAdmin} />}
+                    </div>
                     <p className="text-[var(--text-muted)] text-sm">Sick leave, vacation leave and offset hours</p>
                 </div>
             </div>
@@ -121,7 +129,9 @@ export default function LeaveManagement({ user }) {
                     !error && <div className="flex justify-center py-16"><Loader2 className="animate-spin text-[var(--accent-purple)]" size={32} /></div>
                 ) : (
                     <>
-                        <LeaveBalanceCards summary={mine.summary} />
+                        <LeaveBalanceCards summary={mine.summary} offsetFromOT={showOT ? mine.offsetFromOT : 0} />
+
+                        {showOT && <OvertimeCounter userId={user.id} />}
 
                         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
                             <LeaveRequestForm user={user} summary={mine.summary} requests={mine.requests} onSubmitted={refreshAll} />
@@ -163,7 +173,7 @@ export default function LeaveManagement({ user }) {
 
             {tab === 'balances' && isAdmin && (
                 staff
-                    ? <LeaveBalancesAdmin admin={user} users={staff.users} requests={staff.requests} allotted={staff.allotted} onChanged={refreshAll} />
+                    ? <LeaveBalancesAdmin admin={user} users={staff.users} requests={staff.requests} allotted={staff.allotted} earned={staff.earned || {}} onChanged={refreshAll} />
                     : <div className="flex justify-center py-16"><Loader2 className="animate-spin text-[var(--accent-purple)]" size={32} /></div>
             )}
         </div>

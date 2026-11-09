@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Search } from 'lucide-react'
+import { Check, Loader2, Search, X } from 'lucide-react'
+import { leaveApi } from '../../services/api'
 import { LEAVE_TYPES, LEAVE_TYPE_KEYS, STATUS, formatAmount, requestAmount } from '../../services/leave'
 import { departmentName } from '../../services/org'
 import { RequestCard } from '../leave/shared'
@@ -16,7 +17,11 @@ const selectClass = 'bg-[var(--surface-3)] text-[var(--text-primary)] text-sm px
  * A request keeps the department it was filed from, so a transfer does not
  * rewrite history — last year's leave stays with last year's department.
  */
-export default function LeaveHistory({ requests, users, departments, scopeDepartments }) {
+export default function LeaveHistory({ user, requests, users, departments, scopeDepartments, onChanged }) {
+    // Deciding and cancelling from here is a super admin's. Managers read this
+    // list; the Leave & Offset tab's Approvals remains the senior/admin queue.
+    const canManage = user?.role === 'super_admin'
+    const [busy, setBusy] = useState(null)
     const [search, setSearch] = useState('')
     const [deptFilter, setDeptFilter] = useState('')
     const [type, setType] = useState('')
@@ -51,6 +56,47 @@ export default function LeaveHistory({ requests, users, departments, scopeDepart
     }, [filtered])
 
     const reset = (fn) => (v) => { fn(v); setShown(PAGE) }
+
+    // Goes through leaveApi.review — the single path every decision takes — so it
+    // re-checks the balance on approve, moves the calendar entry in the same
+    // write, and tells the employee. Cancelling an approved leave is a rejection
+    // of it: the balance comes back by itself because "used" is derived.
+    const decide = async (r, status) => {
+        let note = ''
+        if (status === STATUS.REJECTED) {
+            const asked = window.prompt(
+                r.status === STATUS.APPROVED
+                    ? `Cancel ${r.userName || 'this'} approved leave? Add a reason — they will see it:`
+                    : `Decline ${r.userName || 'this'} request? Add a reason (optional) — they will see it:`,
+                ''
+            )
+            if (asked === null) return
+            note = asked
+        } else if (!window.confirm(`Approve ${r.userName || 'this'} request?`)) {
+            return
+        }
+        setBusy(r.id)
+        const res = await leaveApi.review(r.id, status, user, note)
+        setBusy(null)
+        if (!res.success) { alert(res.message); return }
+        onChanged?.()
+    }
+
+    const actionsFor = (r) => {
+        if (!canManage || r.userId === user.id) return null // never your own request
+        const btn = 'flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-colors disabled:opacity-50'
+        const spin = busy === r.id ? <Loader2 size={12} className="animate-spin" /> : null
+        if (r.status === STATUS.PENDING) return (
+            <>
+                <button disabled={busy === r.id} onClick={() => decide(r, STATUS.APPROVED)} className={`${btn} bg-[var(--accent-green)]/15 text-[var(--accent-green)] border-[var(--accent-green)]/30 hover:bg-[var(--accent-green)]/25`}>{spin || <Check size={12} />} Approve</button>
+                <button disabled={busy === r.id} onClick={() => decide(r, STATUS.REJECTED)} className={`${btn} bg-[var(--accent-red)]/10 text-[var(--accent-red)] border-[var(--accent-red)]/30 hover:bg-[var(--accent-red)]/20`}>{spin || <X size={12} />} Decline</button>
+            </>
+        )
+        if (r.status === STATUS.APPROVED) return (
+            <button disabled={busy === r.id} onClick={() => decide(r, STATUS.REJECTED)} className={`${btn} bg-[var(--surface-3)] text-[var(--text-secondary)] border-[var(--border-strong)] hover:text-[var(--accent-red)]`}>{spin || <X size={12} />} Cancel leave</button>
+        )
+        return null
+    }
 
     return (
         <div className="space-y-4">
@@ -100,7 +146,7 @@ export default function LeaveHistory({ requests, users, departments, scopeDepart
                     <p className="text-xs text-[var(--text-muted)]">{filtered.length} request{filtered.length === 1 ? '' : 's'}</p>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                         {filtered.slice(0, shown).map(r => (
-                            <RequestCard key={r.id} request={r} showEmployee>
+                            <RequestCard key={r.id} request={r} showEmployee actions={actionsFor(r)}>
                                 <p className="text-[10px] text-[var(--text-muted)] mt-1">{departmentName(departments, r.departmentId || names[r.userId]?.departmentId)}</p>
                             </RequestCard>
                         ))}

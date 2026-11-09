@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Search, SlidersHorizontal, X, Loader2 } from 'lucide-react'
-import { leaveApi } from '../../services/api'
+import { AlertTriangle, Search, SlidersHorizontal, X, Loader2 } from 'lucide-react'
+import { leaveApi, overtimeApi } from '../../services/api'
+import { OFFSET_WARN_HOURS, OT_THRESHOLD_HOURS, offsetOverWarning } from '../../services/overtime'
 import { LEAVE_TYPES, LEAVE_TYPE_KEYS, DEFAULT_ALLOTMENT, summarize, formatAmount } from '../../services/leave'
+import { canSeeOvertimeOffset } from '../../services/leave'
 import { inputClass } from './shared'
 
 /**
@@ -9,7 +11,11 @@ import { inputClass } from './shared'
  * Every change is a signed credit or deduction with a mandatory reason, which
  * lands in leaveAdjustments — balances are never overwritten silently.
  */
-export default function LeaveBalancesAdmin({ admin, users, requests, allotted, onChanged }) {
+const round2 = (n) => Math.round(n * 100) / 100
+
+export default function LeaveBalancesAdmin({ admin, users, requests, allotted, earned = {}, onChanged }) {
+    // The over-30-hours warning is for super admins; everyone else sees the numbers.
+    const isSuper = canSeeOvertimeOffset(admin)
     const [search, setSearch] = useState('')
     const [target, setTarget] = useState(null) // the employee being adjusted
 
@@ -17,12 +23,26 @@ export default function LeaveBalancesAdmin({ admin, users, requests, allotted, o
         .filter(u => !u.removed)
         .filter(u => (u.name || '').toLowerCase().includes(search.toLowerCase()) || (u.email || '').toLowerCase().includes(search.toLowerCase()))
         .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
-        .map(u => ({
-            user: u,
-            // Someone with no balance doc is on the defaults, and the row says so.
-            custom: !!allotted[u.id],
-            summary: summarize(allotted[u.id] || DEFAULT_ALLOTMENT, requests.filter(r => r.userId === u.id)),
-        })), [users, requests, allotted, search])
+        .map(u => {
+            // What HR set by hand (the only part an adjustment can change) …
+            const base = allotted[u.id] || DEFAULT_ALLOTMENT
+            // … plus the offset overtime has added. The table shows the total.
+            const fromOT = earned[u.id] || 0
+            const total = { ...base, offset: round2(base.offset + fromOT) }
+            return {
+                user: u,
+                base,
+                fromOT,
+                // Someone with no balance doc is on the defaults, and the row says so.
+                custom: !!allotted[u.id],
+                summary: summarize(total, requests.filter(r => r.userId === u.id)),
+            }
+        }), [users, requests, allotted, earned, search])
+
+    const overWarn = useMemo(
+        () => (isSuper ? rows.filter(r => offsetOverWarning(r.summary.offset.remaining)) : []),
+        [rows, isSuper]
+    )
 
     return (
         <section className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] overflow-hidden">
@@ -43,6 +63,17 @@ export default function LeaveBalancesAdmin({ admin, users, requests, allotted, o
                 </div>
             </div>
 
+            {overWarn.length > 0 && (
+                <div role="alert" className="mx-4 sm:mx-6 mt-4 flex items-start gap-3 p-3 rounded-xl bg-[var(--accent-amber)]/10 border border-[var(--accent-amber)]/30 text-xs text-[var(--text-secondary)]">
+                    <AlertTriangle size={16} className="text-[var(--accent-amber)] shrink-0 mt-0.5" />
+                    <p>
+                        <strong className="text-[var(--accent-amber)]">{overWarn.length} {overWarn.length === 1 ? 'person has' : 'people have'} more than {OFFSET_WARN_HOURS} hours of offset:</strong>{' '}
+                        {overWarn.map(r => `${r.user.name || r.user.email} (${r.summary.offset.remaining}h)`).join(', ')}.
+                        There is no cap, so the extra hours still count — open Adjust to see where they came from.
+                    </p>
+                </div>
+            )}
+
             <p className="md:hidden px-4 pt-3 text-[10px] font-medium uppercase tracking-widest text-[var(--text-muted)]">Swipe sideways for all balances</p>
             {/* `relative` so the sr-only header below is clipped by this scroller
                 instead of escaping it and widening the whole page. */}
@@ -60,7 +91,7 @@ export default function LeaveBalancesAdmin({ admin, users, requests, allotted, o
                     <tbody className="divide-y divide-[var(--border)]">
                         {rows.length === 0 ? (
                             <tr><td colSpan={5} className="px-6 py-8 text-center text-sm text-[var(--text-muted)]">No employees found.</td></tr>
-                        ) : rows.map(({ user, custom, summary }) => (
+                        ) : rows.map(({ user, custom, summary, fromOT }) => (
                             <tr key={user.id} className="hover:bg-white/5 transition-colors">
                                 <td className="px-4 sm:px-6 py-3">
                                     <p className="text-sm font-bold text-[var(--text-primary)] truncate max-w-[200px]">{user.name || 'Unknown'}</p>
@@ -70,11 +101,13 @@ export default function LeaveBalancesAdmin({ admin, users, requests, allotted, o
                                 </td>
                                 {LEAVE_TYPE_KEYS.map(k => {
                                     const b = summary[k]
+                                    const warn = isSuper && k === 'offset' && offsetOverWarning(b.remaining)
                                     return (
                                         <td key={k} className="px-3 py-3 text-sm tabular-nums">
-                                            <span className={`font-bold ${b.remaining <= 0 ? 'text-[var(--accent-red)]' : 'text-[var(--text-primary)]'}`}>{b.remaining}</span>
+                                            <span className={`font-bold ${b.remaining <= 0 ? 'text-[var(--accent-red)]' : warn ? 'text-[var(--accent-amber)]' : 'text-[var(--text-primary)]'}`}>{b.remaining}</span>
+                                            {warn && <AlertTriangle size={12} className="inline ml-1 -mt-0.5 text-[var(--accent-amber)]" aria-label={`More than ${OFFSET_WARN_HOURS} hours of offset`} />}
                                             <span className="text-[var(--text-muted)]"> / {b.allotted}</span>
-                                            <span className="text-[10px] text-[var(--text-muted)] block">{b.used} used{b.pending > 0 ? ` · ${b.pending} pending` : ''}</span>
+                                            <span className="text-[10px] text-[var(--text-muted)] block">{b.used} used{b.pending > 0 ? ` · ${b.pending} pending` : ''}{isSuper && k === 'offset' && fromOT > 0 ? ` · ${fromOT} from OT` : ''}</span>
                                         </td>
                                     )
                                 })}
@@ -97,7 +130,9 @@ export default function LeaveBalancesAdmin({ admin, users, requests, allotted, o
                     admin={admin}
                     employee={target}
                     allotted={allotted[target.id] || DEFAULT_ALLOTMENT}
-                    summary={summarize(allotted[target.id] || DEFAULT_ALLOTMENT, requests.filter(r => r.userId === target.id))}
+                    fromOT={isSuper ? (earned[target.id] || 0) : 0}
+                    isSuper={isSuper}
+                    summary={rows.find(r => r.user.id === target.id)?.summary}
                     onClose={() => setTarget(null)}
                     onSaved={() => { onChanged?.() }}
                 />
@@ -106,7 +141,7 @@ export default function LeaveBalancesAdmin({ admin, users, requests, allotted, o
     )
 }
 
-function AdjustModal({ admin, employee, allotted, summary, onClose, onSaved }) {
+function AdjustModal({ admin, employee, allotted, fromOT, isSuper, summary, onClose, onSaved }) {
     const [type, setType] = useState('sick')
     const [mode, setMode] = useState('credit') // 'credit' | 'deduct'
     const [amount, setAmount] = useState('')
@@ -114,12 +149,16 @@ function AdjustModal({ admin, employee, allotted, summary, onClose, onSaved }) {
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState('')
     const [history, setHistory] = useState(null) // null = loading, 'error' = failed, else the list
+    const [conversions, setConversions] = useState(null) // same states, for overtime → offset
 
     useEffect(() => {
         let cancelled = false
         leaveApi.getAdjustments(employee.id)
             .then(h => { if (!cancelled) setHistory(h) })
             .catch((e) => { console.error('Load adjustments failed', e); if (!cancelled) setHistory('error') })
+        overtimeApi.getConversions(employee.id)
+            .then(c => { if (!cancelled) setConversions(c) })
+            .catch((e) => { console.error('Load OT conversions failed', e); if (!cancelled) setConversions('error') })
         return () => { cancelled = true }
     }, [employee.id])
 
@@ -209,8 +248,15 @@ function AdjustModal({ admin, employee, allotted, summary, onClose, onSaved }) {
                         </label>
                     </div>
 
+                    {isSuper && offsetOverWarning(summary?.offset.remaining) && (
+                        <p className="flex items-start gap-2 text-xs text-[var(--text-secondary)] bg-[var(--accent-amber)]/10 border border-[var(--accent-amber)]/30 rounded-lg px-3 py-2">
+                            <AlertTriangle size={14} className="text-[var(--accent-amber)] shrink-0 mt-0.5" />
+                            <span><strong className="text-[var(--accent-amber)]">{summary.offset.remaining} hours of offset</strong> — more than {OFFSET_WARN_HOURS}. There is no cap, so every hour still counts. The history below shows where it came from.</span>
+                        </p>
+                    )}
+
                     <p className="text-xs text-[var(--text-secondary)]">
-                        Granted {formatAmount(type, allotted[type])} → <span className="font-bold text-[var(--text-primary)]">{formatAmount(type, after)}</span>
+                        {type === 'offset' && fromOT > 0 ? 'HR-granted' : 'Granted'} {formatAmount(type, allotted[type])}{type === 'offset' && fromOT > 0 ? ` (plus ${fromOT} hrs from overtime, not changed here)` : ''} → <span className="font-bold text-[var(--text-primary)]">{formatAmount(type, after)}</span>
                         {after < 0 && <span className="text-[var(--accent-red)]"> (can’t go below zero)</span>}
                     </p>
 
@@ -230,8 +276,25 @@ function AdjustModal({ admin, employee, allotted, summary, onClose, onSaved }) {
                         <p role="alert" className="text-xs text-[var(--accent-red)] bg-[var(--accent-red)]/10 border border-[var(--accent-red)]/20 rounded-lg px-3 py-2">{error}</p>
                     )}
 
+                    {isSuper && (
                     <div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-2">History</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-2">Overtime converted to offset</p>
+                        {conversions === null ? (
+                            <Loader2 size={16} className="animate-spin text-[var(--text-muted)]" />
+                        ) : conversions === 'error' ? (
+                            <p className="text-xs text-[var(--accent-red)]">Couldn’t load the overtime history, so it may not be empty. Try reopening this.</p>
+                        ) : conversions.length === 0 ? (
+                            <p className="text-xs text-[var(--text-muted)]">None yet. Overtime past {OT_THRESHOLD_HOURS} hours in a cutoff is converted when that cutoff’s DTR is approved.</p>
+                        ) : (
+                            <ul className="space-y-2 max-h-48 overflow-y-auto overscroll-contain">
+                                {conversions.map(c => <ConversionRow key={c.id} item={c} />)}
+                            </ul>
+                        )}
+                    </div>
+                    )}
+
+                    <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-2">Adjustment history</p>
                         {history === null ? (
                             <Loader2 size={16} className="animate-spin text-[var(--text-muted)]" />
                         ) : history === 'error' ? (
@@ -270,5 +333,31 @@ function AdjustModal({ admin, employee, allotted, summary, onClose, onSaved }) {
                 </div>
             </div>
         </div>
+    )
+}
+
+const shortDate = (ts) => (ts && typeof ts.toDate === 'function' ? ts.toDate().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '?')
+
+/** One cutoff's conversion: how much OT, what stayed OT, what became offset, and whether it counts. */
+function ConversionRow({ item }) {
+    const counted = item.status === 'approved'
+    const ot = Number(item.otHours) || 0
+    const excess = Number(item.offsetEarned) || 0
+    const label = item.cutoff ? `${shortDate(item.cutoff.startDate)} – ${shortDate(item.cutoff.endDate)}` : 'Cutoff no longer listed'
+    return (
+        <li className="text-xs p-2.5 bg-[var(--surface-2)] rounded-lg border border-[var(--border)]">
+            <div className="flex items-center justify-between gap-2">
+                <span className="font-bold text-[var(--text-primary)]">{label}</span>
+                <span className={`text-[10px] font-bold uppercase ${counted ? 'text-[var(--accent-green)]' : 'text-[var(--text-muted)]'}`}>{counted ? 'Counted' : 'Not counted — DTR not approved'}</span>
+            </div>
+            <p className="text-[var(--text-secondary)] mt-0.5">
+                {ot} hrs overtime · {Math.min(ot, OT_THRESHOLD_HOURS)} stay OT ·{' '}
+                <span className="font-bold" style={{ color: excess > 0 ? 'var(--accent-purple)' : 'var(--text-muted)' }}>{excess} → offset</span>
+            </p>
+            <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
+                Credited {item.offsetConvertedAt?.toDate?.().toLocaleDateString('en-GB') || '—'}
+                {item.otSessionsSkipped > 0 ? ` · ${item.otSessionsSkipped} incomplete OT ${item.otSessionsSkipped === 1 ? 'entry' : 'entries'} skipped` : ''}
+            </p>
+        </li>
     )
 }

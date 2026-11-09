@@ -176,7 +176,7 @@ export default function DepartmentHub({ user }) {
                     )}
 
                     {tab === 'history' && canSeeTeam && (
-                        <LeaveHistory requests={requests} users={people} departments={departments} scopeDepartments={scopeDepartments} />
+                        <LeaveHistory user={user} requests={requests} users={people} departments={departments} scopeDepartments={scopeDepartments} onChanged={() => { loadTeam(); loadEvents() }} />
                     )}
 
                     {tab === 'setup' && isAdmin && (

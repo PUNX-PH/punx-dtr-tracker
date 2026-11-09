@@ -75,7 +75,13 @@ export default function Layout({ children, user, onLogout, activeTab, onTabChang
             handleDismiss(notif);
             alert(`OT Approved for ${notif.data.employeeName}`);
         } else if (notif.type === 'DTR_APPROVAL') {
-            await api.updateDTRStatus(notif.data.submissionId, 'approved', notif.data.employeeId, user.name);
+            // Approving also converts overtime past 20h to offset and can fail; if
+            // it did, leave the request actionable and say why instead of "Approved".
+            const res = await api.updateDTRStatus(notif.data.submissionId, 'approved', notif.data.employeeId, user.name);
+            if (!res.success) {
+                alert('Failed to approve: ' + res.message);
+                return;
+            }
             await api.markNotificationRead(notif.id);
             handleDismiss(notif);
             alert(`DTR Approved for ${notif.data.employeeName}`);

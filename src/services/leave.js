@@ -34,6 +34,15 @@ export const canUseLeave = (user, enabled = LEAVE_TAB_ENABLED) =>
 export const canUseDepartment = (user, enabled = LEAVE_TAB_ENABLED) =>
     enabled && user?.role === 'super_admin'
 
+// The overtime → offset features: the "how this is calculated" Info dialog, the
+// OT counter, the "from OT" breakdown, the conversion history and the 30-hour
+// offset warning. Its own gate so these stay super-admin-only while they are
+// tested, even after the Leave tab itself opens to others. This hides the
+// screens; the conversion is still worked out when a DTR is approved, so the
+// data is there the day it is switched on.
+export const canSeeOvertimeOffset = (user, enabled = LEAVE_TAB_ENABLED) =>
+    enabled && user?.role === 'super_admin'
+
 export const STATUS = { PENDING: 'pending', APPROVED: 'approved', REJECTED: 'rejected' }
 
 const pad = (n) => String(n).padStart(2, '0')

@@ -3,7 +3,7 @@ import { LEAVE_TYPES, LEAVE_TYPE_KEYS, formatAmount } from '../../services/leave
 // Used / remaining per type. The bar is "used" in the type's colour with
 // "pending" striped behind it, so a person can see both what is gone and what
 // is already spoken for before they file another request.
-export default function LeaveBalanceCards({ summary }) {
+export default function LeaveBalanceCards({ summary, offsetFromOT = 0 }) {
     return (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {LEAVE_TYPE_KEYS.map(type => {
@@ -36,6 +36,9 @@ export default function LeaveBalanceCards({ summary }) {
                             <div>
                                 <dt className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">Granted</dt>
                                 <dd className="text-sm font-bold text-[var(--text-primary)] tabular-nums">{b.allotted}</dd>
+                                {type === 'offset' && offsetFromOT > 0 && (
+                                    <dd className="text-[10px] text-[var(--text-muted)]">{offsetFromOT} from OT</dd>
+                                )}
                             </div>
                             <div>
                                 <dt className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">Used</dt>
