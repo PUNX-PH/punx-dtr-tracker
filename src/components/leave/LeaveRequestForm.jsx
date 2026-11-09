@@ -9,18 +9,24 @@ export default function LeaveRequestForm({ user, summary, requests, onSubmitted 
     const [type, setType] = useState('sick')
     const [startDate, setStartDate] = useState(today)
     const [endDate, setEndDate] = useState(today)
-    const [hours, setHours] = useState(HOURS_PER_DAY)
+    const [offsetHours, setOffsetHours] = useState(HOURS_PER_DAY)
+    // Sick/vacation can be filed for whole days, or for part of one day in hours.
+    const [unit, setUnit] = useState('days') // 'days' | 'hours'
+    const [partHours, setPartHours] = useState(4)
     const [reason, setReason] = useState('')
     const [submitting, setSubmitting] = useState(false)
     const [message, setMessage] = useState(null) // { ok: bool, text }
 
     const isOffset = type === 'offset'
+    const isPartial = !isOffset && unit === 'hours'
+    const singleDay = isOffset || isPartial
+    const hours = isOffset ? offsetHours : partHours
 
     // The same validator the api runs on write, so what the form says is what
     // the save will say — minus anything that changed since this page loaded.
     const check = useMemo(
-        () => validateRequest({ type, startDate, endDate, hours }, summary, requests),
-        [type, startDate, endDate, hours, summary, requests]
+        () => validateRequest({ type, startDate, endDate, hours, unit: isPartial ? 'hours' : 'days' }, summary, requests),
+        [type, startDate, endDate, hours, isPartial, summary, requests]
     )
 
     const handleStart = (value) => {
@@ -34,7 +40,7 @@ export default function LeaveRequestForm({ user, summary, requests, onSubmitted 
         if (check.error) return setMessage({ ok: false, text: check.error })
         setSubmitting(true)
         setMessage(null)
-        const res = await leaveApi.submit(user, { type, startDate, endDate, hours, reason })
+        const res = await leaveApi.submit(user, { type, startDate, endDate, hours, unit: isPartial ? 'hours' : 'days', reason })
         setSubmitting(false)
         if (res.success) {
             setMessage({ ok: true, text: 'Request sent. You will be notified when it is decided.' })
@@ -76,20 +82,37 @@ export default function LeaveRequestForm({ user, summary, requests, onSubmitted 
                 })}
             </div>
 
-            {isOffset ? (
+            {!isOffset && (
+                <div role="radiogroup" aria-label="Length" className="flex rounded-xl overflow-hidden border border-[var(--border-strong)] w-fit">
+                    {[['days', 'Full days'], ['hours', 'Part of a day']].map(([k, label]) => (
+                        <button
+                            key={k}
+                            type="button"
+                            role="radio"
+                            aria-checked={unit === k}
+                            onClick={() => { setUnit(k); setMessage(null) }}
+                            className={`px-3.5 py-2 text-xs font-bold transition-colors ${unit === k ? 'bg-[var(--accent-purple)] text-white' : 'bg-[var(--surface-3)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            {singleDay ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <label className="block">
                         <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Date</span>
                         <input type="date" className={`${inputClass} mt-1`} value={startDate} onChange={(e) => handleStart(e.target.value)} required />
                     </label>
                     <label className="block">
-                        <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Hours to offset</span>
+                        <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">{isOffset ? 'Hours to offset' : 'Hours away'}</span>
                         <input
                             type="number"
                             className={`${inputClass} mt-1`}
                             min="0.5" max={HOURS_PER_DAY} step="0.5"
                             value={hours}
-                            onChange={(e) => setHours(e.target.value)}
+                            onChange={(e) => (isOffset ? setOffsetHours(e.target.value) : setPartHours(e.target.value))}
                             required
                         />
                     </label>
@@ -122,7 +145,7 @@ export default function LeaveRequestForm({ user, summary, requests, onSubmitted 
                 <p className={`text-xs ${check.error ? 'text-[var(--accent-red)]' : 'text-[var(--text-secondary)]'}`} aria-live="polite">
                     {check.error
                         ? check.error
-                        : `This uses ${formatAmount(type, check.amount)}${left !== undefined ? ` of your ${formatAmount(type, Math.max(0, left))} available` : ''}.`}
+                        : `This uses ${isPartial ? `${check.hours} hrs (${formatAmount(type, check.amount)})` : formatAmount(type, check.amount)}${left !== undefined ? ` of your ${formatAmount(type, Math.max(0, left))} available` : ''}.`}
                 </p>
                 <button
                     type="submit"

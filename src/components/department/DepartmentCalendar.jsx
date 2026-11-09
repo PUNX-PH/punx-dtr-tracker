@@ -91,7 +91,7 @@ export default function DepartmentCalendar({
                             const ev = dayEvents(cell.ymd)
                             const items = [
                                 ...ev.holidays.map(h => ({ key: `h${h.id}`, color: HOLIDAY_TYPES[h.type].color, text: h.name, solid: true, title: `${h.name} — ${HOLIDAY_TYPES[h.type].label}` })),
-                                ...ev.leaves.map(l => ({ key: `l${l.id}`, color: LEAVE_TYPES[l.type].color, text: `${l.userName} · ${leaveTag(l.type)}`, title: `${l.userName} — ${LEAVE_TYPES[l.type].label}` })),
+                                ...ev.leaves.map(l => ({ key: `l${l.id}`, color: LEAVE_TYPES[l.type].color, text: `${l.userName} · ${leaveTag(l.type)}${l.type !== 'offset' && l.hours > 0 ? ` ${l.hours}h` : ''}`, title: `${l.userName} — ${LEAVE_TYPES[l.type].label}` })),
                             ]
                             const isSelected = selected === cell.ymd
                             const isToday = cell.ymd === today
@@ -156,7 +156,7 @@ export default function DepartmentCalendar({
                                                         <span className="text-[10px] text-[var(--text-muted)] block truncate">{departmentName(departments, l.departmentId)}</span>
                                                     </span>
                                                     <span className="text-[10px] font-bold uppercase shrink-0" style={{ color: LEAVE_TYPES[l.type].color }}>
-                                                        {l.type === 'offset' ? `Offset · ${l.hours}h` : LEAVE_TYPES[l.type].label}
+                                                        {l.type === 'offset' ? `Offset · ${l.hours}h` : l.hours > 0 ? `${LEAVE_TYPES[l.type].label} · ${l.hours}h` : LEAVE_TYPES[l.type].label}
                                                     </span>
                                                 </li>
                                             ))}

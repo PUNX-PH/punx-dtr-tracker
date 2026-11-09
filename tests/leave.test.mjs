@@ -9,6 +9,7 @@ import assert from 'node:assert/strict'
 import {
   parseYMD, toYMD, workdaysBetween, countWorkdays, summarize, validateRequest,
   findOverlap, leaveForDate, requestAmount, dtrLabel, leaveNote, canUseLeave, LEAVE_TAB_ENABLED, DEFAULT_ALLOTMENT,
+  isPartialDay, requestLabel,
 } from '../src/services/leave.js'
 
 let pass = 0, fail = 0
@@ -158,6 +159,53 @@ it('findOverlap / requestAmount sanity', () => {
   assert.equal(requestAmount(req({ type: 'offset', hours: 2.5, days: 0 })), 2.5)
   assert.equal(findOverlap([req()], '2026-10-13', '2026-10-14'), null)
 })
+
+console.log('\npart of a day (sick / vacation filed in hours)')
+const part = (o) => validateRequest({ type: 'sick', startDate: '2026-10-12', unit: 'hours', hours: 4, ...o }, S, [])
+it('4 hours is half a day, on one date, and keeps its hours', () => {
+  const v = part({})
+  assert.equal(v.error, undefined); assert.equal(v.amount, 0.5); assert.equal(v.hours, 4); assert.equal(v.endDate, '2026-10-12')
+})
+it('half-hour steps cost an exact fraction: 3.5 hours is 7/16 of a day', () => assert.equal(part({ hours: 3.5 }).amount, 0.4375))
+it('8 hours is a whole day', () => assert.equal(part({ hours: 8 }).amount, 1))
+it('works for vacation too', () => assert.equal(part({ type: 'vacation', hours: 2 }).amount, 0.25))
+it('limits: more than a day, zero, odd minutes and weekends are refused', () => {
+  assert.match(part({ hours: 9 }).error, /at most/)
+  assert.match(part({ hours: 0 }).error, /Enter how many hours/)
+  assert.match(part({ hours: 1.3 }).error, /half-hour/)
+  assert.match(part({ startDate: '2026-10-17' }).error, /weekday/)
+})
+it('a part-day ignores any end date it is handed', () => assert.equal(part({ endDate: '2026-10-30' }).endDate, '2026-10-12'))
+it('it draws on the day balance and is refused when there is not enough left', () => {
+  const low = summarize({ sick: 0.25, vacation: 5, offset: 0 }, [])
+  assert.match(validateRequest({ type: 'sick', startDate: '2026-10-12', unit: 'hours', hours: 4 }, low, []).error, /Not enough/)
+  assert.equal(validateRequest({ type: 'sick', startDate: '2026-10-12', unit: 'hours', hours: 2 }, low, []).error, undefined)
+})
+it('whole-day requests are unchanged: the hours field is ignored and nothing is stored in it', () => {
+  const v = validateRequest({ type: 'sick', startDate: '2026-10-12', endDate: '2026-10-14', hours: 4 }, S, [])
+  assert.equal(v.amount, 3); assert.equal(v.hours, 0)
+})
+it('used balance adds part-days up in days', () => {
+  const s = summarize(A, [req({ days: 0.5, hours: 4 }), req({ days: 0.25, hours: 2, startDate: '2026-10-13', endDate: '2026-10-13' })])
+  assert.equal(s.sick.used, 0.75); assert.equal(s.sick.remaining, 4.25)
+})
+it('it still blocks another request on the same date (no two requests share a day)', () => {
+  const existing = [req({ status: 'pending', days: 0.5, hours: 4 })]
+  assert.match(validateRequest({ type: 'vacation', startDate: '2026-10-12', unit: 'hours', hours: 2 }, S, existing).error, /overlaps/)
+})
+it('says it in hours: label, DTR badge and note', () => {
+  const r = req({ days: 0.5, hours: 4, reason: 'Dentist' })
+  assert.equal(isPartialDay(r), true)
+  assert.equal(isPartialDay(req({ days: 2 })), false)
+  assert.equal(isPartialDay(req({ type: 'offset', hours: 4, days: 0 })), false) // offset is its own thing
+  assert.equal(requestLabel(r), '4 hrs (0.5 days)')
+  assert.equal(requestLabel(req({ days: 2 })), '2 days')
+  assert.equal(requestLabel(req({ type: 'offset', hours: 4, days: 0 })), '4 hrs')
+  assert.equal(dtrLabel(r), 'SL · 4 hrs')
+  assert.equal(leaveNote(r), 'Sick Leave · 4 hrs — Dentist')
+})
+it('an approved part-day shows on its date', () =>
+  assert.ok(leaveForDate([req({ days: 0.5, hours: 4 })], parseYMD('2026-10-12'))))
 
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

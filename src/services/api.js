@@ -1,6 +1,6 @@
 import { auth, db } from '../firebase';
 import { collection, query, where, getDocs, getDoc, setDoc, addDoc, updateDoc, deleteDoc, doc, Timestamp, orderBy, limit, onSnapshot, writeBatch, runTransaction } from "firebase/firestore";
-import { DEFAULT_ALLOTMENT, LEAVE_TYPE_KEYS, LEAVE_TYPES, STATUS, summarize, validateRequest, formatAmount, formatRange, requestAmount, canSeeOvertimeOffset } from './leave';
+import { DEFAULT_ALLOTMENT, LEAVE_TYPE_KEYS, LEAVE_TYPES, STATUS, summarize, validateRequest, formatAmount, formatRange, requestAmount, requestLabel, canSeeOvertimeOffset } from './leave';
 import { orgFields } from './org';
 import { calendarEventFrom } from './calendar';
 import { otHoursFromLogs, splitOT, cutoffWindow, offsetEarnedByUser, OT_THRESHOLD_HOURS } from './overtime';
@@ -973,7 +973,7 @@ export const leaveApi = {
                 startDate: v.startDate,
                 endDate: v.endDate,
                 days: isOffset ? 0 : v.amount,
-                hours: isOffset ? v.amount : 0,
+                hours: v.hours, // offset's hours, or a part-day's; 0 for whole days
                 reason: (input.reason || '').trim().slice(0, 500),
                 status: STATUS.PENDING,
                 createdAt: Timestamp.now(),
@@ -989,7 +989,7 @@ export const leaveApi = {
                     seniorId,
                     'LEAVE_APPROVAL',
                     'Leave Approval Required',
-                    `${request.userName || 'An employee'} requested ${LEAVE_TYPES[request.type].label} for ${formatRange(request)} (${formatAmount(request.type, v.amount)}).`,
+                    `${request.userName || 'An employee'} requested ${LEAVE_TYPES[request.type].label} for ${formatRange(request)} (${requestLabel(request)}).`,
                     { requestId: ref.id, employeeId: user.id, employeeName: request.userName }
                 );
             }

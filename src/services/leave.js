@@ -81,6 +81,14 @@ export const countWorkdays = (startYMD, endYMD) => workdaysBetween(startYMD, end
 
 const round2 = (n) => Math.round(n * 100) / 100
 
+/**
+ * A sick/vacation request filed in HOURS for part of one day — a half day, an
+ * afternoon. Its balance cost is still in days (hours ÷ HOURS_PER_DAY, so 4 hours
+ * is half a day): balances stay in days and nobody's existing balance changes
+ * unit. The hours are kept on the request so it can say "4 hrs", not "0.5 days".
+ */
+export const isPartialDay = (req) => req.type !== 'offset' && Number(req.hours) > 0
+
 /** Days for sick/vacation, hours for offset — the unit each balance is kept in. */
 export const requestAmount = (req) => (req.type === 'offset' ? Number(req.hours) || 0 : Number(req.days) || 0)
 
@@ -148,19 +156,26 @@ export function leaveForDate(requests, date) {
  * One validator for the form (live feedback) and the api (the write). Returns
  * `{ error }` or `{ amount, startDate, endDate }` with the normalised values.
  */
-export function validateRequest({ type, startDate, endDate, hours }, summary, existing = []) {
+export function validateRequest({ type, startDate, endDate, hours, unit }, summary, existing = []) {
     if (!LEAVE_TYPES[type]) return { error: 'Pick a request type.' }
     if (!parseYMD(startDate)) return { error: 'Pick a date.' }
 
     let end = endDate
     let amount
-    if (type === 'offset') {
-        end = startDate // offset is for one date; the hours say how much of it
-        amount = Number(hours)
-        if (!Number.isFinite(amount) || amount <= 0) return { error: 'Enter how many offset hours you are using.' }
-        if (amount > HOURS_PER_DAY) return { error: `An offset request covers at most ${HOURS_PER_DAY} hours per day.` }
-        if (Math.round(amount * 2) !== amount * 2) return { error: 'Offset hours go in half-hour steps.' }
-        if (!isWeekday(parseYMD(startDate))) return { error: 'Offset hours can only be used on a weekday.' }
+    let hoursOut = 0 // what is stored in `hours`: offset's amount, a part-day's hours, 0 for whole days
+    // Part of a day: a sick/vacation request filed in hours on a single date.
+    const partial = type !== 'offset' && unit === 'hours'
+    if (type === 'offset' || partial) {
+        end = startDate // one date; the hours say how much of it
+        const hrs = Number(hours)
+        const what = type === 'offset' ? 'offset hours you are using' : 'hours you will be away'
+        if (!Number.isFinite(hrs) || hrs <= 0) return { error: `Enter how many ${what}.` }
+        if (hrs > HOURS_PER_DAY) return { error: type === 'offset' ? `An offset request covers at most ${HOURS_PER_DAY} hours per day.` : `Part of a day is at most ${HOURS_PER_DAY} hours — use full days for longer.` }
+        if (Math.round(hrs * 2) !== hrs * 2) return { error: type === 'offset' ? 'Offset hours go in half-hour steps.' : 'Hours go in half-hour steps.' }
+        if (!isWeekday(parseYMD(startDate))) return { error: type === 'offset' ? 'Offset hours can only be used on a weekday.' : 'Part-day leave can only be taken on a weekday.' }
+        hoursOut = hrs
+        // Offset is kept in hours; a part-day of leave costs a fraction of a day.
+        amount = type === 'offset' ? hrs : hrs / HOURS_PER_DAY
     } else {
         if (!parseYMD(end)) return { error: 'Pick an end date.' }
         if (end < startDate) return { error: 'The end date is before the start date.' }
@@ -182,7 +197,7 @@ export function validateRequest({ type, startDate, endDate, hours }, summary, ex
         }
     }
 
-    return { amount, startDate, endDate: end }
+    return { amount, startDate, endDate: end, hours: hoursOut }
 }
 
 /** "Mon, 12 Oct 2026" from a YMD string, for lists. */
@@ -195,14 +210,26 @@ export const formatRange = (req) => req.startDate === req.endDate
     ? formatYMD(req.startDate)
     : `${formatYMD(req.startDate)} – ${formatYMD(req.endDate)}`
 
-/** The DTR notes line: "Sick Leave — Fever" / "Offset · 4 hrs — Offsetting Saturday OT". Reason is optional. */
+const hoursText = (h) => `${round2(h)} hr${Number(h) === 1 ? '' : 's'}`
+
+/** How much a request is, in the words people use: "2 days", "6 hrs", "4 hrs (0.5 day)". */
+export function requestLabel(req) {
+    if (req.type === 'offset') return formatAmount('offset', Number(req.hours) || 0)
+    if (isPartialDay(req)) return `${hoursText(req.hours)} (${formatAmount(req.type, Number(req.days) || 0)})`
+    return formatAmount(req.type, Number(req.days) || 0)
+}
+
+/** The DTR notes line: "Sick Leave — Fever" / "Sick Leave · 4 hrs — Fever" / "Offset · 4 hrs — Offsetting Saturday OT". Reason is optional. */
 export function leaveNote(req) {
-    const head = req.type === 'offset' ? `Offset · ${dtrLabel(req).replace('OFFSET · ', '')}` : LEAVE_TYPES[req.type].label
+    const head = req.type === 'offset' ? `Offset · ${hoursText(req.hours)}`
+        : isPartialDay(req) ? `${LEAVE_TYPES[req.type].label} · ${hoursText(req.hours)}`
+            : LEAVE_TYPES[req.type].label
     return req.reason ? `${head} — ${req.reason}` : head
 }
 
 /** Short DTR badge text: "SL", "VL", "OFFSET · 4 hrs". */
 export function dtrLabel(req) {
-    if (req.type === 'offset') return `OFFSET · ${round2(req.hours)} hr${Number(req.hours) === 1 ? '' : 's'}`
+    if (req.type === 'offset') return `OFFSET · ${hoursText(req.hours)}`
+    if (isPartialDay(req)) return `${LEAVE_TYPES[req.type].short} · ${hoursText(req.hours)}`
     return LEAVE_TYPES[req.type].short
 }

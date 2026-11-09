@@ -75,6 +75,6 @@ export function calendarEventFrom(req) {
         type: req.type,
         startDate: req.startDate,
         endDate: req.endDate,
-        hours: req.type === 'offset' ? Number(req.hours) || 0 : 0,
+        hours: Number(req.hours) || 0, // offset hours, or a part-day's hours; 0 for whole days
     }
 }

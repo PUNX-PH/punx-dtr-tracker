@@ -1,5 +1,5 @@
 import { CheckCircle2, Clock, XCircle } from 'lucide-react'
-import { LEAVE_TYPES, STATUS, formatAmount, formatRange, requestAmount } from '../../services/leave'
+import { LEAVE_TYPES, STATUS, formatRange, requestLabel } from '../../services/leave'
 
 const STATUS_STYLE = {
     [STATUS.PENDING]: { label: 'Pending', color: 'var(--accent-amber)', Icon: Clock },
@@ -50,7 +50,7 @@ export function RequestCard({ request, showEmployee = false, actions = null, chi
                     )}
                     <div className="flex flex-wrap items-center gap-2">
                         <TypeBadge type={request.type} />
-                        <span className="text-xs font-mono text-[var(--text-secondary)]">{formatAmount(request.type, requestAmount(request))}</span>
+                        <span className="text-xs font-mono text-[var(--text-secondary)]">{requestLabel(request)}</span>
                     </div>
                     <p className="text-sm text-[var(--text-primary)] mt-2">{formatRange(request)}</p>
                 </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Pencil, Save, X, Loader2, Zap, Trash2, Plus } from 'lucide-react'
 import { api } from '../services/api'
-import { leaveForDate, dtrLabel, leaveNote, LEAVE_TYPES } from '../services/leave'
+import { leaveForDate, dtrLabel, leaveNote, isPartialDay, LEAVE_TYPES } from '../services/leave'
 import { parseTime, toTime24, isComplete, isEmpty, formatHHMM } from '../services/time'
 
 // `leaves` is the person's leave/offset requests (any status — only approved
@@ -639,7 +639,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                             // A whole-day leave with nothing clocked reads "SL"/"VL" in
                             // the time cells instead of a bare dash. Offset is partial,
                             // so it keeps the dash and shows only the badge.
-                            const dayOffLabel = leave && leave.type !== 'offset' ? LEAVE_TYPES[leave.type].short : null
+                            const dayOffLabel = leave && leave.type !== 'offset' && !isPartialDay(leave) ? LEAVE_TYPES[leave.type].short : null
                             const dayOffCell = dayOffLabel
                                 ? <span className="font-bold text-xs tracking-wider" style={{ color: LEAVE_TYPES[leave.type].color }} title={LEAVE_TYPES[leave.type].label}>{dayOffLabel}</span>
                                 : '-'
@@ -654,7 +654,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                             style={{ color: LEAVE_TYPES[leave.type].color, background: `color-mix(in srgb, ${LEAVE_TYPES[leave.type].color} 14%, transparent)` }}
                                             title={`${LEAVE_TYPES[leave.type].label} — approved${leave.reviewerName ? ` by ${leave.reviewerName}` : ''}`}
                                         >
-                                            {leave.type === 'offset' ? dtrLabel(leave) : LEAVE_TYPES[leave.type].label}
+                                            {leave.type === 'offset' || isPartialDay(leave) ? dtrLabel(leave) : LEAVE_TYPES[leave.type].label}
                                         </span>
                                     )}
                                 </td>

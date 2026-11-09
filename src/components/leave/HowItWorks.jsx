@@ -61,6 +61,7 @@ export default function HowItWorks({ isSuperAdmin = false }) {
                             <Section title="Sick & vacation leave">
                                 <li>Counted in <strong>working days, Monday to Friday</strong>. Weekends inside a range are not charged. Holidays are not excluded yet, so a holiday inside a range still counts as a day.</li>
                                 <li>New people start with <strong>{DEFAULT_ALLOTMENT.sick} sick</strong> and <strong>{DEFAULT_ALLOTMENT.vacation} vacation</strong> days until HR sets their balance.</li>
+                                <li>For <strong>part of a day</strong> — a half day, an afternoon — choose “Part of a day” and enter the hours (half-hour steps, one date, up to {HOURS_PER_DAY}). It uses hours ÷ {HOURS_PER_DAY} of a day, so 4 hours is half a day.</li>
                                 <li><strong>Remaining</strong> = granted − used. Only <em>approved</em> requests are used.</li>
                                 <li><strong>Pending</strong> requests are set aside: they can’t be spent twice, but they aren’t used until approved.</li>
                             </Section>
