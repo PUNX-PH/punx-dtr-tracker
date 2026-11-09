@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Building2, Loader2, X } from 'lucide-react'
+import { CalendarDays, Loader2, X } from 'lucide-react'
 import { api, calendarApi, holidayApi, leaveApi, orgApi } from '../../services/api'
 import { holidaysForYears } from '../../services/holidays'
 import { monthBounds, monthGrid } from '../../services/calendar'
@@ -122,9 +122,9 @@ export default function DepartmentHub({ user }) {
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
             <div className="flex items-center gap-4">
-                <div className="p-3 bg-[var(--accent-purple)]/10 rounded-xl text-[var(--accent-purple)]"><Building2 size={22} /></div>
+                <div className="p-3 bg-[var(--accent-purple)]/10 rounded-xl text-[var(--accent-purple)]"><CalendarDays size={22} /></div>
                 <div>
-                    <h2 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">Department</h2>
+                    <h2 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">Calendar</h2>
                     <p className="text-[var(--text-muted)] text-sm">
                         {isAdmin ? 'Company-wide calendar, attendance and leave'
                             : canSeeTeam ? 'Calendar, attendance and leave for your departments'

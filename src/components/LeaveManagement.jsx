@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CalendarDays, Loader2, X } from 'lucide-react'
+import { Mail, Loader2, X } from 'lucide-react'
 import { api, leaveApi } from '../services/api'
 import { STATUS } from '../services/leave'
 import LeaveBalanceCards from './leave/LeaveBalanceCards'
@@ -84,7 +84,7 @@ export default function LeaveManagement({ user }) {
         <div className="space-y-6 animate-in fade-in duration-500">
             <div className="flex items-center gap-4">
                 <div className="p-3 bg-[var(--accent-purple)]/10 rounded-xl text-[var(--accent-purple)]">
-                    <CalendarDays size={22} />
+                    <Mail size={22} />
                 </div>
                 <div>
                     <h2 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">Leave & Offset</h2>

@@ -1,4 +1,4 @@
-import { LayoutDashboard, FileSpreadsheet, LogOut, Settings, Users, UserCheck, ChevronLeft, Send, CalendarDays, Building2 } from 'lucide-react'
+import { LayoutDashboard, FileSpreadsheet, LogOut, Settings, Users, UserCheck, ChevronLeft, Send, CalendarDays, Mail } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
 import { canUseLeave, canUseDepartment } from '../services/leave'
 
@@ -8,9 +8,9 @@ export default function Sidebar({ activeTab, onTabChange, onLogout, user, onClos
     const menuItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
 
-        ...(canUseLeave(user) ? [{ id: 'leave', label: 'Leave & Offset', icon: CalendarDays }] : []),
+        ...(canUseLeave(user) ? [{ id: 'leave', label: 'Leave & Offset', icon: Mail }] : []),
 
-        ...(canUseDepartment(user) ? [{ id: 'department', label: 'Department', icon: Building2 }] : []),
+        ...(canUseDepartment(user) ? [{ id: 'department', label: 'Calendar', icon: CalendarDays }] : []),
 
         { id: 'admin', label: 'Admin Dashboard', icon: Users, disabled: !['admin', 'super_admin'].includes(user.role) },
 
