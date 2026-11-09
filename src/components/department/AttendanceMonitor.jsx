@@ -7,9 +7,8 @@ import { DepartmentSelect, ErrorNote, MONTH_NAMES, MonthSwitcher } from './contr
 
 const SORTS = {
     name: { label: 'Name', fn: (a, b) => (a.user.name || '').localeCompare(b.user.name || '') },
-    absent: { label: 'Most absences', fn: (a, b) => b.summary.absent - a.summary.absent || (a.user.name || '').localeCompare(b.user.name || '') },
     late: { label: 'Most late', fn: (a, b) => b.summary.late - a.summary.late || (a.user.name || '').localeCompare(b.user.name || '') },
-    rate: { label: 'Lowest attendance', fn: (a, b) => (a.summary.attendanceRate ?? 101) - (b.summary.attendanceRate ?? 101) },
+    attended: { label: 'Most days attended', fn: (a, b) => b.summary.attended - a.summary.attended || (a.user.name || '').localeCompare(b.user.name || '') },
 }
 
 const tint = (color, pct = 16) => `color-mix(in srgb, ${color} ${pct}%, transparent)`
@@ -33,7 +32,7 @@ function DayStrip({ days }) {
         <div className="flex flex-wrap gap-1" role="list" aria-label="Day by day">
             {days.map(d => {
                 const s = DAY_STATUS[d.status]
-                const quiet = ['weekend', 'upcoming', 'untracked'].includes(d.status)
+                const quiet = ['weekend', 'upcoming', 'noentry'].includes(d.status)
                 const detail = d.holiday ? ` — ${d.holiday.name}` : d.leave ? ` — ${d.leave.type === 'offset' ? 'Offset' : 'Leave'}` : ''
                 return (
                     <span
@@ -55,7 +54,7 @@ function DayStrip({ days }) {
 /**
  * Attendance monitoring for the people a viewer manages (or everyone, for HR).
  * The numbers come from attendance.js — see its header for what "late" and
- * "absent" mean — so this screen only presents them.
+ * "present" mean — so this screen only presents them.
  */
 export default function AttendanceMonitor({
     cursor, onCursor, departments, scopeDepartments, deptFilter, onDeptFilter,
@@ -105,11 +104,9 @@ export default function AttendanceMonitor({
 
             <ErrorNote>{error}</ErrorNote>
 
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-                <Stat label="Attendance rate" value={totals.attendanceRate === null ? '—' : `${totals.attendanceRate}%`} color="var(--accent-green)" />
-                <Stat label="Days attended" value={totals.attended} />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <Stat label="Days attended" value={totals.attended} color="var(--accent-green)" />
                 <Stat label="Late arrivals" value={totals.late} color="var(--accent-amber)" />
-                <Stat label="Absences" value={totals.absent} color="var(--accent-red)" />
                 <Stat label="On leave / offset" value={totals.leave + totals.offset} color="var(--accent-blue)" />
             </div>
 
@@ -129,10 +126,8 @@ export default function AttendanceMonitor({
                                     <th scope="col" className="text-left px-4 py-3">Employee</th>
                                     <th scope="col" className="px-2 py-3 text-center">Present</th>
                                     <th scope="col" className="px-2 py-3 text-center">Late</th>
-                                    <th scope="col" className="px-2 py-3 text-center">Absent</th>
                                     <th scope="col" className="px-2 py-3 text-center">Leave</th>
                                     <th scope="col" className="px-2 py-3 text-center">Offset</th>
-                                    <th scope="col" className="px-2 py-3 text-center">Rate</th>
                                     <th scope="col" className="px-4 py-3"><span className="sr-only">Actions</span></th>
                                 </tr>
                             </thead>
@@ -157,10 +152,8 @@ export default function AttendanceMonitor({
                                                 </td>
                                                 <td className="px-2 py-3 text-center"><Count n={summary.present} color="var(--accent-green)" /></td>
                                                 <td className="px-2 py-3 text-center"><Count n={summary.late} color="var(--accent-amber)" /></td>
-                                                <td className="px-2 py-3 text-center"><Count n={summary.absent} color="var(--accent-red)" /></td>
                                                 <td className="px-2 py-3 text-center"><Count n={summary.leave} color="var(--accent-blue)" /></td>
                                                 <td className="px-2 py-3 text-center"><Count n={summary.offset} color="var(--accent-purple)" /></td>
-                                                <td className="px-2 py-3 text-center font-mono text-xs text-[var(--text-secondary)]">{summary.attendanceRate === null ? '—' : `${summary.attendanceRate}%`}</td>
                                                 <td className="px-4 py-3 text-right">
                                                     <button
                                                         onClick={() => onOpenDtr(user)}
@@ -172,10 +165,10 @@ export default function AttendanceMonitor({
                                             </tr>
                                             {isOpen && (
                                                 <tr className="border-b border-[var(--border)] bg-[var(--surface-2)]">
-                                                    <td colSpan={8} className="px-4 py-4">
+                                                    <td colSpan={5} className="px-4 py-4">
                                                         <DayStrip days={days} />
                                                         <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[10px] font-semibold text-[var(--text-muted)]">
-                                                            {['present', 'late', 'absent', 'leave', 'offset', 'holiday'].map(k => (
+                                                            {['present', 'late', 'leave', 'offset', 'holiday', 'noentry'].map(k => (
                                                                 <span key={k} className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: DAY_STATUS[k].color }} />{DAY_STATUS[k].label}</span>
                                                             ))}
                                                         </div>
@@ -192,8 +185,7 @@ export default function AttendanceMonitor({
             </section>
 
             <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
-                Late means the first time-in is after 9:00 AM. Absent means a finished working day with no time entry, no approved leave and no holiday.
-                Today is never counted as absent, and nothing counts before a person's start date.
+                Late means the first time-in is after 9:00 AM. A working day with no time entry shows as "No entry" and is not counted against anyone.
             </p>
         </div>
     )

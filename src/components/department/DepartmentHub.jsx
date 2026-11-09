@@ -99,10 +99,10 @@ export default function DepartmentHub({ user }) {
     const teamUsers = useMemo(() => usersInScope(scope, people), [scope, people])
     const scopeDepartments = useMemo(() => departmentsInScope(scope, departments), [scope, departments])
 
-    // One attendance load shared by the calendar's absences and the monitor.
+    // Everyone's logs for the month — only fetched while the Attendance tab is open.
     const attendance = useMonthAttendance({
         users: teamUsers, year: cursor.year, month: cursor.month,
-        leaveEvents: events, holidays, enabled: canSeeTeam,
+        leaveEvents: events, holidays, enabled: canSeeTeam && tab === 'attendance',
     })
 
     const closeDtr = useCallback(() => setDtrFor(null), [])
@@ -159,9 +159,8 @@ export default function DepartmentHub({ user }) {
                             cursor={cursor} onCursor={setCursor}
                             departments={departments} deptFilter={deptFilter} onDeptFilter={setDeptFilter}
                             holidays={holidays} leaveEvents={events}
-                            absenceRows={canSeeTeam ? attendance.rows : null}
-                            loading={eventsLoading || attendance.loading}
-                            error={error || attendance.error}
+                            loading={eventsLoading}
+                            error={error}
                             canSync={isAdmin} onSync={handleSync}
                         />
                     )}

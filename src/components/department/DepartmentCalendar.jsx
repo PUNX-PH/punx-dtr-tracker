@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Loader2, RefreshCw, UserX } from 'lucide-react'
+import { Loader2, RefreshCw } from 'lucide-react'
 import { HOLIDAY_TYPES, holidaysByDate } from '../../services/holidays'
 import { WEEKDAY_LABELS, eventsForDate, inDepartment, leaveTag, monthGrid } from '../../services/calendar'
 import { LEAVE_TYPES, formatYMD, toYMD } from '../../services/leave'
@@ -22,16 +22,13 @@ function Chip({ color, children, title }) {
 }
 
 /**
- * The company calendar: Philippine and company holidays, approved leave and
- * offsets for everyone, and — only for people allowed to see them — absences.
- *
- * It draws what it is given. WHO may see absences is decided where the rows are
- * built (DepartmentHub passes `absenceRows` only to managers and HR), so there
- * is no flag in here that could be flipped to leak them.
+ * The company calendar: Philippine and company holidays, and approved leave and
+ * offsets for everyone. Approved leave arrives as reason-free calendarEvents, so
+ * nothing private can be drawn from here.
  */
 export default function DepartmentCalendar({
     cursor, onCursor, departments, deptFilter, onDeptFilter,
-    holidays, leaveEvents, absenceRows = null, loading = false, error = '',
+    holidays, leaveEvents, loading = false, error = '',
     canSync = false, onSync,
 }) {
     const [selected, setSelected] = useState(toYMD(new Date()))
@@ -43,20 +40,7 @@ export default function DepartmentCalendar({
 
     const filteredLeaves = useMemo(() => leaveEvents.filter(inDepartment(deptFilter)), [leaveEvents, deptFilter])
 
-    // { ymd: [{ userId, userName, departmentId }] } — absent days only.
-    const absences = useMemo(() => {
-        const out = {}
-        if (!absenceRows) return out
-        for (const { user, days } of absenceRows) {
-            if (deptFilter && user.departmentId !== deptFilter) continue
-            for (const d of days) {
-                if (d.status === 'absent') (out[d.ymd] ||= []).push({ userId: user.id, userName: user.name || user.email || 'Unknown', departmentId: user.departmentId })
-            }
-        }
-        return out
-    }, [absenceRows, deptFilter])
-
-    const dayEvents = (ymd) => eventsForDate(ymd, { holidaysByDate: holidayIndex, leaves: filteredLeaves, absences })
+    const dayEvents = (ymd) => eventsForDate(ymd, { holidaysByDate: holidayIndex, leaves: filteredLeaves })
     const detail = dayEvents(selected)
 
     const upcoming = useMemo(
@@ -104,7 +88,6 @@ export default function DepartmentCalendar({
                             const items = [
                                 ...ev.holidays.map(h => ({ key: `h${h.id}`, color: HOLIDAY_TYPES[h.type].color, text: h.name, title: `${h.name} — ${HOLIDAY_TYPES[h.type].label}` })),
                                 ...ev.leaves.map(l => ({ key: `l${l.id}`, color: LEAVE_TYPES[l.type].color, text: `${l.userName} · ${leaveTag(l.type)}`, title: `${l.userName} — ${LEAVE_TYPES[l.type].label}` })),
-                                ...ev.absences.map(a => ({ key: `a${a.userId}`, color: 'var(--accent-red)', text: `${a.userName} · absent`, title: `${a.userName} — absent` })),
                             ]
                             const isSelected = selected === cell.ymd
                             const isToday = cell.ymd === today
@@ -141,7 +124,7 @@ export default function DepartmentCalendar({
                 <div className="space-y-4">
                     <section aria-live="polite" className="bg-[var(--surface-1)] border border-[var(--border)] rounded-3xl p-4 sm:p-5">
                         <h3 className="text-sm font-bold text-[var(--text-primary)]">{formatYMD(selected)}</h3>
-                        {detail.holidays.length + detail.leaves.length + detail.absences.length === 0 ? (
+                        {detail.holidays.length + detail.leaves.length === 0 ? (
                             <p className="text-sm text-[var(--text-muted)] mt-3">Nothing scheduled.</p>
                         ) : (
                             <div className="mt-3 space-y-4">
@@ -176,19 +159,6 @@ export default function DepartmentCalendar({
                                         </ul>
                                     </div>
                                 )}
-                                {detail.absences.length > 0 && (
-                                    <div>
-                                        <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--accent-red)] mb-1.5 flex items-center gap-1"><UserX size={11} /> Absent ({detail.absences.length})</p>
-                                        <ul className="space-y-1.5">
-                                            {detail.absences.map(a => (
-                                                <li key={a.userId} className="text-sm">
-                                                    <span className="text-[var(--text-primary)] block truncate">{a.userName}</span>
-                                                    <span className="text-[10px] text-[var(--text-muted)] block truncate">{departmentName(departments, a.departmentId)}</span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )}
                             </div>
                         )}
                     </section>
@@ -215,7 +185,6 @@ export default function DepartmentCalendar({
                     <section aria-label="Legend" className="flex flex-wrap gap-x-4 gap-y-1.5 px-1 text-[10px] font-semibold text-[var(--text-muted)]">
                         {Object.values(HOLIDAY_TYPES).map(t => <span key={t.label} className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: t.color }} />{t.short} holiday</span>)}
                         {Object.values(LEAVE_TYPES).map(t => <span key={t.label} className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: t.color }} />{t.label}</span>)}
-                        {absenceRows && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[var(--accent-red)]" />Absent</span>}
                     </section>
                 </div>
             </div>

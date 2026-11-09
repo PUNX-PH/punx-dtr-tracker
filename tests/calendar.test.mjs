@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict'
 import { easterSunday, phHolidays, mergeHolidays, holidaysByDate, holidaysForYears } from '../src/services/holidays.js'
 import { deriveManaged, scopeFor, inScope, usersInScope, orgFields, orgTitle, departmentsInScope } from '../src/services/org.js'
-import { workedDays, isLate, dayStatus, classifyRange, summarizeDays, trackedFrom } from '../src/services/attendance.js'
+import { DAY_STATUS, workedDays, isLate, dayStatus, classifyRange, summarizeDays } from '../src/services/attendance.js'
 import { monthGrid, monthBounds, addMonths, leavesOnDate, eventsForDate, calendarEventFrom } from '../src/services/calendar.js'
 import { toYMD, canUseDepartment } from '../src/services/leave.js'
 
@@ -152,12 +152,15 @@ it('9:00 is on time, 9:01 is late', () => {
   assert.equal(isLate(new Date(2026, 9, 5, 9, 1)), true)
 })
 const TODAY = '2026-10-14'
-const status = (o) => dayStatus({ today: TODAY, from: '2026-10-01', ...o })
-it('a past weekday with nothing on it is ABSENT', () => assert.equal(status({ ymd: '2026-10-07' }), 'absent'))
-it('today is never absent — the day is not over', () => assert.equal(status({ ymd: TODAY }), 'upcoming'))
-it('weekends are not absences', () => assert.equal(status({ ymd: '2026-10-10' }), 'weekend'))
-it('a holiday is not an absence', () => assert.equal(status({ ymd: '2026-10-07', holiday: { name: 'X' } }), 'holiday'))
-it('approved leave is not an absence', () => {
+const status = (o) => dayStatus({ today: TODAY, ...o })
+it('a past weekday with nothing on it is just "no entry" — there is no absent status', () => {
+  assert.equal(status({ ymd: '2026-10-07' }), 'noentry')
+  assert.ok(!('absent' in DAY_STATUS))
+})
+it('today is never "no entry" — the day is not over', () => assert.equal(status({ ymd: TODAY }), 'upcoming'))
+it('weekends stay weekends', () => assert.equal(status({ ymd: '2026-10-10' }), 'weekend'))
+it('a holiday is a holiday', () => assert.equal(status({ ymd: '2026-10-07', holiday: { name: 'X' } }), 'holiday'))
+it('approved leave is leave / offset', () => {
   assert.equal(status({ ymd: '2026-10-07', leave: { type: 'sick' } }), 'leave')
   assert.equal(status({ ymd: '2026-10-07', leave: { type: 'offset' } }), 'offset')
 })
@@ -171,36 +174,20 @@ it('late only on a normal working day', () => {
   assert.equal(status({ ymd: '2026-10-07', worked }), 'late')
   assert.equal(status({ ymd: '2026-10-07', worked, holiday: { name: 'X' } }), 'present')
 })
-it('nothing counts against someone before they joined', () =>
-  assert.equal(dayStatus({ ymd: '2026-10-02', today: TODAY, from: '2026-10-05' }), 'untracked'))
-it('no join date and no entries means no absences (nothing to measure against)', () =>
-  assert.equal(dayStatus({ ymd: '2026-10-07', today: TODAY, from: null }), 'untracked'))
-it('trackedFrom prefers the profile date, then the first entry', () => {
-  const ts = { toDate: () => new Date(2026, 8, 1) }
-  assert.equal(trackedFrom({ createdAt: ts }, {}), '2026-09-01')
-  assert.equal(trackedFrom({}, { '2026-10-05': {}, '2026-10-02': {} }), '2026-10-02')
-  assert.equal(trackedFrom({}, {}), null)
-})
 it('classifyRange + summarizeDays over a real week', () => {
   const logs = [at('2026-10-05', 9, 0), at('2026-10-06', 9, 30), at('2026-10-08', 9, 0)] // Mon on time, Tue late, Thu on time
   const leaves = [{ status: 'approved', type: 'sick', startDate: '2026-10-07', endDate: '2026-10-07' }] // Wed
   const hol = { '2026-10-09': [{ name: 'Test Holiday' }] } // Fri
-  const days = classifyRange({ startYMD: '2026-10-05', endYMD: '2026-10-11', logs, leaves, holidaysByDate: hol, today: TODAY, user: { createdAt: { toDate: () => new Date(2026, 9, 1) } } })
+  const days = classifyRange({ startYMD: '2026-10-05', endYMD: '2026-10-11', logs, leaves, holidaysByDate: hol, today: TODAY })
   assert.deepEqual(days.map(d => d.status), ['present', 'late', 'leave', 'present', 'holiday', 'weekend', 'weekend'])
   const s = summarizeDays(days)
-  assert.equal(s.attended, 3); assert.equal(s.late, 1); assert.equal(s.leave, 1); assert.equal(s.absent, 0); assert.equal(s.holiday, 1)
-  assert.equal(s.attendanceRate, 100) // 3 attended of 3 expected — the leave day and the holiday are not expected days
+  assert.equal(s.attended, 3); assert.equal(s.late, 1); assert.equal(s.leave, 1); assert.equal(s.holiday, 1); assert.equal(s.noentry, 0)
+  assert.ok(!('absent' in s)); assert.ok(!('attendanceRate' in s))
 })
-it('taking approved leave never lowers the rate', () => {
-  const days = classifyRange({ startYMD: '2026-10-05', endYMD: '2026-10-08', logs: [at('2026-10-05', 9, 0)], leaves: [{ status: 'approved', type: 'vacation', startDate: '2026-10-06', endDate: '2026-10-08' }], today: TODAY, user: { createdAt: { toDate: () => new Date(2026, 9, 1) } } })
-  assert.equal(summarizeDays(days).leave, 3)
-  assert.equal(summarizeDays(days).attendanceRate, 100)
-})
-it('an absent day lowers the rate; nothing due yet is null, not 0%', () => {
-  const days = classifyRange({ startYMD: '2026-10-05', endYMD: '2026-10-06', logs: [at('2026-10-05', 9, 0)], leaves: [], today: TODAY, user: { createdAt: { toDate: () => new Date(2026, 9, 1) } } })
-  assert.equal(summarizeDays(days).absent, 1)
-  assert.equal(summarizeDays(days).attendanceRate, 50)
-  assert.equal(summarizeDays([]).attendanceRate, null)
+it('a working day with nothing on it counts as no entry, not as anything worse', () => {
+  const days = classifyRange({ startYMD: '2026-10-05', endYMD: '2026-10-06', logs: [at('2026-10-05', 9, 0)], leaves: [], today: TODAY })
+  const s = summarizeDays(days)
+  assert.equal(s.noentry, 1); assert.equal(s.attended, 1)
 })
 it('local time: a 9 AM clock-in lands on that calendar day, not the UTC one', () => {
   const w = workedDays([at('2026-10-05', 0, 30)]) // 12:30 AM local is the previous day in UTC east of Greenwich
@@ -243,13 +230,13 @@ it('a Fri–Mon leave paints Fri and Mon, not the weekend', () => {
   assert.equal(leavesOnDate(e, '2026-10-18').length, 0)
   assert.equal(leavesOnDate(e, '2026-10-19').length, 1)
 })
-it('eventsForDate bundles holidays, leave and absences for the day', () => {
+it('eventsForDate bundles holidays and leave for the day', () => {
   const out = eventsForDate('2026-10-16', {
     holidaysByDate: { '2026-10-16': [{ name: 'H' }] },
     leaves: [ev({})],
-    absences: { '2026-10-16': [{ userId: 'x' }] },
   })
-  assert.equal(out.holidays.length, 1); assert.equal(out.leaves.length, 1); assert.equal(out.absences.length, 1)
+  assert.equal(out.holidays.length, 1); assert.equal(out.leaves.length, 1)
+  assert.ok(!('absences' in out))
 })
 it('the calendar event copied from a request carries no reason', () => {
   const e = calendarEventFrom({ userId: 'u', userName: 'U', type: 'sick', startDate: 'a', endDate: 'b', reason: 'chemo', reviewNote: 'x' })

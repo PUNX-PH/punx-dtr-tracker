@@ -1,19 +1,18 @@
 // Attendance monitoring: what happened on each working day, per person. Pure,
-// so the rules for "absent" and "late" live in one place and are tested
+// so the rule for "late" lives in one place and is tested
 // (tests/calendar.test.mjs) instead of being re-derived inside a component.
 //
-// A day is classified from four inputs only — the person's logs, their approved
-// leave, the holidays, and today's date — and never from anything the person can
-// type into a "status" field.
+// There is deliberately no "absent": a weekday with no time entry is shown as
+// "No entry" and nothing more. Whether that means anything is a conversation, not
+// something this screen should decide.
 //
-// ASSUMPTIONS HR SHOULD CONFIRM (they are constants below, one line each)
-//   WORK_START      9:00 AM, the same shift Smart Fill uses (9am–6pm). Arriving
-//                   after it is "late". There is no grace period yet.
-//   Present         any real time entry that day: IN, OUT, OT_IN or OT_OUT.
-//                   (EDIT / REASON / NOTE rows are bookkeeping, not attendance.)
-//   Absent          a working day that has ENDED, with no entry, no approved
-//                   leave and no holiday. Today is never absent — the day is not over.
-//   Before they joined (or logged their first day) nothing counts against them.
+// A day is classified from the person's logs, their approved leave, the holidays
+// and today's date — never from anything the person can type into a status field.
+//
+//   WORK_START   9:00 AM, the same shift Smart Fill uses (9am–6pm). Arriving after
+//                it is "late". There is no grace period yet.
+//   Present      any real time entry that day: IN, OUT, OT_IN or OT_OUT.
+//                (EDIT / REASON / NOTE rows are bookkeeping, not attendance.)
 
 import { parseYMD, toYMD, isWeekday, leaveForDate } from './leave.js'
 
@@ -24,13 +23,12 @@ const WORK_LOG_TYPES = new Set(['IN', 'OUT', 'OT_IN', 'OT_OUT'])
 export const DAY_STATUS = {
     present: { label: 'Present', short: 'P', color: 'var(--accent-green)' },
     late: { label: 'Late', short: 'L', color: 'var(--accent-amber)' },
-    absent: { label: 'Absent', short: 'A', color: 'var(--accent-red)' },
     leave: { label: 'On leave', short: 'LV', color: 'var(--accent-blue)' },
     offset: { label: 'Offset', short: 'OS', color: 'var(--accent-purple)' },
     holiday: { label: 'Holiday', short: 'H', color: 'var(--accent-purple)' },
     weekend: { label: 'Weekend', short: '', color: 'var(--text-muted)' },
+    noentry: { label: 'No entry', short: '', color: 'var(--text-muted)' },
     upcoming: { label: 'Not yet', short: '', color: 'var(--text-muted)' },
-    untracked: { label: 'Before start', short: '', color: 'var(--text-muted)' },
 }
 
 const asDate = (v) => (v instanceof Date ? v : new Date(v))
@@ -58,41 +56,28 @@ export function isLate(firstIn) {
     return !!firstIn && minutesOfDay(firstIn) > WORK_START_MINUTES
 }
 
-/** The first date attendance can be held against someone: when they joined, else their first entry. */
-export function trackedFrom(user, days) {
-    const created = user?.createdAt
-    const createdDate = created && typeof created.toDate === 'function' ? created.toDate() : null
-    if (createdDate) return toYMD(createdDate)
-    const keys = Object.keys(days).sort()
-    return keys.length ? keys[0] : null
-}
-
 /**
  * One day's status.
  *   ymd        'YYYY-MM-DD'
  *   worked     workedDays()[ymd] or undefined
  *   leave      the approved request covering the day, if any (leaveForDate)
  *   holiday    a holiday on the day, if any
- *   today      'YYYY-MM-DD'
- *   from       trackedFrom() — days before it are 'untracked'
+ *   today      'YYYY-MM-DD' — today and later are 'upcoming', never 'noentry'
  */
-export function dayStatus({ ymd, worked, leave, holiday, today, from }) {
+export function dayStatus({ ymd, worked, leave, holiday, today }) {
     const date = parseYMD(ymd)
-    if (!date) return 'untracked'
-    if (from && ymd < from && !worked) return 'untracked'
+    if (!date) return 'noentry'
     if (worked) return isLate(worked.firstIn) && isWeekday(date) && !holiday ? 'late' : 'present'
     if (!isWeekday(date)) return 'weekend'
     if (holiday) return 'holiday'
     if (leave) return leave.type === 'offset' ? 'offset' : 'leave'
     if (ymd >= today) return 'upcoming'
-    if (!from) return 'untracked' // no join date and no entries at all: nothing to hold against them
-    return 'absent'
+    return 'noentry'
 }
 
 /** Every date in [startYMD, endYMD] as a status list: [{ ymd, status, leave?, holiday? }]. */
-export function classifyRange({ startYMD, endYMD, logs, leaves, holidaysByDate = {}, today, user }) {
+export function classifyRange({ startYMD, endYMD, logs, leaves, holidaysByDate = {}, today }) {
     const worked = workedDays(logs)
-    const from = trackedFrom(user, worked)
     const out = []
     const start = parseYMD(startYMD)
     const end = parseYMD(endYMD)
@@ -105,25 +90,15 @@ export function classifyRange({ startYMD, endYMD, logs, leaves, holidaysByDate =
             ymd,
             leave,
             holiday,
-            status: dayStatus({ ymd, worked: worked[ymd], leave, holiday, today, from }),
+            status: dayStatus({ ymd, worked: worked[ymd], leave, holiday, today }),
         })
     }
     return out
 }
 
-/** Counts per status, over working days only (weekend/upcoming/untracked are not "days worked"). */
+/** Counts per status. "Attended" counts a late arrival too — they were there. */
 export function summarizeDays(days) {
-    const totals = { present: 0, late: 0, absent: 0, leave: 0, offset: 0, holiday: 0 }
+    const totals = { present: 0, late: 0, leave: 0, offset: 0, holiday: 0, noentry: 0 }
     for (const d of days) if (d.status in totals) totals[d.status]++
-    // "Attended" counts a late arrival too — they were there.
-    const attended = totals.present + totals.late
-    // Days they were EXPECTED in: attended + absent. Approved leave and holidays are
-    // not expected days, so taking leave never lowers someone's rate.
-    const expected = attended + totals.absent
-    return {
-        ...totals,
-        attended,
-        // Share of expected days actually attended. null when nothing was due yet.
-        attendanceRate: expected === 0 ? null : Math.round((attended / expected) * 100),
-    }
+    return { ...totals, attended: totals.present + totals.late }
 }

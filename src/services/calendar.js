@@ -48,17 +48,11 @@ export function leavesOnDate(events, ymd) {
     })
 }
 
-/**
- * Everything on one day: holidays, who is on leave, who was absent. `absences`
- * is { [ymd]: [{ userId, userName, departmentId }] } and is only ever passed in
- * for people allowed to see it (managers, HR) — the calendar draws what it is
- * handed, so who sees absences is decided where it is built, not in here.
- */
-export function eventsForDate(ymd, { holidaysByDate = {}, leaves = [], absences = {} }) {
+/** Everything on one day: the holidays and who is on leave. */
+export function eventsForDate(ymd, { holidaysByDate = {}, leaves = [] }) {
     return {
         holidays: holidaysByDate[ymd] || [],
         leaves: leavesOnDate(leaves, ymd),
-        absences: absences[ymd] || [],
     }
 }
 

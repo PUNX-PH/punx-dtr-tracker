@@ -34,7 +34,7 @@ export default function useMonthAttendance({ users, year, month, leaveEvents, ho
     const [nonce, setNonce] = useState(0)
     // Which (people, month) the logs in state belong to. Rows are only built once
     // it matches what is being asked for — before that, every day would classify
-    // as absent for a split second, which is a false report, not a loading state.
+    // as "no entry" for a split second, which is a false report, not a loading state.
     const [loadedFor, setLoadedFor] = useState('')
 
     const idsKey = users.map(u => u.id).sort().join(',')
@@ -76,7 +76,7 @@ export default function useMonthAttendance({ users, year, month, leaveEvents, ho
                 startYMD: start, endYMD: end,
                 logs: logsByUser[user.id] || [],
                 leaves: approved.filter(e => e.userId === user.id),
-                holidaysByDate: byDate, today, user,
+                holidaysByDate: byDate, today,
             })
             return { user, days, summary: summarizeDays(days) }
         })
