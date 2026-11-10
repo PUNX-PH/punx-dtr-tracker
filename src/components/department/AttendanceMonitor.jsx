@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, FileText, Loader2, RefreshCw, Search } from 'lucide-react'
 import { DAY_STATUS, summarizeDays } from '../../services/attendance'
-import { formatYMD } from '../../services/leave'
+import { formatYMD, parseYMD, toYMD } from '../../services/leave'
+import { WEEKDAY_LABELS } from '../../services/calendar'
 import { departmentName } from '../../services/org'
 import { DepartmentSelect, ErrorNote, MONTH_NAMES, MonthSwitcher } from './controls'
 
@@ -26,27 +27,67 @@ const Count = ({ n, color }) => (
     <span className={n === 0 ? 'text-[var(--text-muted)]' : 'font-bold'} style={n === 0 ? undefined : { color }}>{n}</span>
 )
 
-/** One person's month as a strip of coloured days. Weekends are drawn faint so the working days read. */
-function DayStrip({ days }) {
+const LEGEND = ['present', 'late', 'leave', 'offset', 'holiday', 'noentry']
+
+/**
+ * One person's month as a calendar: weekday columns, every day in its place, so
+ * "what happened on the 12th" is found by position like any wall calendar. The
+ * colour says what kind of day it was and the small letter repeats it, so it
+ * doesn't rely on colour alone. Weekends and days still to come are drawn faint;
+ * a working day with nothing on it is dashed — empty, not wrong.
+ */
+function MonthCalendar({ days, summary }) {
+    const today = toYMD(new Date())
+    const lead = days.length ? parseYMD(days[0].ymd).getDay() : 0 // blanks before the 1st, Sunday-first
+
     return (
-        <div className="flex flex-wrap gap-1" role="list" aria-label="Day by day">
-            {days.map(d => {
-                const s = DAY_STATUS[d.status]
-                const quiet = ['weekend', 'upcoming', 'noentry'].includes(d.status)
-                const detail = d.holiday ? ` — ${d.holiday.name}` : d.leave ? ` — ${d.leave.type === 'offset' ? 'Offset' : 'Leave'}` : ''
-                return (
-                    <span
-                        key={d.ymd}
-                        role="listitem"
-                        title={`${formatYMD(d.ymd)}: ${s.label}${detail}`}
-                        aria-label={`${formatYMD(d.ymd)}: ${s.label}`}
-                        className={`w-7 h-7 rounded-md flex items-center justify-center text-[9px] font-bold ${quiet ? 'opacity-50' : ''}`}
-                        style={{ color: s.color, background: quiet ? 'var(--surface-3)' : tint(s.color) }}
-                    >
-                        {d.ymd.slice(8)}
-                    </span>
-                )
-            })}
+        <div className="flex flex-wrap items-start gap-x-8 gap-y-4">
+            <div className="w-full max-w-md" role="grid" aria-label="Day by day">
+                <div className="grid grid-cols-7 gap-1 mb-1" role="row">
+                    {WEEKDAY_LABELS.map(w => (
+                        <div key={w} role="columnheader" className="text-center text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] py-1">{w}</div>
+                    ))}
+                </div>
+                <div className="grid grid-cols-7 gap-1">
+                    {Array.from({ length: lead }).map((_, i) => <div key={`b${i}`} aria-hidden="true" />)}
+                    {days.map(d => {
+                        const st = DAY_STATUS[d.status]
+                        const faint = d.status === 'weekend' || d.status === 'upcoming'
+                        const empty = d.status === 'noentry'
+                        const detail = d.holiday ? ` — ${d.holiday.name}` : d.leave ? ` — ${d.leave.type === 'offset' ? 'Offset' : 'Leave'}` : ''
+                        const isToday = d.ymd === today
+                        return (
+                            <div
+                                key={d.ymd}
+                                role="gridcell"
+                                title={`${formatYMD(d.ymd)}: ${st.label}${detail}`}
+                                aria-label={`${formatYMD(d.ymd)}: ${st.label}${detail}`}
+                                className={`h-12 rounded-lg px-1.5 py-1 flex flex-col justify-between border
+                                    ${empty ? 'border-dashed border-[var(--border-strong)]' : 'border-transparent'}
+                                    ${isToday ? 'ring-2 ring-[var(--accent-purple)]' : ''}`}
+                                style={{
+                                    background: faint ? 'var(--surface-3)' : empty ? 'transparent' : tint(st.color),
+                                    opacity: faint ? 0.55 : 1,
+                                }}
+                            >
+                                <span className="text-xs font-bold leading-none" style={{ color: faint || empty ? 'var(--text-secondary)' : st.color }}>{Number(d.ymd.slice(8))}</span>
+                                <span className="text-[9px] font-bold leading-none self-end" style={{ color: st.color }}>{st.short}</span>
+                            </div>
+                        )
+                    })}
+                </div>
+            </div>
+
+            {/* The month at a glance, doubling as the key */}
+            <ul className="flex flex-col gap-2 min-w-[10rem] pt-7" aria-label="Key">
+                {LEGEND.map(k => (
+                    <li key={k} className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                        <span className="w-3 h-3 rounded-[4px] shrink-0 border" style={k === 'noentry' ? { borderStyle: 'dashed', borderColor: 'var(--border-strong)' } : { background: tint(DAY_STATUS[k].color, 30), borderColor: 'transparent' }} />
+                        <span className="flex-1">{DAY_STATUS[k].label}</span>
+                        <span className="font-bold tabular-nums" style={{ color: summary[k] > 0 ? DAY_STATUS[k].color : 'var(--text-muted)' }}>{summary[k]}</span>
+                    </li>
+                ))}
+            </ul>
         </div>
     )
 }
@@ -165,13 +206,8 @@ export default function AttendanceMonitor({
                                             </tr>
                                             {isOpen && (
                                                 <tr className="border-b border-[var(--border)] bg-[var(--surface-2)]">
-                                                    <td colSpan={5} className="px-4 py-4">
-                                                        <DayStrip days={days} />
-                                                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[10px] font-semibold text-[var(--text-muted)]">
-                                                            {['present', 'late', 'leave', 'offset', 'holiday', 'noentry'].map(k => (
-                                                                <span key={k} className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: DAY_STATUS[k].color }} />{DAY_STATUS[k].label}</span>
-                                                            ))}
-                                                        </div>
+                                                    <td colSpan={6} className="px-4 py-5">
+                                                        <MonthCalendar days={days} summary={summary} />
                                                     </td>
                                                 </tr>
                                             )}
