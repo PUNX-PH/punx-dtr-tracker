@@ -48,7 +48,7 @@ export default function DepartmentCalendar({
     const detail = dayEvents(selected)
 
     const upcoming = useMemo(
-        () => holidays.filter(h => h.date >= today).slice(0, 5),
+        () => holidays.filter(h => (h.endDate || h.date) >= today).slice(0, 5),
         [holidays, today]
     )
 
@@ -90,7 +90,7 @@ export default function DepartmentCalendar({
                         {grid.map((cell, i) => {
                             const ev = dayEvents(cell.ymd)
                             const items = [
-                                ...ev.holidays.map(h => ({ key: `h${h.id}`, color: HOLIDAY_TYPES[h.type].color, text: h.name, solid: true, title: `${h.name} — ${HOLIDAY_TYPES[h.type].label}` })),
+                                ...ev.holidays.map(h => ({ key: `h${h.id}`, color: HOLIDAY_TYPES[h.type].color, text: h.days > 1 ? `${h.name} (${h.day}/${h.days})` : h.name, solid: true, title: `${h.name}${h.days > 1 ? ` — day ${h.day} of ${h.days}` : ''} — ${HOLIDAY_TYPES[h.type].label}` })),
                                 ...ev.leaves.map(l => ({ key: `l${l.id}`, color: LEAVE_TYPES[l.type].color, text: `${l.userName} · ${leaveTag(l.type)}${l.type !== 'offset' && l.hours > 0 ? ` ${l.hours}h` : ''}`, title: `${l.userName} — ${LEAVE_TYPES[l.type].label}` })),
                             ]
                             const isSelected = selected === cell.ymd
@@ -138,7 +138,7 @@ export default function DepartmentCalendar({
                                         <ul className="space-y-1.5">
                                             {detail.holidays.map(h => (
                                                 <li key={h.id} className="flex items-center justify-between gap-2 text-sm">
-                                                    <span className="text-[var(--text-primary)] min-w-0 truncate">{h.name}</span>
+                                                    <span className="text-[var(--text-primary)] min-w-0 truncate">{h.name}{h.days > 1 && <span className="text-[10px] text-[var(--text-muted)]"> · day {h.day} of {h.days}</span>}</span>
                                                     <span className="text-[10px] font-bold uppercase shrink-0" style={{ color: HOLIDAY_TYPES[h.type].color }}>{HOLIDAY_TYPES[h.type].short}</span>
                                                 </li>
                                             ))}
@@ -177,7 +177,7 @@ export default function DepartmentCalendar({
                                     <li key={h.id}>
                                         <button onClick={() => { const [y, m] = h.date.split('-').map(Number); onCursor({ year: y, month: m - 1 }); setSelected(h.date) }} className="w-full flex items-center justify-between gap-2 text-left text-sm hover:text-[var(--accent-purple)] transition-colors">
                                             <span className="min-w-0 truncate text-[var(--text-primary)]">{h.name}</span>
-                                            <span className="text-xs text-[var(--text-muted)] shrink-0">{formatYMD(h.date).replace(/ \d{4}$/, '')}</span>
+                                            <span className="text-xs text-[var(--text-muted)] shrink-0">{formatYMD(h.date).replace(/ \d{4}$/, '')}{h.days > 1 ? ` · ${h.days} days` : ''}</span>
                                         </button>
                                     </li>
                                 ))}

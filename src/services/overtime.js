@@ -23,8 +23,9 @@ const round2 = (n) => Math.round(n * 100) / 100
 /**
  * OT sessions from raw logs. A session is an OT_IN and an OT_OUT with the same
  * local calendar day and session number (a day can have several — "split OT").
- * Returns { hours, sessions, skipped }:
- *   hours     total of the complete, sensible sessions
+ * Returns { hours, minutes, sessions, skipped }:
+ *   hours     total of the complete, sensible sessions (2 decimals)
+ *   minutes   the same total in whole minutes — what "X hrs Y mins" is built from
  *   sessions  how many were counted
  *   skipped   sessions with an IN but no OUT (or the reverse), or an OUT that is
  *             not after the IN. They count for nothing rather than guessing — an
@@ -53,7 +54,18 @@ export function otHoursFromLogs(logs = []) {
         minutes += Math.round((end - start) / 60000)
         sessions++
     }
-    return { hours: round2(minutes / 60), sessions, skipped }
+    return { hours: round2(minutes / 60), minutes, sessions, skipped }
+}
+
+/** 1590 → "26 hrs 30 mins"; 60 → "1 hr"; 61 → "1 hr 1 min"; 0 → "0 mins". */
+export function formatDuration(totalMinutes) {
+    const m = Math.max(0, Math.round(Number(totalMinutes) || 0))
+    const h = Math.floor(m / 60)
+    const r = m % 60
+    const parts = []
+    if (h > 0) parts.push(`${h} hr${h === 1 ? '' : 's'}`)
+    if (r > 0 || h === 0) parts.push(`${r} min${r === 1 ? '' : 's'}`)
+    return parts.join(' ')
 }
 
 /** { kept, excess }: what stays overtime and what becomes offset. */

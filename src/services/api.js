@@ -2,6 +2,7 @@ import { auth, db } from '../firebase';
 import { collection, query, where, getDocs, getDoc, setDoc, addDoc, updateDoc, deleteDoc, doc, Timestamp, orderBy, limit, onSnapshot, writeBatch, runTransaction } from "firebase/firestore";
 import { DEFAULT_ALLOTMENT, LEAVE_TYPE_KEYS, LEAVE_TYPES, STATUS, summarize, validateRequest, formatAmount, formatRange, requestAmount, requestLabel, canSeeOvertimeOffset } from './leave';
 import { orgFields } from './org';
+import { spanDays, MAX_SPAN_DAYS } from './holidays';
 import { calendarEventFrom } from './calendar';
 import { otHoursFromLogs, splitOT, cutoffWindow, offsetEarnedByUser, OT_THRESHOLD_HOURS } from './overtime';
 
@@ -1258,12 +1259,21 @@ export const holidayApi = {
      * Add a company holiday (id = null) or save an edit. Editing a built-in
      * holiday writes a doc under its own `ph-…` id, which overrides it.
      */
-    save: async (id, { date, name, type }) => {
+    save: async (id, { date, endDate = '', name, type, recurring = false }) => {
         try {
             const clean = (name || '').trim().slice(0, 80);
             if (!clean) return { success: false, message: "Give the holiday a name." };
             if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return { success: false, message: "Pick a date." };
-            const data = { date, name: clean, type, hidden: false, updatedAt: Timestamp.now() };
+            // Optional end date for a holiday that lasts several days.
+            if (endDate) {
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return { success: false, message: "Pick a valid end date." };
+                if (endDate < date) return { success: false, message: "The end date is before the start date." };
+                if (spanDays(date, endDate) > MAX_SPAN_DAYS) return { success: false, message: `A holiday can last at most ${MAX_SPAN_DAYS} days.` };
+            }
+            // A built-in override belongs to one year's date; the built-in list already
+            // generates every year, so it never repeats.
+            const repeats = recurring === true && !(id && id.startsWith('ph-'));
+            const data = { date, endDate: endDate && endDate !== date ? endDate : '', name: clean, type, recurring: repeats, hidden: false, updatedAt: Timestamp.now() };
             if (id) await setDoc(doc(db, "holidays", id), data);
             else await addDoc(collection(db, "holidays"), data);
             return { success: true };
@@ -1276,14 +1286,28 @@ export const holidayApi = {
     /** Take a holiday off the calendar. A built-in one is hidden (a flag), because deleting it would let the built-in list put it straight back. */
     remove: async (holiday) => {
         try {
-            if (holiday.id.startsWith('ph-')) {
-                await setDoc(doc(db, "holidays", holiday.id), { hidden: true, date: holiday.date, name: holiday.name, type: holiday.type, updatedAt: Timestamp.now() });
+            // A repeating holiday is one stored doc behind many dates: removing any
+            // occurrence removes the doc, so it is gone from every year.
+            const docId = holiday.seriesId || holiday.id;
+            if (docId.startsWith('ph-')) {
+                await setDoc(doc(db, "holidays", docId), { hidden: true, date: holiday.date, name: holiday.name, type: holiday.type, updatedAt: Timestamp.now() });
             } else {
-                await deleteDoc(doc(db, "holidays", holiday.id));
+                await deleteDoc(doc(db, "holidays", docId));
             }
             return { success: true };
         } catch (error) {
             console.error("Remove holiday error", error);
+            return { success: false, message: error.message };
+        }
+    },
+
+    /** Stop a holiday repeating every year. It stays on its first date; later years drop it. */
+    stopRepeating: async (seriesId) => {
+        try {
+            await updateDoc(doc(db, "holidays", seriesId), { recurring: false, updatedAt: Timestamp.now() });
+            return { success: true };
+        } catch (error) {
+            console.error("Stop repeating holiday error", error);
             return { success: false, message: error.message };
         }
     },

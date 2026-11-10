@@ -2,7 +2,7 @@
 // and the month grid. No Firebase: these are the rules the Department Calendar,
 // Attendance and Leave history screens all lean on.
 import assert from 'node:assert/strict'
-import { easterSunday, phHolidays, mergeHolidays, holidaysByDate, holidaysForYears, HOLIDAY_TYPES } from '../src/services/holidays.js'
+import { easterSunday, phHolidays, mergeHolidays, holidaysByDate, holidaysForYears, HOLIDAY_TYPES, spanDays, MAX_SPAN_DAYS } from '../src/services/holidays.js'
 import { deriveManaged, scopeFor, inScope, usersInScope, orgFields, orgTitle, departmentsInScope } from '../src/services/org.js'
 import { DAY_STATUS, workedDays, isLate, dayStatus, classifyRange, summarizeDays } from '../src/services/attendance.js'
 import { monthGrid, monthBounds, addMonths, leavesOnDate, eventsForDate, calendarEventFrom } from '../src/services/calendar.js'
@@ -91,6 +91,73 @@ it('two holidays on one date both show', () => {
 it('a view that spans New Year gets both years', () => {
   const m = holidaysForYears([2026, 2027, 2026], [])
   assert.ok(m.some(h => h.date === '2026-12-25') && m.some(h => h.date === '2027-01-01'))
+})
+
+console.log('\nholidays that repeat every year')
+const company = (o) => ({ id: 'co1', date: '2026-07-10', name: 'Foundation Day', type: 'company', ...o })
+const yearsOf = (list, name) => list.filter(h => h.name === name).map(h => h.date)
+it('a repeating holiday lands on the same date every year from its first year', () => {
+  const m = holidaysForYears([2026, 2027, 2028], [company({ recurring: true })])
+  assert.deepEqual(yearsOf(m, 'Foundation Day'), ['2026-07-10', '2027-07-10', '2028-07-10'])
+})
+it('...and never before the year it starts', () => {
+  const m = holidaysForYears([2024, 2025, 2026], [company({ recurring: true })])
+  assert.deepEqual(yearsOf(m, 'Foundation Day'), ['2026-07-10'])
+})
+it('each occurrence has its own id but they all point at the one stored doc', () => {
+  const m = holidaysForYears([2026, 2027], [company({ recurring: true })]).filter(h => h.name === 'Foundation Day')
+  assert.deepEqual(m.map(h => h.id), ['co1@2026', 'co1@2027'])
+  assert.ok(m.every(h => h.seriesId === 'co1' && h.recurring === true))
+})
+it('turning the repeat off leaves only the first year', () => {
+  const m = holidaysForYears([2026, 2027, 2028], [company({ recurring: false })])
+  assert.deepEqual(yearsOf(m, 'Foundation Day'), ['2026-07-10'])
+  assert.equal(m.find(h => h.name === 'Foundation Day').id, 'co1')
+})
+it('a 29 Feb holiday falls on 28 Feb in a year with no 29th', () => {
+  const m = holidaysForYears([2028, 2029], [company({ date: '2028-02-29', recurring: true })])
+  assert.deepEqual(yearsOf(m, 'Foundation Day'), ['2028-02-29', '2029-02-28'])
+})
+it('a built-in override never repeats — the built-in list already generates every year', () => {
+  const m = holidaysForYears([2026, 2027], [{ id: 'ph-2026-06-12', date: '2026-06-13', name: 'Independence Day (moved)', type: 'regular', recurring: true }])
+  assert.deepEqual(yearsOf(m, 'Independence Day (moved)'), ['2026-06-13'])
+  assert.ok(m.some(h => h.date === '2027-06-12' && h.name === 'Independence Day'))
+})
+it('without a year list a repeating doc is just its own date (no surprise expansion)', () =>
+  assert.deepEqual(yearsOf(mergeHolidays([], [company({ recurring: true })]), 'Foundation Day'), ['2026-07-10']))
+
+console.log('\nholidays that last several days')
+it('spanDays counts both ends, and treats a bad range as one day', () => {
+  assert.equal(spanDays('2026-12-24', '2026-12-26'), 3)
+  assert.equal(spanDays('2026-12-24', '2026-12-24'), 1)
+  assert.equal(spanDays('2026-12-24', ''), 1)
+  assert.equal(spanDays('2026-12-24', '2026-12-20'), 1)
+})
+it('a multi-day holiday is on every day it covers, numbered', () => {
+  const m = holidaysByDate(mergeHolidays([], [company({ endDate: '2026-07-13' })]))
+  const days = ['2026-07-10', '2026-07-11', '2026-07-12', '2026-07-13']
+  assert.deepEqual(days.map(d => (m[d] || []).length), [1, 1, 1, 1])
+  assert.deepEqual(days.map(d => `${m[d][0].day}/${m[d][0].days}`), ['1/4', '2/4', '3/4', '4/4'])
+  assert.equal(m['2026-07-14'], undefined)
+})
+it('an end date before the start is ignored rather than breaking the calendar', () => {
+  const m = holidaysByDate(mergeHolidays([], [company({ endDate: '2026-07-01' })]))
+  assert.deepEqual(Object.keys(m), ['2026-07-10'])
+})
+it('a repeating multi-day holiday keeps its length each year, across New Year', () => {
+  const list = holidaysForYears([2026, 2027], [company({ date: '2026-12-30', endDate: '2027-01-02', recurring: true, name: 'Year-end break' })])
+  const mine = list.filter(h => h.name === 'Year-end break')
+  assert.deepEqual(mine.map(h => [h.date, h.endDate, h.days]), [['2026-12-30', '2027-01-02', 4], ['2027-12-30', '2028-01-02', 4]])
+  const byDate = holidaysByDate(list)
+  assert.ok(byDate['2027-01-01'].some(h => h.name === 'Year-end break'))
+})
+it('a span is capped so a typo cannot paint months', () => {
+  const m = holidaysByDate(mergeHolidays([], [company({ endDate: '2030-07-10' })]))
+  assert.equal(Object.keys(m).length, MAX_SPAN_DAYS)
+})
+it('a built-in override may be stretched over several days', () => {
+  const m = holidaysByDate(holidaysForYears([2026], [{ id: 'ph-2026-04-02', date: '2026-04-02', endDate: '2026-04-05', name: 'Holy Week', type: 'regular' }]))
+  assert.deepEqual(['2026-04-02', '2026-04-03', '2026-04-04', '2026-04-05'].map(d => (m[d] || []).some(h => h.name === 'Holy Week')), [true, true, true, true])
 })
 
 console.log('\nwho can see whom')

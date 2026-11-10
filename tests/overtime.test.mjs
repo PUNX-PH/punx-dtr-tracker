@@ -3,7 +3,7 @@
 // DTRs only, and a warning (not a cap) past 30 hours of offset.
 import assert from 'node:assert/strict'
 import {
-  OT_THRESHOLD_HOURS, OFFSET_WARN_HOURS, otHoursFromLogs, splitOT, cutoffWindow, offsetEarnedByUser, offsetOverWarning,
+  OT_THRESHOLD_HOURS, OFFSET_WARN_HOURS, formatDuration, otHoursFromLogs, splitOT, cutoffWindow, offsetEarnedByUser, offsetOverWarning,
 } from '../src/services/overtime.js'
 import { canSeeOvertimeOffset } from '../src/services/leave.js'
 
@@ -22,7 +22,7 @@ it('the thresholds are 20 hours of OT and a warning at 30 hours of offset', () =
 })
 
 console.log('\ncounting OT from the DTR')
-it('one session', () => assert.deepEqual(otHoursFromLogs([ot('OT_IN', 5, 18, 0), ot('OT_OUT', 5, 21, 30)]), { hours: 3.5, sessions: 1, skipped: 0 }))
+it('one session', () => assert.deepEqual(otHoursFromLogs([ot('OT_IN', 5, 18, 0), ot('OT_OUT', 5, 21, 30)]), { hours: 3.5, minutes: 210, sessions: 1, skipped: 0 }))
 it('split OT: several sessions on one day, and across days, add up', () => {
   const r = otHoursFromLogs([
     ot('OT_IN', 5, 18, 0, 0), ot('OT_OUT', 5, 20, 0, 0),
@@ -45,7 +45,28 @@ it('minutes are kept: 1h20m is 1.33 hours', () =>
   assert.equal(otHoursFromLogs([ot('OT_IN', 5, 18, 0), ot('OT_OUT', 5, 19, 20)]).hours, 1.33))
 it('works from ISO strings as the api returns them', () =>
   assert.equal(otHoursFromLogs([{ type: 'OT_IN', timestamp: at(5, 18, 0).toISOString() }, { type: 'OT_OUT', timestamp: at(5, 20, 0).toISOString() }]).hours, 2))
-it('no logs is zero, not an error', () => assert.deepEqual(otHoursFromLogs(), { hours: 0, sessions: 0, skipped: 0 }))
+it('no logs is zero, not an error', () => assert.deepEqual(otHoursFromLogs(), { hours: 0, minutes: 0, sessions: 0, skipped: 0 }))
+
+console.log('\nhours and minutes for people to read')
+it('minutes are exact, so the total can be said as hours and minutes', () => {
+  const r = otHoursFromLogs([
+    { type: 'OT_IN', timestamp: at(5, 18, 0) }, { type: 'OT_OUT', timestamp: at(5, 20, 15) },
+    { type: 'OT_IN', timestamp: at(6, 18, 0) }, { type: 'OT_OUT', timestamp: at(6, 19, 20) },
+  ])
+  assert.equal(r.minutes, 215) // 2h15m + 1h20m
+  assert.equal(formatDuration(r.minutes), '3 hrs 35 mins')
+})
+it('wording: singular and plural, whole hours, under an hour, zero', () => {
+  assert.equal(formatDuration(1590), '26 hrs 30 mins')
+  assert.equal(formatDuration(60), '1 hr')
+  assert.equal(formatDuration(120), '2 hrs')
+  assert.equal(formatDuration(61), '1 hr 1 min')
+  assert.equal(formatDuration(45), '45 mins')
+  assert.equal(formatDuration(1), '1 min')
+  assert.equal(formatDuration(0), '0 mins')
+  assert.equal(formatDuration(-5), '0 mins')
+  assert.equal(formatDuration(undefined), '0 mins')
+})
 
 console.log('\nthe 20-hour rule')
 it('under 20 hours: nothing converts', () => assert.deepEqual(splitOT(14.5), { kept: 14.5, excess: 0 }))

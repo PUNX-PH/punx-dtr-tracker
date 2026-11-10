@@ -100,39 +100,100 @@ export function phHolidays(year) {
         .sort((a, b) => a.date.localeCompare(b.date))
 }
 
+// A holiday can last several days (Holy Week, a company break). Capped so a typo'd
+// end year can't paint half the calendar.
+export const MAX_SPAN_DAYS = 31
+
+const addDays = (ymdStr, n) => {
+    const d = parseYMD(ymdStr)
+    d.setDate(d.getDate() + n)
+    return toYMD(d)
+}
+
+/** How many calendar days a holiday covers, start and end inclusive (1 for a single day). */
+export function spanDays(date, endDate) {
+    const start = parseYMD(date)
+    const end = parseYMD(endDate)
+    if (!start || !end || end < start) return 1
+    return Math.round((end - start) / 86400000) + 1
+}
+
+const daysInMonth = (y, m) => new Date(y, m, 0).getDate() // m is 1-based
+
 /**
- * Built-in list + what HR has stored in Firestore.
+ * The occurrences of one stored holiday doc: [{ date, endDate }].
+ *
+ * A RECURRING doc repeats on the same month and day every year from the year it
+ * starts, keeping its length (a Dec 30 – Jan 2 break stays four days). It never
+ * appears before its first year. A 29 Feb holiday falls on 28 Feb in a year with
+ * no 29th. Built-in overrides (ids starting ph-) are tied to one year's date and
+ * never repeat — the built-in list already generates every year itself.
+ */
+function occurrences(doc, years) {
+    const length = Math.min(spanDays(doc.date, doc.endDate), MAX_SPAN_DAYS)
+    const startYear = Number(doc.date.slice(0, 4))
+    const recurring = doc.recurring === true && !doc.id.startsWith('ph-') && years.length > 0
+    if (!recurring) {
+        return [{ date: doc.date, endDate: length > 1 ? addDays(doc.date, length - 1) : doc.date }]
+    }
+    const [, m, d] = doc.date.split('-').map(Number)
+    return years.filter(y => y >= startYear).map(y => {
+        const date = `${y}-${String(m).padStart(2, '0')}-${String(Math.min(d, daysInMonth(y, m))).padStart(2, '0')}`
+        return { date, endDate: length > 1 ? addDays(date, length - 1) : date }
+    })
+}
+
+/**
+ * Built-in list + what HR has stored in Firestore, for the given `years`.
  *
  * A stored doc whose id starts `ph-` is an OVERRIDE of the built-in holiday with
- * that id: it replaces the name/type/date, or — with `hidden: true` — removes it
- * (HR deleting a holiday that was not proclaimed this year). Anything else is a
- * company holiday HR added. Hiding is a flag rather than a delete so the built-in
- * list cannot grow it back the next time the page loads.
+ * that id: it replaces the name/type/date (and may stretch it over several days),
+ * or — with `hidden: true` — removes it (HR deleting a holiday that was not
+ * proclaimed this year). Anything else is a company holiday HR added, which may
+ * span days and may repeat every year. Hiding is a flag rather than a delete so
+ * the built-in list cannot grow it back the next time the page loads.
+ *
+ * Each result: { id, seriesId, date, endDate, days, name, type, source, recurring }.
+ * `id` is unique per occurrence (`<doc id>@<year>` for a repeating holiday);
+ * `seriesId` is the stored doc, which is what editing or removing acts on.
  */
-export function mergeHolidays(builtIn, stored = []) {
-    const byId = new Map(builtIn.map(h => [h.id, h]))
+export function mergeHolidays(builtIn, stored = [], years = []) {
+    const out = new Map(builtIn.map(h => [h.id, { ...h, seriesId: h.id, endDate: h.date, days: 1, recurring: false }]))
     for (const doc of stored) {
         if (!doc || !doc.id) continue
-        if (doc.hidden === true) { byId.delete(doc.id); continue }
+        if (doc.hidden === true) { out.delete(doc.id); continue }
         if (!parseYMD(doc.date) || !HOLIDAY_TYPES[doc.type]) continue // ignore a malformed doc rather than crash the calendar
         const isOverride = doc.id.startsWith('ph-')
-        byId.set(doc.id, {
-            id: doc.id, date: doc.date, name: doc.name || 'Holiday', type: doc.type,
-            source: isOverride ? 'ph-edited' : 'company',
-        })
+        const repeats = doc.recurring === true && !isOverride
+        if (isOverride) out.delete(doc.id)
+        for (const occ of occurrences(doc, years)) {
+            const id = repeats && years.length > 0 ? `${doc.id}@${occ.date.slice(0, 4)}` : doc.id
+            out.set(id, {
+                id, seriesId: doc.id, date: occ.date, endDate: occ.endDate, days: spanDays(occ.date, occ.endDate),
+                name: doc.name || 'Holiday', type: doc.type, recurring: repeats,
+                source: isOverride ? 'ph-edited' : 'company',
+            })
+        }
     }
-    return [...byId.values()].sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name))
+    return [...out.values()].sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name))
 }
 
 /** Every built-in holiday across the years a view spans, merged with HR's edits. */
 export function holidaysForYears(years, stored = []) {
-    const builtIn = [...new Set(years)].flatMap(phHolidays)
-    return mergeHolidays(builtIn, stored)
+    const ys = [...new Set(years)]
+    return mergeHolidays(ys.flatMap(phHolidays), stored, ys)
 }
 
-/** { 'YYYY-MM-DD': [holiday, ...] } — two holidays can share a date. */
+/**
+ * { 'YYYY-MM-DD': [holiday, ...] } — a multi-day holiday is listed on EVERY day
+ * it covers, each copy carrying `day` (1-based) and `days` so a chip can say
+ * "2/3". Two holidays can share a date.
+ */
 export function holidaysByDate(list) {
     const map = {}
-    for (const h of list) (map[h.date] ||= []).push(h)
+    for (const h of list) {
+        const n = Math.min(spanDays(h.date, h.endDate), MAX_SPAN_DAYS)
+        for (let i = 0; i < n; i++) (map[i === 0 ? h.date : addDays(h.date, i)] ||= []).push({ ...h, day: i + 1, days: n })
+    }
     return map
 }

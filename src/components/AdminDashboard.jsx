@@ -4,6 +4,8 @@ import { Timestamp } from 'firebase/firestore'
 import * as XLSX from 'xlsx'
 import { api, defaultSubmitBy, reminderApi, leaveApi } from '../services/api'
 import { leaveForDate, leaveNote } from '../services/leave'
+import { cutoffWindow, formatDuration, otHoursFromLogs } from '../services/overtime'
+import OvertimeTotal from './OvertimeTotal'
 import DTRTable from './DTRTable'
 import RecentActivityTable from './RecentActivityTable'
 import CutoffsView from './CutoffsView'
@@ -322,6 +324,14 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                 "Notes": findAnyLog()?.reason || ''
             };
         });
+
+        // Total overtime for the period, to the minute — same counting as the card on screen.
+        const win = cutoffWindow(cutoff);
+        const otTotal = otHoursFromLogs(userHistory.filter(l => {
+            const t = new Date(l.timestamp);
+            return t >= win.from && t <= win.to;
+        }));
+        exportData.push({}, { Date: 'TOTAL OVERTIME', Overtime: formatDuration(otTotal.minutes) });
 
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.json_to_sheet(exportData);
@@ -1079,6 +1089,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                 </div>
                             ) : (
                                 <div className="space-y-6">
+                                    <OvertimeTotal history={userHistory} cutoff={cutoff} />
                                     <DTRTable
                                         user={selectedUser} // Pass selected user so table saves to THEIR log
                                         history={userHistory}
