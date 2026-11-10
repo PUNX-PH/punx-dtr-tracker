@@ -1,14 +1,22 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { Pencil, Save, X, Loader2, Zap, Trash2, Plus } from 'lucide-react'
+import { Pencil, Save, X, Loader2, Zap, Trash2, Plus, AlertTriangle } from 'lucide-react'
 import { api } from '../services/api'
-import { leaveForDate, dtrLabel, leaveNote, isPartialDay, LEAVE_TYPES } from '../services/leave'
+import { leaveForDate, dtrLabel, leaveNote, isPartialDay, toYMD, LEAVE_TYPES } from '../services/leave'
+import { formatDuration } from '../services/overtime'
 import { parseTime, toTime24, isComplete, isEmpty, formatHHMM } from '../services/time'
 
 // `leaves` is the person's leave/offset requests (any status — only approved
 // ones are drawn). They are overlaid at read time rather than written into
 // `logs`, so a revoked leave simply stops showing and payroll's own records are
 // never touched by the leave feature.
-export default function DTRTable({ user, history, onRefresh, initialDate, periodEnd, canEdit = true, leaves = [] }) {
+//
+// Reviewer aids, both optional and passed only by the admin dashboard:
+//   flaggedDays  ['YYYY-MM-DD', ...] days with an OT entry that is missing its start
+//                or end — drawn with an amber edge and a "not counted" note
+//   otTotals     { 'YYYY-MM-DD': minutes } each day's counted overtime, shown under
+//                that day's sessions
+// Every row also carries data-dtr-day so a reviewer can be scrolled to it.
+export default function DTRTable({ user, history, onRefresh, initialDate, periodEnd, canEdit = true, leaves = [], flaggedDays = null, otTotals = null }) {
     const draftStorageKey = `dtr_draft_${user.id}`
 
     // Reads a non-empty draft for `key`, or null. Read-only views (canEdit=false)
@@ -636,6 +644,8 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                     <tbody className="text-sm">
                         {rows.map((date, i) => {
                             const leave = leaveForDate(leaves, date)
+                            const dayKey = toYMD(date)
+                            const flagged = !!flaggedDays && flaggedDays.includes(dayKey)
                             // A whole-day leave with nothing clocked reads "SL"/"VL" in
                             // the time cells instead of a bare dash. Offset is partial,
                             // so it keeps the dash and shows only the badge.
@@ -644,7 +654,11 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                 ? <span className="font-bold text-xs tracking-wider" style={{ color: LEAVE_TYPES[leave.type].color }} title={LEAVE_TYPES[leave.type].label}>{dayOffLabel}</span>
                                 : '-'
                             return (
-                            <tr key={i} className="border-b border-[var(--border)] group hover:bg-white/5 transition-colors">
+                            <tr
+                                key={i}
+                                data-dtr-day={dayKey}
+                                className={`border-b border-[var(--border)] group hover:bg-white/5 transition-colors ${flagged ? 'bg-[var(--accent-amber)]/5 shadow-[inset_3px_0_0_var(--accent-amber)]' : ''}`}
+                            >
                                 {/* Day */}
                                 <td className="py-4 text-[var(--text-primary)] border-r border-[var(--border)] font-bold text-left px-4 text-base">
                                     {date.toLocaleDateString('en-GB', { weekday: 'long' })}
@@ -737,13 +751,25 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                             </div>
                                         </div>
                                     ) : getVisibleOTSessions(date).length > 0 ? (
-                                        <div className="flex flex-col divide-y divide-[var(--border)]/60">
-                                            {getVisibleOTSessions(date).map(session => (
-                                                <div key={session} className="h-12 flex items-center px-2 text-[var(--text-primary)]">
-                                                    {getDisplayValue(date, 'OT_IN', session) || '–'} – {getDisplayValue(date, 'OT_OUT', session) || '–'}
+                                        <>
+                                            <div className="flex flex-col divide-y divide-[var(--border)]/60">
+                                                {getVisibleOTSessions(date).map(session => (
+                                                    <div key={session} className="h-12 flex items-center px-2 text-[var(--text-primary)]">
+                                                        {getDisplayValue(date, 'OT_IN', session) || '–'} – {getDisplayValue(date, 'OT_OUT', session) || '–'}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            {((otTotals && otTotals[dayKey] > 0) || flagged) && (
+                                                <div className="px-2 py-1.5 border-t border-[var(--border)]/60 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] font-bold font-sans">
+                                                    {otTotals && otTotals[dayKey] > 0 && (
+                                                        <span className="text-[var(--accent-purple)]">Total {formatDuration(otTotals[dayKey])}</span>
+                                                    )}
+                                                    {flagged && (
+                                                        <span className="flex items-center gap-1 text-[var(--accent-amber)]"><AlertTriangle size={10} /> Incomplete OT — not counted</span>
+                                                    )}
                                                 </div>
-                                            ))}
-                                        </div>
+                                            )}
+                                        </>
                                     ) : (
                                         <div className="h-12 flex items-center justify-center text-[var(--text-primary)]">-</div>
                                     )}

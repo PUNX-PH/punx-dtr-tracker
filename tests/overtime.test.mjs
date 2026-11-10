@@ -3,7 +3,7 @@
 // DTRs only, and a warning (not a cap) past 30 hours of offset.
 import assert from 'node:assert/strict'
 import {
-  OT_THRESHOLD_HOURS, OFFSET_WARN_HOURS, formatDuration, otHoursFromLogs, splitOT, cutoffWindow, offsetEarnedByUser, offsetOverWarning,
+  OT_THRESHOLD_HOURS, OFFSET_WARN_HOURS, formatDuration, otHoursFromLogs, otForPeriod, splitOT, cutoffWindow, offsetEarnedByUser, offsetOverWarning,
 } from '../src/services/overtime.js'
 import { canSeeOvertimeOffset } from '../src/services/leave.js'
 
@@ -22,7 +22,11 @@ it('the thresholds are 20 hours of OT and a warning at 30 hours of offset', () =
 })
 
 console.log('\ncounting OT from the DTR')
-it('one session', () => assert.deepEqual(otHoursFromLogs([ot('OT_IN', 5, 18, 0), ot('OT_OUT', 5, 21, 30)]), { hours: 3.5, minutes: 210, sessions: 1, skipped: 0 }))
+it('one session', () => {
+  const r = otHoursFromLogs([ot('OT_IN', 5, 18, 0), ot('OT_OUT', 5, 21, 30)])
+  assert.equal(r.hours, 3.5); assert.equal(r.minutes, 210); assert.equal(r.sessions, 1); assert.equal(r.skipped, 0)
+  assert.deepEqual(r.byDay, { '2026-10-05': 210 })
+})
 it('split OT: several sessions on one day, and across days, add up', () => {
   const r = otHoursFromLogs([
     ot('OT_IN', 5, 18, 0, 0), ot('OT_OUT', 5, 20, 0, 0),
@@ -45,7 +49,40 @@ it('minutes are kept: 1h20m is 1.33 hours', () =>
   assert.equal(otHoursFromLogs([ot('OT_IN', 5, 18, 0), ot('OT_OUT', 5, 19, 20)]).hours, 1.33))
 it('works from ISO strings as the api returns them', () =>
   assert.equal(otHoursFromLogs([{ type: 'OT_IN', timestamp: at(5, 18, 0).toISOString() }, { type: 'OT_OUT', timestamp: at(5, 20, 0).toISOString() }]).hours, 2))
-it('no logs is zero, not an error', () => assert.deepEqual(otHoursFromLogs(), { hours: 0, minutes: 0, sessions: 0, skipped: 0 }))
+it('no logs is zero, not an error', () => assert.deepEqual(otHoursFromLogs(), { hours: 0, minutes: 0, sessions: 0, skipped: 0, incomplete: [], byDay: {} }))
+
+console.log('\nwhere the incomplete entries are')
+it('names the day, the session and what is wrong, in date order', () => {
+  const r = otHoursFromLogs([
+    ot('OT_IN', 9, 18, 0),                           // no end
+    ot('OT_OUT', 6, 20, 0),                          // no start
+    ot('OT_IN', 7, 18, 0), ot('OT_OUT', 7, 2, 0),    // end before start
+    ot('OT_IN', 8, 18, 0), ot('OT_OUT', 8, 19, 0),   // fine
+  ])
+  assert.deepEqual(r.incomplete.map(i => [i.day, i.problem]), [['2026-10-06', 'no-start'], ['2026-10-07', 'bad-order'], ['2026-10-09', 'no-end']])
+  assert.equal(r.skipped, 3); assert.equal(r.minutes, 60)
+  assert.equal(r.incomplete[2].inAt.getHours(), 18) // the start time is there to show
+})
+it('a complete second session on the same day does not hide an incomplete first one', () => {
+  const r = otHoursFromLogs([ot('OT_IN', 5, 18, 0, 0), ot('OT_IN', 5, 21, 0, 1), ot('OT_OUT', 5, 22, 0, 1)])
+  assert.deepEqual(r.incomplete.map(i => [i.day, i.session, i.problem]), [['2026-10-05', 0, 'no-end']])
+  assert.deepEqual(r.byDay, { '2026-10-05': 60 })
+})
+it('byDay gives each day its own total, split sessions added together', () => {
+  const r = otHoursFromLogs([
+    ot('OT_IN', 5, 18, 0, 0), ot('OT_OUT', 5, 19, 30, 0), ot('OT_IN', 5, 21, 0, 1), ot('OT_OUT', 5, 22, 0, 1),
+    ot('OT_IN', 6, 18, 0), ot('OT_OUT', 6, 18, 45),
+  ])
+  assert.deepEqual(r.byDay, { '2026-10-05': 150, '2026-10-06': 45 })
+})
+it('otForPeriod counts only the cutoff days, and everything when there is no cutoff', () => {
+  const logs = [ot('OT_IN', 5, 18, 0), ot('OT_OUT', 5, 20, 0), ot('OT_IN', 20, 18, 0), ot('OT_OUT', 20, 19, 0)]
+  const cutoff = { startDate: { toDate: () => new Date(2026, 9, 1, 8) }, endDate: { toDate: () => new Date(2026, 9, 15, 8) } }
+  assert.equal(otForPeriod(logs, cutoff).minutes, 120)
+  assert.equal(otForPeriod(logs, cutoff).window.startYMD, '2026-10-01')
+  assert.equal(otForPeriod(logs, null).minutes, 180)
+  assert.equal(otForPeriod(logs, null).window, null)
+})
 
 console.log('\nhours and minutes for people to read')
 it('minutes are exact, so the total can be said as hours and minutes', () => {

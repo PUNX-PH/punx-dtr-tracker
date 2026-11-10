@@ -3,9 +3,10 @@ import { Search, User as UserIcon, Loader2, FileSpreadsheet, Users, Folder, X, S
 import { Timestamp } from 'firebase/firestore'
 import * as XLSX from 'xlsx'
 import { api, defaultSubmitBy, reminderApi, leaveApi } from '../services/api'
-import { leaveForDate, leaveNote } from '../services/leave'
-import { cutoffWindow, formatDuration, otHoursFromLogs } from '../services/overtime'
-import OvertimeTotal from './OvertimeTotal'
+import { leaveForDate, leaveNote, canSeeOvertimeOffset } from '../services/leave'
+import { cutoffWindow, formatDuration, otHoursFromLogs, otForPeriod } from '../services/overtime'
+import DtrDecisionBar from './DtrDecisionBar'
+import AdminManageMenu from './AdminManageMenu'
 import DTRTable from './DTRTable'
 import RecentActivityTable from './RecentActivityTable'
 import CutoffsView from './CutoffsView'
@@ -478,6 +479,22 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
         }
     }
 
+    // For the selected person: this period's overtime, their submission, and whether
+    // THIS viewer may decide it (a super admin, when no senior is assigned to do so).
+    const ot = otForPeriod(userHistory, cutoff)
+    const submissionOfSelected = selectedUser ? (getSubmissionStatus(selectedUser.id) || null) : null
+    const canDecideSelected = !!selectedUser && currentUser.role === 'super_admin' && !selectedUser.assignedSeniorId
+        && !!submissionOfSelected && ['pending', 'pending_senior'].includes(submissionOfSelected.status)
+
+    // Scroll the DTR to a day and flash it, so a reviewer lands on the row to fix.
+    const jumpToDay = (day) => {
+        const row = document.querySelector(`[data-dtr-day="${day}"]`)
+        if (!row) return
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        row.classList.add('bg-[var(--accent-amber)]/25')
+        setTimeout(() => row.classList.remove('bg-[var(--accent-amber)]/25'), 1800)
+    }
+
     return (
         <div className="flex flex-col lg:h-full gap-4 sm:gap-6 animate-in fade-in duration-500">
             {/* Top Bar: Cutoff Management */}
@@ -869,7 +886,8 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                             </span>
                                         )}
                                     </div>
-                                    <div className="flex flex-wrap gap-2 mt-4">
+                                    {/* One compact row: export, who reviews them, and role actions in a menu. */}
+                                    <div className="flex flex-wrap items-end gap-3 mt-4">
                                         <button
                                             onClick={handleExportDTR}
                                             className="flex items-center gap-2 px-4 py-2 bg-[var(--accent-green)] hover:bg-[var(--accent-green-hover)] text-black text-xs font-bold rounded-xl transition-colors shadow-lg shadow-green-900/20"
@@ -878,101 +896,36 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                             Export DTR to Excel
                                         </button>
 
-                                        {/* Role Management Buttons */}
-                                        {currentUser.id !== selectedUser.id && (
-                                            <>
-                                                {selectedUser.role === 'employee' && (
-                                                    <button
-                                                        onClick={() => handleUpdateRole('admin')}
-                                                        className="flex items-center gap-2 px-4 py-2 bg-[var(--accent-red)]/10 text-[var(--accent-red)] hover:bg-[var(--accent-red)]/20 border border-[var(--accent-red)]/20 text-xs font-bold rounded-xl transition-colors"
-                                                    >
-                                                        Promote to Admin
-                                                    </button>
-                                                )}
-                                                {selectedUser.role === 'admin' && (
-                                                    <>
-                                                        {currentUser.role === 'super_admin' && (
-                                                            <button
-                                                                onClick={() => handleUpdateRole('super_admin')}
-                                                                className="flex items-center gap-2 px-4 py-2 bg-[var(--accent-purple)]/10 text-[var(--accent-purple)] hover:bg-[var(--accent-purple)]/20 border border-[var(--accent-purple)]/20 text-xs font-bold rounded-xl transition-colors"
-                                                            >
-                                                                Promote to Super Admin
-                                                            </button>
-                                                        )}
-                                                        <button
-                                                            onClick={() => handleUpdateRole('employee')}
-                                                            className="flex items-center gap-2 px-4 py-2 bg-[var(--surface-3)] text-[var(--text-secondary)] hover:bg-[var(--surface-3-hover)] border border-[var(--border-strong)] text-xs font-bold rounded-xl transition-colors"
-                                                        >
-                                                            Demote to Employee
-                                                        </button>
-                                                    </>
-                                                )}
-                                                {selectedUser.role === 'super_admin' && (
-                                                    <button
-                                                        onClick={() => handleUpdateRole('admin')}
-                                                        className="flex items-center gap-2 px-4 py-2 bg-[var(--surface-3)] text-[var(--text-secondary)] hover:bg-[var(--surface-3-hover)] border border-[var(--border-strong)] text-xs font-bold rounded-xl transition-colors"
-                                                    >
-                                                        Demote to Admin
-                                                    </button>
-                                                )}
-                                                {/* Senior Role Toggle */}
-                                                <button
-                                                    onClick={() => handleUpdateSeniorStatus(!selectedUser.isSenior)}
-                                                    className={`flex items-center gap-2 px-4 py-2 border text-xs font-bold rounded-xl transition-colors
-                                                        ${selectedUser.isSenior
-                                                            ? 'bg-[var(--accent-amber)]/10 text-[var(--accent-amber)] border-[var(--accent-amber)]/20 hover:bg-[var(--accent-amber)]/20'
-                                                            : 'bg-[var(--surface-3)] text-[var(--text-secondary)] border-[var(--border-strong)] hover:text-[var(--text-primary)]'}`}
-                                                >
-                                                    {selectedUser.isSenior ? 'Remove Senior Role' : 'Make Senior'}
-                                                </button>
-                                            </>
-                                        )}
-                                    </div>
+                                        <label className="block">
+                                            <span className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider block mb-1">Assigned senior</span>
+                                            <select
+                                                className="bg-[var(--surface-3)] text-[var(--text-primary)] text-xs font-bold px-3 py-2 rounded-xl border border-[var(--border-strong)] focus:outline-none focus:border-[var(--accent-amber)] min-w-[12rem]"
+                                                value={selectedUser.assignedSeniorId || ''}
+                                                onChange={(e) => handleAssignSenior(e.target.value)}
+                                            >
+                                                <option value="">-- No Senior Assigned --</option>
+                                                {users.filter(u => u.isSenior && !u.removed && u.id !== selectedUser.id).map(senior => (
+                                                    <option key={senior.id} value={senior.id}>
+                                                        {senior.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </label>
 
-                                    {/* Senior Assignment */}
-                                    <div className="mt-4 p-4 bg-[var(--surface-3)] rounded-xl border border-[var(--border-strong)]">
-                                        <label className="text-xs text-[var(--text-muted)] font-bold uppercase tracking-wider block mb-2">Assigned Senior</label>
-                                        <select
-                                            className="w-full bg-[var(--surface-1)] text-[var(--text-primary)] text-sm px-3 py-2 rounded-lg border border-[var(--border-strong)] focus:outline-none focus:border-[var(--accent-amber)]"
-                                            value={selectedUser.assignedSeniorId || ''}
-                                            onChange={(e) => handleAssignSenior(e.target.value)}
-                                        >
-                                            <option value="">-- No Senior Assigned --</option>
-                                            {users.filter(u => u.isSenior && !u.removed && u.id !== selectedUser.id).map(senior => (
-                                                <option key={senior.id} value={senior.id}>
-                                                    {senior.name}
-                                                </option>
-                                            ))}
-                                        </select>
+                                        {currentUser.id !== selectedUser.id && (
+                                            <AdminManageMenu
+                                                selectedUser={selectedUser}
+                                                currentUser={currentUser}
+                                                onRole={handleUpdateRole}
+                                                onToggleSenior={handleUpdateSeniorStatus}
+                                            />
+                                        )}
                                     </div>
                                 </div>
 
                                 {/* Attachment Viewer */}
                                 {getSubmissionStatus(selectedUser.id) ? (
                                     <div className="w-full lg:w-auto flex flex-col items-start lg:items-end gap-2">
-                                        <div className="flex flex-col sm:flex-row items-start sm:items-center lg:items-center justify-between w-full gap-3 sm:gap-4 mb-2">
-                                            {/* Actions for Super Admin */}
-                                            {currentUser.role === 'super_admin' && !selectedUser.assignedSeniorId && ['pending', 'pending_senior'].includes(getSubmissionStatus(selectedUser.id).status) ? (
-                                                <div className="flex gap-2">
-                                                    <button onClick={() => handleDTRAction('approved')} className="px-4 py-2 bg-[var(--accent-green)] hover:bg-[var(--accent-green-hover)] text-black text-xs font-bold uppercase tracking-wider rounded-xl transition-colors shadow-lg shadow-green-900/20">
-                                                        Approve DTR
-                                                    </button>
-                                                    <button onClick={() => handleDTRAction('rejected')} className="px-4 py-2 bg-[var(--accent-red)] hover:bg-[var(--accent-red)] text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-colors shadow-lg shadow-red-900/20">
-                                                        Reject
-                                                    </button>
-                                                </div>
-                                            ) : <div></div>}
-
-                                            <p className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1
-                                                ${getSubmissionStatus(selectedUser.id).status === 'approved' ? 'text-[var(--accent-green)]' :
-                                                  getSubmissionStatus(selectedUser.id).status === 'rejected' ? 'text-[var(--accent-red)]' : 'text-[var(--accent-amber)]'}`}>
-                                                <span className={`w-2 h-2 rounded-full
-                                                    ${getSubmissionStatus(selectedUser.id).status === 'approved' ? 'bg-[var(--accent-green)]' :
-                                                      getSubmissionStatus(selectedUser.id).status === 'rejected' ? 'bg-[var(--accent-red)]' : 'bg-[var(--accent-amber)]'}`}></span>
-                                                DTR {getSubmissionStatus(selectedUser.id).status.toUpperCase().replace('PENDING_SENIOR', 'PENDING')}
-                                            </p>
-                                        </div>
-
                                         {/* URLs */}
                                         {(() => {
                                             const sub = getSubmissionStatus(selectedUser.id);
@@ -1075,11 +1028,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                             {new Date(getSubmissionStatus(selectedUser.id).submittedAt.toDate()).toLocaleString()}
                                         </p>
                                     </div>
-                                ) : (
-                                    <div className="px-4 py-2 rounded-xl bg-[var(--surface-3)] border border-[var(--border)] text-[var(--text-muted)] text-xs font-bold uppercase">
-                                        No Submission Yet
-                                    </div>
-                                )}
+                                ) : null}
                             </div>
 
                             {/* DTR Table */}
@@ -1089,7 +1038,15 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                 </div>
                             ) : (
                                 <div className="space-y-6">
-                                    <OvertimeTotal history={userHistory} cutoff={cutoff} />
+                                    <DtrDecisionBar
+                                        ot={ot}
+                                        sub={submissionOfSelected}
+                                        canDecide={canDecideSelected}
+                                        onDecide={handleDTRAction}
+                                        seniorName={users.find(u => u.id === selectedUser.assignedSeniorId)?.name}
+                                        showOffsetPreview={canSeeOvertimeOffset(currentUser)}
+                                        onJump={jumpToDay}
+                                    />
                                     <DTRTable
                                         user={selectedUser} // Pass selected user so table saves to THEIR log
                                         history={userHistory}
@@ -1097,6 +1054,8 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                         onRefresh={() => loadHistory(selectedUser.id)}
                                         initialDate={cutoff ? cutoff.startDate.toDate() : null}
                                         periodEnd={cutoff ? cutoff.endDate.toDate() : null}
+                                        flaggedDays={ot.incomplete.map(i => i.day)}
+                                        otTotals={ot.byDay}
                                     />
                                     <RecentActivityTable history={userHistory} />
                                 </div>

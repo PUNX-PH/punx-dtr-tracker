@@ -23,7 +23,7 @@ const round2 = (n) => Math.round(n * 100) / 100
 /**
  * OT sessions from raw logs. A session is an OT_IN and an OT_OUT with the same
  * local calendar day and session number (a day can have several — "split OT").
- * Returns { hours, minutes, sessions, skipped }:
+ * Returns { hours, minutes, sessions, skipped, incomplete, byDay }:
  *   hours     total of the complete, sensible sessions (2 decimals)
  *   minutes   the same total in whole minutes — what "X hrs Y mins" is built from
  *   sessions  how many were counted
@@ -31,6 +31,10 @@ const round2 = (n) => Math.round(n * 100) / 100
  *             not after the IN. They count for nothing rather than guessing — an
  *             overnight session typed as 6 PM → 2 AM on one row would otherwise
  *             be a negative number, or a made-up 8 hours.
+ *   incomplete  WHICH sessions were skipped, so a reviewer can go and look:
+ *               [{ day:'YYYY-MM-DD', session, problem, inAt, outAt }] where problem
+ *               is 'no-end', 'no-start' or 'bad-order' (end not after start)
+ *   byDay       { 'YYYY-MM-DD': minutes } — each day's counted overtime
  */
 export function otHoursFromLogs(logs = []) {
     const groups = new Map()
@@ -45,16 +49,35 @@ export function otHoursFromLogs(logs = []) {
     }
     let minutes = 0
     let sessions = 0
-    let skipped = 0
-    for (const g of groups.values()) {
-        if (g.ins.length === 0 || g.outs.length === 0) { skipped++; continue }
-        const start = new Date(Math.min(...g.ins))
-        const end = new Date(Math.max(...g.outs))
-        if (end <= start) { skipped++; continue }
-        minutes += Math.round((end - start) / 60000)
+    const incomplete = []
+    const byDay = {}
+    for (const [key, g] of groups) {
+        const [day, session] = key.split('_')
+        const inAt = g.ins.length ? new Date(Math.min(...g.ins)) : null
+        const outAt = g.outs.length ? new Date(Math.max(...g.outs)) : null
+        const problem = !inAt ? 'no-start' : !outAt ? 'no-end' : outAt <= inAt ? 'bad-order' : null
+        if (problem) { incomplete.push({ day, session: Number(session), problem, inAt, outAt }); continue }
+        const m = Math.round((outAt - inAt) / 60000)
+        minutes += m
+        byDay[day] = (byDay[day] || 0) + m
         sessions++
     }
-    return { hours: round2(minutes / 60), minutes, sessions, skipped }
+    incomplete.sort((a, b) => a.day.localeCompare(b.day) || a.session - b.session)
+    return { hours: round2(minutes / 60), minutes, sessions, skipped: incomplete.length, incomplete, byDay }
+}
+
+/**
+ * Overtime for the period a DTR is showing: only logs inside the cutoff's days
+ * when there is one, else everything given. Adds `window` (or null).
+ */
+export function otForPeriod(logs = [], cutoff = null) {
+    if (!cutoff) return { ...otHoursFromLogs(logs), window: null }
+    const win = cutoffWindow(cutoff)
+    const inside = logs.filter(l => {
+        const t = new Date(l.timestamp)
+        return t >= win.from && t <= win.to
+    })
+    return { ...otHoursFromLogs(inside), window: win }
 }
 
 /** 1590 → "26 hrs 30 mins"; 60 → "1 hr"; 61 → "1 hr 1 min"; 0 → "0 mins". */
