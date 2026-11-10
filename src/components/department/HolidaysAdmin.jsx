@@ -1,9 +1,20 @@
 import { useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, Pencil, Plus, Repeat, RotateCcw, Trash2 } from 'lucide-react'
 import { holidayApi } from '../../services/api'
-import { HOLIDAY_TYPES, MAX_SPAN_DAYS, holidaysForYears } from '../../services/holidays'
+import { HOLIDAY_TYPES, MAX_SPAN_DAYS, holidaysForYears, spanDays } from '../../services/holidays'
 import { formatYMD } from '../../services/leave'
 import { inputClass } from '../leave/shared'
+
+// A labelled field. The label always sits ABOVE the control in one style, which is
+// what keeps every label on the same baseline across a row.
+function Field({ label, children }) {
+    return (
+        <div className="block min-w-0">
+            <span className="block text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">{label}</span>
+            {children}
+        </div>
+    )
+}
 
 const SOURCE_LABEL = { ph: 'Built-in', 'ph-edited': 'Edited', company: 'Company' }
 const blank = (year) => ({ id: null, date: `${year}-01-01`, endDate: '', multi: false, name: '', type: 'company', recurring: false })
@@ -97,54 +108,79 @@ export default function HolidaysAdmin({ stored, onChanged }) {
             </div>
 
             {form && (
-                <form onSubmit={save} className="p-4 bg-[var(--surface-2)] border border-[var(--border)] rounded-2xl space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-[10rem_1fr_13rem] gap-3 items-end">
-                        <label className="text-xs font-bold text-[var(--text-muted)]">{form.multi ? 'First day' : 'Date'}
-                            <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} required className={`${inputClass} mt-1`} />
-                        </label>
-                        <label className="text-xs font-bold text-[var(--text-muted)]">Name
-                            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required maxLength={80} placeholder="e.g. Company Foundation Day" className={`${inputClass} mt-1`} />
-                        </label>
-                        <label className="text-xs font-bold text-[var(--text-muted)]">Type
-                            <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className={`${inputClass} mt-1`}>
+                <form onSubmit={save} className="p-4 sm:p-5 bg-[var(--surface-2)] border border-[var(--border)] rounded-2xl space-y-5">
+                    <p className="text-sm font-bold text-[var(--text-primary)]">{form.id ? 'Edit holiday' : 'New holiday'}</p>
+
+                    {/* What it is */}
+                    <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_15rem] gap-4">
+                        <Field label="Name">
+                            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required maxLength={80} placeholder="e.g. Company Foundation Day" className={inputClass} />
+                        </Field>
+                        <Field label="Type">
+                            <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className={inputClass}>
                                 {Object.entries(HOLIDAY_TYPES).map(([k, t]) => <option key={k} value={k}>{t.label}</option>)}
                             </select>
-                        </label>
+                        </Field>
                     </div>
 
-                    <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
-                        <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
-                            <input
-                                type="checkbox"
-                                checked={form.multi}
-                                onChange={(e) => setForm({ ...form, multi: e.target.checked, endDate: e.target.checked ? (form.endDate || form.date) : '' })}
-                                className="w-4 h-4 accent-[var(--accent-purple)]"
-                            />
-                            Lasts more than one day
-                        </label>
+                    {/* When it is */}
+                    <div className="flex flex-wrap items-end gap-4">
+                        <Field label="Length">
+                            <div role="radiogroup" aria-label="Length" className="flex rounded-xl overflow-hidden border border-[var(--border-strong)] h-[2.375rem]">
+                                {[[false, 'One day'], [true, 'Several days']].map(([multi, label]) => (
+                                    <button
+                                        key={label}
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={form.multi === multi}
+                                        onClick={() => setForm({ ...form, multi, endDate: multi ? (form.endDate || form.date) : '' })}
+                                        className={`px-4 text-xs font-bold transition-colors ${form.multi === multi ? 'bg-[var(--accent-purple)] text-white' : 'bg-[var(--surface-3)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                        </Field>
+                        <Field label={form.multi ? 'First day' : 'Date'}>
+                            <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} required className={`${inputClass} !w-44`} />
+                        </Field>
                         {form.multi && (
-                            <label className="text-xs font-bold text-[var(--text-muted)]">Last day (up to {MAX_SPAN_DAYS} days)
-                                <input type="date" value={form.endDate} min={form.date} onChange={(e) => setForm({ ...form, endDate: e.target.value })} required className={`${inputClass} mt-1 !w-auto`} />
-                            </label>
+                            <Field label="Last day">
+                                <input type="date" value={form.endDate} min={form.date} onChange={(e) => setForm({ ...form, endDate: e.target.value })} required className={`${inputClass} !w-44`} />
+                            </Field>
                         )}
-                        <label className={`flex items-center gap-2 text-sm ${isBuiltInEdit ? 'text-[var(--text-muted)]' : 'text-[var(--text-secondary)]'}`} title={isBuiltInEdit ? 'Built-in holidays already repeat by themselves' : undefined}>
-                            <input
-                                type="checkbox"
-                                checked={form.recurring && !isBuiltInEdit}
-                                disabled={isBuiltInEdit}
-                                onChange={(e) => setForm({ ...form, recurring: e.target.checked })}
-                                className="w-4 h-4 accent-[var(--accent-purple)]"
-                            />
-                            Repeats every year
-                        </label>
+                        {form.multi && form.endDate && form.endDate >= form.date && (
+                            <p className="pb-2 text-xs text-[var(--text-secondary)]">
+                                <strong className="text-[var(--text-primary)]">{spanDays(form.date, form.endDate)} days</strong>
+                                {spanDays(form.date, form.endDate) > MAX_SPAN_DAYS && <span className="text-[var(--accent-red)]"> — the most is {MAX_SPAN_DAYS}</span>}
+                            </p>
+                        )}
                     </div>
-                    {form.recurring && !isBuiltInEdit && (
-                        <p className="text-[11px] text-[var(--text-muted)]">Appears on the same date every year from {form.date.slice(0, 4)} onward. You can stop it repeating any time.</p>
-                    )}
 
-                    <div className="flex gap-2">
-                        <button disabled={busy} className="px-4 py-2 bg-[var(--accent-purple)] hover:bg-[var(--accent-purple-hover)] text-white text-xs font-bold rounded-lg disabled:opacity-50">Save</button>
-                        <button type="button" onClick={() => { setForm(null); setError('') }} className="px-4 py-2 bg-[var(--surface-3)] text-[var(--text-secondary)] text-xs font-bold rounded-lg border border-[var(--border-strong)]">Cancel</button>
+                    {/* Whether it comes back */}
+                    <label className={`flex items-start gap-3 p-3 rounded-xl border ${isBuiltInEdit ? 'border-[var(--border)] opacity-60' : 'border-[var(--border-strong)] hover:border-[var(--accent-purple)]/50 cursor-pointer'} bg-[var(--surface-1)] transition-colors`}>
+                        <input
+                            type="checkbox"
+                            checked={form.recurring && !isBuiltInEdit}
+                            disabled={isBuiltInEdit}
+                            onChange={(e) => setForm({ ...form, recurring: e.target.checked })}
+                            className="w-4 h-4 mt-0.5 accent-[var(--accent-purple)] shrink-0"
+                        />
+                        <span className="min-w-0">
+                            <span className="block text-sm font-bold text-[var(--text-primary)]">Repeats every year</span>
+                            <span className="block text-xs text-[var(--text-muted)] mt-0.5">
+                                {isBuiltInEdit
+                                    ? 'Built-in holidays already repeat by themselves.'
+                                    : form.recurring
+                                        ? `Appears on the same date every year from ${form.date.slice(0, 4)} onward. You can stop it repeating any time.`
+                                        : 'Off: it appears only on the dates above.'}
+                            </span>
+                        </span>
+                    </label>
+
+                    <div className="flex justify-end gap-2 pt-4 border-t border-[var(--border)]">
+                        <button type="button" onClick={() => { setForm(null); setError('') }} className="px-4 py-2 bg-[var(--surface-3)] hover:bg-[var(--surface-3-hover)] text-[var(--text-secondary)] text-xs font-bold rounded-lg border border-[var(--border-strong)] transition-colors">Cancel</button>
+                        <button disabled={busy} className="px-5 py-2 bg-[var(--accent-purple)] hover:bg-[var(--accent-purple-hover)] text-white text-xs font-bold rounded-lg disabled:opacity-50 transition-colors">Save holiday</button>
                     </div>
                 </form>
             )}
