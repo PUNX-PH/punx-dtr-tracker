@@ -12,7 +12,10 @@ export default function Sidebar({ activeTab, onTabChange, onLogout, user, onClos
 
         ...(canUseDepartment(user) ? [{ id: 'department', label: 'Calendar', icon: CalendarDays }] : []),
 
-        { id: 'admin', label: 'Admin Dashboard', icon: Users, disabled: !['admin', 'super_admin'].includes(user.role) },
+        // Hidden, not greyed out, for everyone who can't use it. App.jsx still
+        // refuses the route for them, and firestore.rules is what actually
+        // guards the data — this only stops showing a link that goes nowhere.
+        ...(['admin', 'super_admin'].includes(user.role) ? [{ id: 'admin', label: 'Admin Dashboard', icon: Users }] : []),
 
         ...(canSeeSenior ? [{ id: 'senior', label: 'Senior Dashboard', icon: UserCheck }] : []),
     ]

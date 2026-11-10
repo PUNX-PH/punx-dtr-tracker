@@ -735,7 +735,11 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                             )}
                         </div>
 
-                        <div className="flex-1 max-h-[45dvh] lg:max-h-none overflow-y-auto overscroll-contain p-2 space-y-1">
+                        {/* Capped at every width. The old lg:max-h-none relied on the parents
+                            having a definite height, which they don't in the real layout, so on
+                            a wide screen the list grew to the whole roster and the PAGE scrolled
+                            instead. min-h-0 lets it still shrink when the parent is shorter. */}
+                        <div className="flex-1 min-h-0 max-h-[45dvh] lg:max-h-[70dvh] overflow-y-auto overscroll-contain p-2 space-y-1">
                             {loading ? (
                                 <div className="flex justify-center py-8 text-[var(--text-muted)]">
                                     <Loader2 className="animate-spin" />
