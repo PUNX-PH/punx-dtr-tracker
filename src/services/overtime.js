@@ -17,6 +17,10 @@ import { parseYMD, toYMD } from './leave.js'
 
 export const OT_THRESHOLD_HOURS = 20
 export const OFFSET_WARN_HOURS = 30
+// The longest single OT session accepted. It is what lets an overnight session
+// (6 PM → 2 AM, both typed on the same row) count as 8 hours, while a mistyped
+// AM/PM (9 PM → 7 PM would be 22 hours) is still flagged instead of counted.
+export const MAX_OT_SESSION_HOURS = 16
 
 const round2 = (n) => Math.round(n * 100) / 100
 
@@ -27,10 +31,12 @@ const round2 = (n) => Math.round(n * 100) / 100
  *   hours     total of the complete, sensible sessions (2 decimals)
  *   minutes   the same total in whole minutes — what "X hrs Y mins" is built from
  *   sessions  how many were counted
- *   skipped   sessions with an IN but no OUT (or the reverse), or an OUT that is
- *             not after the IN. They count for nothing rather than guessing — an
- *             overnight session typed as 6 PM → 2 AM on one row would otherwise
- *             be a negative number, or a made-up 8 hours.
+ *   skipped   sessions with an IN but no OUT (or the reverse), or an OUT that
+ *             can't be made sense of. They count for nothing rather than guessing.
+ *             An OUT earlier than the IN is an OVERNIGHT session (6 PM → 2:13 AM
+ *             is 8h 13m: the OUT is the next morning) as long as that comes to no
+ *             more than MAX_OT_SESSION_HOURS; past that it is almost certainly a
+ *             mistyped AM/PM and is reported as 'bad-order'.
  *   incomplete  WHICH sessions were skipped, so a reviewer can go and look:
  *               [{ day:'YYYY-MM-DD', session, problem, inAt, outAt }] where problem
  *               is 'no-end', 'no-start' or 'bad-order' (end not after start)
@@ -55,9 +61,10 @@ export function otHoursFromLogs(logs = []) {
         const [day, session] = key.split('_')
         const inAt = g.ins.length ? new Date(Math.min(...g.ins)) : null
         const outAt = g.outs.length ? new Date(Math.max(...g.outs)) : null
-        const problem = !inAt ? 'no-start' : !outAt ? 'no-end' : outAt <= inAt ? 'bad-order' : null
+        let m = inAt && outAt ? Math.round((outAt - inAt) / 60000) : 0
+        if (inAt && outAt && m <= 0) m += 24 * 60 // ended after midnight
+        const problem = !inAt ? 'no-start' : !outAt ? 'no-end' : (m <= 0 || m > MAX_OT_SESSION_HOURS * 60) ? 'bad-order' : null
         if (problem) { incomplete.push({ day, session: Number(session), problem, inAt, outAt }); continue }
-        const m = Math.round((outAt - inAt) / 60000)
         minutes += m
         byDay[day] = (byDay[day] || 0) + m
         sessions++

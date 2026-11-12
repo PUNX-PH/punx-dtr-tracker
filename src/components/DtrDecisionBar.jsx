@@ -13,7 +13,7 @@ const clock = (d) => (d ? d.toLocaleTimeString([], { hour: 'numeric', minute: '2
 const problemText = (i) => {
     if (i.problem === 'no-end') return `OT starts ${clock(i.inAt)} but never ends`
     if (i.problem === 'no-start') return `OT ends ${clock(i.outAt)} but never starts`
-    return `OT end ${clock(i.outAt)} isn’t after its start ${clock(i.inAt)}`
+    return `OT ${clock(i.inAt)} to ${clock(i.outAt)} doesn’t look right — check AM/PM`
 }
 
 /**

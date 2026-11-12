@@ -3,7 +3,7 @@
 // DTRs only, and a warning (not a cap) past 30 hours of offset.
 import assert from 'node:assert/strict'
 import {
-  OT_THRESHOLD_HOURS, OFFSET_WARN_HOURS, formatDuration, otHoursFromLogs, otForPeriod, splitOT, cutoffWindow, offsetEarnedByUser, offsetOverWarning,
+  OT_THRESHOLD_HOURS, OFFSET_WARN_HOURS, MAX_OT_SESSION_HOURS, formatDuration, otHoursFromLogs, otForPeriod, splitOT, cutoffWindow, offsetEarnedByUser, offsetOverWarning,
 } from '../src/services/overtime.js'
 import { canSeeOvertimeOffset } from '../src/services/leave.js'
 
@@ -41,9 +41,23 @@ it('an IN with no OUT counts for nothing and is reported', () => {
   const r = otHoursFromLogs([ot('OT_IN', 5, 18, 0)])
   assert.equal(r.hours, 0); assert.equal(r.skipped, 1)
 })
-it('an OUT not after its IN (an overnight session on one row) is skipped, never negative or invented', () => {
-  const r = otHoursFromLogs([ot('OT_IN', 5, 18, 0), ot('OT_OUT', 5, 2, 0)])
-  assert.equal(r.hours, 0); assert.equal(r.skipped, 1)
+it('an overnight session on one row counts: 6:00 PM to 2:13 AM is 8h 13m', () => {
+  const r = otHoursFromLogs([ot('OT_IN', 5, 18, 0), ot('OT_OUT', 5, 2, 13)])
+  assert.equal(r.minutes, 493); assert.equal(r.skipped, 0); assert.equal(r.sessions, 1)
+  assert.deepEqual(r.byDay, { '2026-10-05': 493 }) // credited to the day it started
+})
+it('an OUT that would make the session longer than the limit is a mistake, not an overnight', () => {
+  assert.equal(MAX_OT_SESSION_HOURS, 16)
+  const r = otHoursFromLogs([ot('OT_IN', 5, 21, 0), ot('OT_OUT', 5, 19, 0)]) // 9 PM to 7 PM = 22h
+  assert.equal(r.hours, 0); assert.equal(r.skipped, 1); assert.equal(r.incomplete[0].problem, 'bad-order')
+})
+it('an OUT equal to its IN is not 24 hours of overtime', () => {
+  const r = otHoursFromLogs([ot('OT_IN', 5, 18, 0), ot('OT_OUT', 5, 18, 0)])
+  assert.equal(r.hours, 0); assert.equal(r.incomplete[0].problem, 'bad-order')
+})
+it('exactly the limit counts, one minute more does not', () => {
+  assert.equal(otHoursFromLogs([ot('OT_IN', 5, 18, 0), ot('OT_OUT', 5, 10, 0)]).hours, 16)
+  assert.equal(otHoursFromLogs([ot('OT_IN', 5, 18, 0), ot('OT_OUT', 5, 10, 1)]).skipped, 1)
 })
 it('minutes are kept: 1h20m is 1.33 hours', () =>
   assert.equal(otHoursFromLogs([ot('OT_IN', 5, 18, 0), ot('OT_OUT', 5, 19, 20)]).hours, 1.33))
@@ -56,7 +70,7 @@ it('names the day, the session and what is wrong, in date order', () => {
   const r = otHoursFromLogs([
     ot('OT_IN', 9, 18, 0),                           // no end
     ot('OT_OUT', 6, 20, 0),                          // no start
-    ot('OT_IN', 7, 18, 0), ot('OT_OUT', 7, 2, 0),    // end before start
+    ot('OT_IN', 7, 21, 0), ot('OT_OUT', 7, 19, 0),   // end before start, too long to be overnight
     ot('OT_IN', 8, 18, 0), ot('OT_OUT', 8, 19, 0),   // fine
   ])
   assert.deepEqual(r.incomplete.map(i => [i.day, i.problem]), [['2026-10-06', 'no-start'], ['2026-10-07', 'bad-order'], ['2026-10-09', 'no-end']])

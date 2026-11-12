@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Info, X } from 'lucide-react'
 import { DEFAULT_ALLOTMENT, HOURS_PER_DAY } from '../../services/leave'
-import { OFFSET_WARN_HOURS, OT_THRESHOLD_HOURS } from '../../services/overtime'
+import { OFFSET_WARN_HOURS, OT_THRESHOLD_HOURS, MAX_OT_SESSION_HOURS } from '../../services/overtime'
 
 function Section({ title, children }) {
     return (
@@ -78,7 +78,7 @@ export default function HowItWorks({ isSuperAdmin = false }) {
                                 <li>The first <strong>{OT_THRESHOLD_HOURS} hours</strong> of a cutoff stay ordinary overtime.</li>
                                 <li>Every hour <strong>past {OT_THRESHOLD_HOURS}</strong> becomes offset, 1 hour of overtime = 1 hour of offset. Example: {OT_THRESHOLD_HOURS + 6.5} hours of OT → {OT_THRESHOLD_HOURS} stay overtime, 6.5 become offset.</li>
                                 <li>It is credited when your DTR for that cutoff is <strong>approved</strong>. What was approved is what counts — changing your DTR afterwards doesn’t change it.</li>
-                                <li>An OT entry with a start but no end, or an end that isn’t after its start, is skipped. Fix it before submitting so it counts.</li>
+                                <li>OT that runs past midnight counts: 6:00 PM to 2:00 AM is 8 hours. An OT entry with a start but no end, or one that would run longer than {MAX_OT_SESSION_HOURS} hours (usually a wrong AM/PM), is skipped. Fix it before submitting so it counts.</li>
                             </Section>
                         </div>
                     </div>
