@@ -10,6 +10,7 @@ import AdminManageMenu from './AdminManageMenu'
 import DTRTable from './DTRTable'
 import RecentActivityTable from './RecentActivityTable'
 import CutoffsView from './CutoffsView'
+import { narrowEmployees, countByState, applyStatus, seniorOptions } from '../services/employeeFilters'
 
 export default function AdminDashboard({ currentUser, focusRequest, onFocusHandled }) {
     const isSuperAdmin = currentUser.role === 'super_admin'
@@ -17,6 +18,9 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
     const [users, setUsers] = useState([])
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState('')
+    // Employees-list filters: where their DTR is for the cutoff on screen, and who their senior is.
+    const [statusFilter, setStatusFilter] = useState('all') // all | waiting | approved | notsent | rejected
+    const [seniorFilter, setSeniorFilter] = useState('all') // all | none | <senior's user id>
     const [selectedUser, setSelectedUser] = useState(null)
     const [userHistory, setUserHistory] = useState([])
     const [userLeaves, setUserLeaves] = useState([])
@@ -242,13 +246,15 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
 
     const removedCount = users.filter(u => u.removed).length
 
-    const filteredUsers = users
-        .filter(u => !!u.removed === showRemoved)
-        .filter(u =>
-            u.name?.toLowerCase().includes(search.toLowerCase()) ||
-            u.email?.toLowerCase().includes(search.toLowerCase())
-        )
-        .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+    // The status and senior filters are for the current-employees list; the
+    // Removed list is only searched.
+    const listUsers = users.filter(u => !!u.removed === showRemoved)
+    const narrowed = narrowEmployees(listUsers, { search, senior: showRemoved ? 'all' : seniorFilter })
+    const statusCounts = countByState(narrowed, submissions)
+    const filteredUsers = applyStatus(narrowed, showRemoved ? 'all' : statusFilter, submissions)
+    const seniors = seniorOptions(users)
+    const filtersActive = !showRemoved && (statusFilter !== 'all' || seniorFilter !== 'all')
+    const clearFilters = () => { setStatusFilter('all'); setSeniorFilter('all') }
 
     const getSubmissionStatus = (userId) => {
         return submissions[userId]
@@ -713,6 +719,59 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                     onChange={(e) => setSearch(e.target.value)}
                                 />
                             </div>
+                            {!showRemoved && (
+                                <div className="mt-3 space-y-2">
+                                    <div role="group" aria-label="Filter by DTR status" className="flex flex-wrap gap-1.5">
+                                        {[
+                                            ['all', 'All', null],
+                                            ['waiting', 'Sent, not approved', 'var(--accent-amber)'],
+                                            ['approved', 'Approved', 'var(--accent-green)'],
+                                            ['notsent', 'Not sent', null],
+                                            ['rejected', 'Rejected', 'var(--accent-red)'],
+                                        ]
+                                            .filter(([k]) => k !== 'rejected' || statusCounts.rejected > 0 || statusFilter === 'rejected')
+                                            .map(([k, label, dot]) => {
+                                                const on = statusFilter === k
+                                                return (
+                                                    <button
+                                                        key={k}
+                                                        type="button"
+                                                        aria-pressed={on}
+                                                        onClick={() => setStatusFilter(k)}
+                                                        className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold rounded-lg border transition-colors
+                                                            ${on
+                                                                ? 'bg-[var(--accent-purple)] text-white border-[var(--accent-purple)]'
+                                                                : 'bg-[var(--surface-3)] text-[var(--text-secondary)] border-[var(--border-strong)] hover:text-[var(--text-primary)]'}`}
+                                                    >
+                                                        {dot && <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: dot }} />}
+                                                        {label}
+                                                        <span className={`tabular-nums ${on ? 'text-white/80' : 'text-[var(--text-muted)]'}`}>{statusCounts[k]}</span>
+                                                    </button>
+                                                )
+                                            })}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <select
+                                            aria-label="Filter by assigned senior"
+                                            value={seniorFilter}
+                                            onChange={(e) => setSeniorFilter(e.target.value)}
+                                            className="flex-1 min-w-0 bg-[var(--surface-3)] text-[var(--text-primary)] text-xs rounded-xl py-2 px-3 border border-[var(--border-strong)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-purple)]"
+                                        >
+                                            <option value="all">Any assigned senior</option>
+                                            <option value="none">No senior assigned</option>
+                                            {seniors.map(sn => <option key={sn.id} value={sn.id}>{sn.name} · {sn.count} assigned</option>)}
+                                        </select>
+                                        {filtersActive && (
+                                            <button type="button" onClick={clearFilters} className="shrink-0 text-[11px] font-bold text-[var(--accent-purple)] hover:underline">
+                                                Clear
+                                            </button>
+                                        )}
+                                    </div>
+                                    <p className="text-[11px] text-[var(--text-muted)]" aria-live="polite">
+                                        {filteredUsers.length} {filteredUsers.length === 1 ? 'person' : 'people'}{cutoff && statusFilter !== 'all' ? ' for this cutoff' : ''}
+                                    </p>
+                                </div>
+                            )}
                             {selectMode && (
                                 <div className="flex items-center gap-2 mt-3">
                                     <button
@@ -745,7 +804,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                     <Loader2 className="animate-spin" />
                                 </div>
                             ) : filteredUsers.length === 0 ? (
-                                <div className="text-center py-8 text-[var(--text-muted)] text-sm">{showRemoved ? 'No removed users' : 'No users found'}</div>
+                                <div className="text-center py-8 text-[var(--text-muted)] text-sm">{showRemoved ? 'No removed users' : filtersActive ? 'No one matches these filters' : 'No users found'}</div>
                             ) : (
                                 filteredUsers.map(user => {
                                     const submission = getSubmissionStatus(user.id)
