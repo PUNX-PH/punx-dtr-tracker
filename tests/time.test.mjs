@@ -2,7 +2,7 @@
 // the DTR time dropdowns. The cases that matter are the 12s and midnight: 12 AM
 // is 00:xx, 12 PM is 12:xx, and a late-night entry must never read back as 24:xx.
 import assert from 'node:assert/strict'
-import { parseTime, toTime24, isComplete, isEmpty, formatHHMM } from '../src/services/time.js'
+import { parseTime, toTime24, isComplete, isEmpty, formatHHMM, parseTypedTime, formatClock, stepTime24 } from '../src/services/time.js'
 
 let pass = 0, fail = 0
 function it(name, fn) {
@@ -49,6 +49,47 @@ it('midnight hour is 00, never 24', () => {
   assert.equal(formatHHMM(new Date(2026, 9, 30, 0, 5)), '00:05')
   assert.equal(formatHHMM(new Date(2026, 9, 30, 23, 59)), '23:59')
   assert.equal(formatHHMM(new Date(2026, 9, 30, 9, 0)), '09:00')
+})
+
+console.log('\ntyping a time')
+const t = (x) => parseTypedTime(x)
+it('hour and minutes with a colon, with or without am/pm', () => {
+  assert.deepEqual(t('9:30'), { h: '9', m: '30', p: '' })
+  assert.deepEqual(t('9:30pm'), { h: '9', m: '30', p: 'PM' })
+  assert.deepEqual(t('9:30 AM'), { h: '9', m: '30', p: 'AM' })
+  assert.deepEqual(t('  11:05 p.m. '), { h: '11', m: '05', p: 'PM' })
+})
+it('just the hour, or digits with no colon', () => {
+  assert.deepEqual(t('9'), { h: '9', m: '00', p: '' })
+  assert.deepEqual(t('9pm'), { h: '9', m: '00', p: 'PM' })
+  assert.deepEqual(t('9p'), { h: '9', m: '00', p: 'PM' })
+  assert.deepEqual(t('12'), { h: '12', m: '00', p: '' })
+  assert.deepEqual(t('930'), { h: '9', m: '30', p: '' })
+  assert.deepEqual(t('0930'), { h: '9', m: '30', p: '' })
+  assert.deepEqual(t('1230am'), { h: '12', m: '30', p: 'AM' })
+})
+it('24-hour times know their AM/PM', () => {
+  assert.deepEqual(t('21:30'), { h: '9', m: '30', p: 'PM' })
+  assert.deepEqual(t('2130'), { h: '9', m: '30', p: 'PM' })
+  assert.deepEqual(t('13'), { h: '1', m: '00', p: 'PM' })
+  assert.deepEqual(t('0:30'), { h: '12', m: '30', p: 'AM' })
+  assert.deepEqual(t('00:00'), { h: '12', m: '00', p: 'AM' })
+})
+it('things that are not times', () => {
+  for (const bad of ['', '   ', 'pm', 'abc', '9:3', '9:60', '25:00', '24:00', '9:30:15', '99', '1234567', '21:30am', '0:30pm']) assert.equal(t(bad), null, JSON.stringify(bad))
+})
+it('formats and round-trips with the 24-hour value', () => {
+  const p = t('9:05pm')
+  assert.equal(formatClock(p), '9:05')
+  assert.equal(toTime24(p), '21:05')
+  assert.equal(toTime24(t('12:15am')), '00:15'); assert.equal(toTime24(t('12:15pm')), '12:15')
+})
+it('arrow keys step by minutes and wrap round midnight', () => {
+  assert.equal(stepTime24('21:30', 15), '21:45')
+  assert.equal(stepTime24('21:55', 15), '22:10')
+  assert.equal(stepTime24('23:55', 15), '00:10')
+  assert.equal(stepTime24('00:05', -15), '23:50')
+  assert.equal(stepTime24('', 15), '')
 })
 
 console.log(`\n${pass} passed, ${fail} failed`)

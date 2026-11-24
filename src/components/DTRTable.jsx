@@ -6,7 +6,7 @@ import { formatDuration, otHoursFromLogs } from '../services/overtime'
 import { checkOTSession } from '../services/workday'
 import { HOLIDAY_TYPES } from '../services/holidays'
 import { useHolidays } from './useHolidays'
-import { parseTime, toTime24, isComplete, isEmpty, formatHHMM } from '../services/time'
+import { parseTime, toTime24, formatHHMM, parseTypedTime, formatClock, stepTime24 } from '../services/time'
 
 // `leaves` is the person's leave/offset requests (any status — only approved
 // ones are drawn). They are overlaid at read time rather than written into
@@ -623,6 +623,18 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                             onChange={handleDateChange}
                         />
                     </div>
+                    {/* Holiday outline key — only the kinds that are in this period */}
+                    {holidayTypesInView.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2.5 text-[11px] text-[var(--text-secondary)]" aria-label="Holiday outline colours">
+                            <span className="font-bold uppercase tracking-widest text-[10px] text-[var(--text-muted)]">Outlined rows</span>
+                            {holidayTypesInView.map(t => (
+                                <span key={t} className="flex items-center gap-1.5">
+                                    <span aria-hidden="true" className="w-3 h-3 rounded-[4px] border-2" style={{ borderColor: HOLIDAY_TYPES[t].color }} />
+                                    {HOLIDAY_TYPES[t].label}
+                                </span>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex flex-wrap md:flex-nowrap items-center gap-2">
@@ -693,22 +705,15 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                 Swipe the table sideways to see overtime and notes
             </p>
 
-            {/* Holiday outline key — only the kinds that are in this period */}
-            {holidayTypesInView.length > 0 && (
-                <div className="px-4 sm:px-6 pt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--text-secondary)]" aria-label="Holiday outline colours">
-                    <span className="font-bold uppercase tracking-widest text-[10px] text-[var(--text-muted)]">Outlined rows</span>
-                    {holidayTypesInView.map(t => (
-                        <span key={t} className="flex items-center gap-1.5">
-                            <span aria-hidden="true" className="w-3 h-3 rounded-[4px] border-2" style={{ borderColor: HOLIDAY_TYPES[t].color }} />
-                            {HOLIDAY_TYPES[t].label}
-                        </span>
-                    ))}
-                </div>
+            {editMode && (
+                <p className="px-4 sm:px-6 pt-3 text-[11px] text-[var(--text-muted)]">
+                    Type a time like <strong className="text-[var(--text-secondary)]">9:30</strong> or <strong className="text-[var(--text-secondary)]">9pm</strong>, then tap AM or PM. Press ↑ or ↓ to move it 15 minutes.
+                </p>
             )}
 
             {/* The Grid */}
             <div className="overflow-x-auto overscroll-x-contain">
-                <table className="w-full min-w-[720px] text-center border-collapse">
+                <table className="w-full min-w-[840px] text-center border-collapse">
                     <thead>
                         {/* Top Level Headers */}
                         <tr className="border-b border-[var(--border)]">
@@ -797,12 +802,14 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                 {/* Regular IN */}
                                 <td style={edge()} className="p-0 border-r border-[var(--border)] border-dashed border-white/10 bg-[var(--accent-green)]/5 font-mono h-12">
                                     {editMode ? (
-                                        <TimeCellEditor
-                                            value={getInputValue(date, 'IN')}
-                                            onChange={(v) => handleEditChange(date, 'IN', v)}
-                                            onDelete={() => handleCellDelete(date, 'IN')}
-                                            ringColor="var(--accent-green)"
-                                        />
+                                        <div className="h-12">
+                                            <TimeCellEditor
+                                                value={getInputValue(date, 'IN')}
+                                                onChange={(v) => handleEditChange(date, 'IN', v)}
+                                                onDelete={() => handleCellDelete(date, 'IN')}
+                                                ringColor="var(--accent-green)"
+                                            />
+                                        </div>
                                     ) : (
                                         <div className="py-3 text-[var(--text-primary)]">{getDisplayValue(date, 'IN') || dayOffCell}</div>
                                     )}
@@ -811,12 +818,14 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                 {/* Regular OUT */}
                                 <td style={edge()} className="p-0 border-r border-[var(--border)] bg-[var(--accent-green)]/5 font-mono h-12">
                                     {editMode ? (
-                                        <TimeCellEditor
-                                            value={getInputValue(date, 'OUT')}
-                                            onChange={(v) => handleEditChange(date, 'OUT', v)}
-                                            onDelete={() => handleCellDelete(date, 'OUT')}
-                                            ringColor="var(--accent-green)"
-                                        />
+                                        <div className="h-12">
+                                            <TimeCellEditor
+                                                value={getInputValue(date, 'OUT')}
+                                                onChange={(v) => handleEditChange(date, 'OUT', v)}
+                                                onDelete={() => handleCellDelete(date, 'OUT')}
+                                                ringColor="var(--accent-green)"
+                                            />
+                                        </div>
                                     ) : (
                                         <div className="py-3 text-[var(--text-primary)]">{getDisplayValue(date, 'OUT') || dayOffCell}</div>
                                     )}
@@ -824,7 +833,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
 
                                 {/* Overtime — one or more sessions per day, each row matching the
                                     h-12 height/flush edges of the Regular Time cells beside it */}
-                                <td colSpan={2} style={edge()} className="p-0 border-r border-[var(--border)] bg-[var(--accent-purple)]/5 font-mono align-top">
+                                <td colSpan={2} style={edge()} className="p-0 border-r border-[var(--border)] bg-[var(--accent-purple)]/5 font-mono align-middle">
                                     {editMode ? (
                                         <div className="flex flex-col divide-y divide-[var(--border)]/60">
                                             {getOTSessionsForDate(date).map(session => {
@@ -838,7 +847,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                                 return (
                                                 <div key={session} className="px-2 py-2 min-h-12 flex flex-col justify-center gap-1.5">
                                                     <div className="flex items-center gap-2">
-                                                        <div className="w-32 h-8 shrink-0">
+                                                        <div className="w-36 h-8 shrink-0">
                                                             <TimeCellEditor
                                                                 value={inV}
                                                                 onChange={(v) => handleEditChange(date, 'OT_IN', v, session)}
@@ -847,7 +856,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                                             />
                                                         </div>
                                                         <span className="text-[var(--text-muted)] text-xs shrink-0">-</span>
-                                                        <div className="w-32 h-8 shrink-0">
+                                                        <div className="w-36 h-8 shrink-0">
                                                             <TimeCellEditor
                                                                 value={outV}
                                                                 onChange={(v) => handleEditChange(date, 'OT_OUT', v, session)}
@@ -903,7 +912,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                                     const overlap = overlapBySession.get(`${dayKey}_${session}`)
                                                     const reasonText = getOTReason(date, session)
                                                     return (
-                                                        <div key={session} className="min-h-12 py-1.5 flex flex-col justify-center px-2 text-[var(--text-primary)] text-left">
+                                                        <div key={session} className="min-h-12 py-1.5 flex flex-col items-center justify-center px-3 text-[var(--text-primary)] text-center">
                                                             <span>{getDisplayValue(date, 'OT_IN', session) || '–'} – {getDisplayValue(date, 'OT_OUT', session) || '–'}</span>
                                                             {reasonText ? (
                                                                 <span className="mt-0.5 text-[11px] font-sans text-[var(--text-secondary)] whitespace-pre-wrap break-words">{reasonText}</span>
@@ -943,13 +952,15 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                 {/* Reason / Notes */}
                                 <td style={edge('last')} className="p-0 border-r border-[var(--border)] text-[var(--text-secondary)] font-mono">
                                     {editMode ? (
-                                        <input
-                                            type="text"
-                                            placeholder={leave ? leaveNote(leave) : '...'}
-                                            className="w-full h-full bg-black/50 text-white px-2 py-1 text-xs focus:outline-none focus:bg-black focus:ring-1 ring-slate-500"
-                                            value={getInputValue(date, 'REASON')}
-                                            onChange={(e) => handleEditChange(date, 'REASON', e.target.value)}
-                                        />
+                                        <div className="p-2">
+                                            <input
+                                                type="text"
+                                                placeholder={leave ? leaveNote(leave) : 'Notes for the day'}
+                                                className="w-full h-9 rounded bg-black/50 text-white px-2 text-xs font-sans focus:outline-none focus:bg-black focus:ring-1 ring-slate-500"
+                                                value={getInputValue(date, 'REASON')}
+                                                onChange={(e) => handleEditChange(date, 'REASON', e.target.value)}
+                                            />
+                                        </div>
                                     ) : (
                                         <div className="py-3 px-2 text-xs text-[var(--text-primary)] whitespace-pre-wrap break-words" title={getDisplayValue(date, 'REASON')}>
                                             {/* The leave line is always shown with its reason, above
@@ -973,57 +984,109 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
     )
 }
 
-const HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i + 1))
-const MINUTE_OPTIONS = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'))
-
-// Hour / minute / AM-PM dropdowns instead of <input type="time">. Safari's
-// native time field commits a value as soon as hour and minute are typed —
-// before AM/PM is chosen, so "9:00 PM" could save as 9:00 AM — and reports ''
-// while a person is mid-typing, which this table's save treats as "delete".
-// Selects have neither problem. The parent only hears a time once all three
-// parts are chosen (or '' once all three are cleared); a half-picked time
-// stays here, highlighted, and never reaches the save.
+// One field to type a time into, with an AM / PM toggle beside it, instead of
+// three dropdowns (a minute list of 00–59 is slow to use and got clipped at the
+// edge of the table). It takes what people actually type — "9:30", "930", "9pm",
+// "21:30" — and ↑ / ↓ nudge it by 15 minutes.
+//
+// It still follows the rule the dropdowns were built for: Safari's native time
+// field committed "9:00 PM" as 9:00 AM before AM/PM was chosen. Here the parent
+// only hears a time once the hour, minutes AND AM/PM are all known (or '' once
+// it is emptied); anything half-entered stays here, outlined in amber, and
+// never reaches the save.
 function TimeSelect({ value, onChange, ringColor }) {
-    const [parts, setParts] = useState(() => parseTime(value))
+    const initial = parseTime(value)
+    const [text, setText] = useState(initial.h ? formatClock(initial) : '')
+    const [ap, setAp] = useState(initial.p)
+    const lastEmitted = useRef(value || '')
 
-    // Follow the value when it changes from outside (Save, Cancel, Smart Fill,
-    // a restored draft). A half-picked time leaves `value` untouched, so this
-    // does not fire mid-entry and wipe it.
-    useEffect(() => { setParts(parseTime(value)) }, [value])
+    // Follow the value when it changes from outside (Save, Cancel, Smart Fill, a
+    // restored draft). What this field itself just sent doesn't count, so typing
+    // is never overwritten mid-keystroke.
+    useEffect(() => {
+        if ((value || '') === lastEmitted.current) return
+        const p = parseTime(value)
+        setText(p.h ? formatClock(p) : '')
+        setAp(p.p)
+        lastEmitted.current = value || ''
+    }, [value])
 
-    const update = (patch) => {
-        const next = { ...parts, ...patch }
-        // Picking an hour with no minute yet starts the minute at :00, one fewer
-        // thing to do. AM/PM is deliberately never defaulted.
-        if (patch.h && !next.m) next.m = '00'
-        setParts(next)
-        if (isComplete(next)) onChange(toTime24(next))
-        else if (isEmpty(next)) onChange('')
+    const parsed = parseTypedTime(text)
+    const finalAp = parsed?.p || ap
+    const complete = !!(parsed && finalAp)
+    const incomplete = (text.trim() !== '' || ap !== '') && !complete
+    const hint = !incomplete ? undefined
+        : text.trim() === '' ? 'Type the time, like 9:30'
+        : !parsed ? 'Type a time like 9:30 — the minutes need two digits'
+        : 'Choose AM or PM'
+
+    const emit = (v) => { lastEmitted.current = v; onChange(v) }
+
+    // Text typed (or stepped): tell the parent when it is a whole time, or empty.
+    const typed = (nextText, nextAp) => {
+        const p = parseTypedTime(nextText)
+        const useAp = p?.p || nextAp
+        setText(nextText)
+        setAp(nextText.trim() === '' ? '' : useAp)
+        if (p && useAp) emit(toTime24({ h: p.h, m: p.m, p: useAp }))
+        else if (nextText.trim() === '') emit('')
     }
 
-    const incomplete = !isComplete(parts) && !isEmpty(parts)
-    const selectClass = 'min-w-0 flex-1 h-full bg-transparent text-white text-center text-xs appearance-none cursor-pointer focus:outline-none focus:bg-black px-0'
+    const pickAp = (choice) => {
+        setAp(choice)
+        const p = parseTypedTime(text)
+        if (p) emit(toTime24({ h: p.h, m: p.m, p: choice }))
+    }
+
+    const onKeyDown = (e) => {
+        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
+        e.preventDefault()
+        if (!complete) return
+        const next = stepTime24(toTime24({ h: parsed.h, m: parsed.m, p: finalAp }), e.key === 'ArrowUp' ? 15 : -15)
+        const np = parseTime(next)
+        setText(formatClock(np)); setAp(np.p); emit(next)
+    }
+
+    // Leaving the field tidies what was typed: "930" -> "9:30".
+    const onBlur = () => { if (parsed) setText(formatClock(parsed)) }
+
+    const toggle = (label) => (
+        <button
+            key={label}
+            type="button"
+            tabIndex={-1}
+            aria-pressed={finalAp === label}
+            onClick={() => pickAp(label)}
+            className={`h-6 px-1.5 rounded text-[10px] font-bold leading-none transition-colors ${finalAp === label ? 'text-black' : 'text-white/45 hover:text-white'}`}
+            style={finalAp === label ? { background: ringColor } : undefined}
+        >
+            {label}
+        </button>
+    )
 
     return (
         <div
-            className="flex items-center w-full h-full bg-black/50 pr-6 focus-within:ring-1"
+            className="flex items-center justify-center gap-1.5 w-full h-full bg-black/50 pl-1 pr-6 focus-within:ring-1"
             style={{ '--tw-ring-color': incomplete ? 'var(--accent-amber)' : ringColor, ...(incomplete ? { boxShadow: 'inset 0 0 0 1px var(--accent-amber)' } : null) }}
-            title={incomplete ? 'Pick the hour, minute and AM/PM — nothing is saved until all three are set' : undefined}
+            title={hint}
         >
-            <select aria-label="Hour" className={selectClass} value={parts.h} onChange={(e) => update({ h: e.target.value })}>
-                <option value="">--</option>
-                {HOUR_OPTIONS.map(h => <option key={h} value={h}>{h}</option>)}
-            </select>
-            <span className="text-white/60 text-xs">:</span>
-            <select aria-label="Minute" className={selectClass} value={parts.m} onChange={(e) => update({ m: e.target.value })}>
-                <option value="">--</option>
-                {MINUTE_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-            <select aria-label="AM or PM" className={selectClass} value={parts.p} onChange={(e) => update({ p: e.target.value })}>
-                <option value="">--</option>
-                <option value="AM">AM</option>
-                <option value="PM">PM</option>
-            </select>
+            <input
+                type="text"
+                inputMode="text"
+                autoComplete="off"
+                aria-label="Time, for example 9:30"
+                placeholder="h:mm"
+                value={text}
+                onChange={(e) => typed(e.target.value, ap)}
+                onFocus={(e) => e.target.select()}
+                onBlur={onBlur}
+                onKeyDown={onKeyDown}
+                maxLength={8}
+                className="w-12 min-w-0 h-6 bg-transparent text-white text-center text-xs font-mono placeholder:text-white/30 focus:outline-none"
+            />
+            <div role="group" aria-label="AM or PM" className="flex items-center gap-px shrink-0">
+                {['AM', 'PM'].map(toggle)}
+            </div>
         </div>
     )
 }
