@@ -19,24 +19,29 @@ const explain = (e, what) => e?.code === 'permission-denied'
     : `${what}: ${e?.message || 'something went wrong'}`
 
 /**
- * The Department hub: one calendar for the company, plus — depending on who is
- * looking — attendance monitoring, leave history and the org setup.
+ * One component, two homes:
  *
- *   everyone            Calendar (holidays + approved leave; no reasons)
- *   managers/directors  + Attendance and Leave history for THEIR departments
- *   HR / admin          + the same for the whole company, and Setup
+ *   The Calendar page (no `section`)   the company calendar — holidays and approved
+ *                                       leave, no reasons — and, for HR / admins,
+ *                                       the Holidays editor.
+ *   The Admin Dashboard (`section`)    one screen at a time, chosen by the dashboard's
+ *                                       own tabs: 'attendance', 'history' (leave
+ *                                       history), 'people' and 'departments'. The
+ *                                       header and tab bar are the dashboard's, so
+ *                                       they are not drawn here.
  *
  * The scope (org.js scopeFor) decides what is fetched, and the Firestore rules
  * refuse anything outside it — this component never filters data it should not
  * have been given.
  */
-export default function DepartmentHub({ user }) {
+export default function DepartmentHub({ user, section = null }) {
     const scope = useMemo(() => scopeFor(user), [user])
     const canSeeTeam = hasScope(scope)
     const isAdmin = isHrOrAdmin(user)
 
     const now = new Date()
     const [tab, setTab] = useState('calendar')
+    const active = section || tab // what is on screen: the dashboard's choice, else this page's own tab
     const [cursor, setCursor] = useState({ year: now.getFullYear(), month: now.getMonth() })
     const [deptFilter, setDeptFilter] = useState('')
 
@@ -102,7 +107,7 @@ export default function DepartmentHub({ user }) {
     // Everyone's logs for the month — only fetched while the Attendance tab is open.
     const attendance = useMonthAttendance({
         users: teamUsers, year: cursor.year, month: cursor.month,
-        leaveEvents: events, holidays, enabled: canSeeTeam && tab === 'attendance',
+        leaveEvents: events, holidays, enabled: canSeeTeam && active === 'attendance',
     })
 
     const closeDtr = useCallback(() => setDtrFor(null), [])
@@ -113,27 +118,27 @@ export default function DepartmentHub({ user }) {
         await loadEvents()
     }
 
+    // The Calendar page: the calendar, and HR's holiday editor beside it.
     const tabs = [
         { id: 'calendar', label: 'Calendar' },
-        ...(canSeeTeam ? [{ id: 'attendance', label: 'Attendance' }, { id: 'history', label: 'Leave history' }] : []),
-        ...(isAdmin ? [{ id: 'setup', label: 'Setup' }] : []),
+        ...(isAdmin ? [{ id: 'holidays', label: 'Holidays' }] : []),
     ]
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
-            <div className="flex items-center gap-4">
-                <div className="p-3 bg-[var(--accent-purple)]/10 rounded-xl text-[var(--accent-purple)]"><CalendarDays size={22} /></div>
-                <div>
-                    <h2 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">Calendar</h2>
-                    <p className="text-[var(--text-muted)] text-sm">
-                        {isAdmin ? 'Company-wide calendar, attendance and leave'
-                            : canSeeTeam ? 'Calendar, attendance and leave for your departments'
-                                : 'Holidays and who is away'}
-                    </p>
+            {!section && (
+                <div className="flex items-center gap-4">
+                    <div className="p-3 bg-[var(--accent-purple)]/10 rounded-xl text-[var(--accent-purple)]"><CalendarDays size={22} /></div>
+                    <div>
+                        <h2 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">Calendar</h2>
+                        <p className="text-[var(--text-muted)] text-sm">
+                            {isAdmin ? 'Company holidays and who is away — and where the holidays are set' : 'Holidays and who is away'}
+                        </p>
+                    </div>
                 </div>
-            </div>
+            )}
 
-            {tabs.length > 1 && (
+            {!section && tabs.length > 1 && (
                 <div role="tablist" className="flex items-center gap-2 bg-[var(--surface-1)] rounded-2xl border border-[var(--border)] p-1.5 w-full sm:w-fit overflow-x-auto">
                     {tabs.map(t => (
                         <button
@@ -150,11 +155,11 @@ export default function DepartmentHub({ user }) {
                 </div>
             )}
 
-            {tab !== 'calendar' && <ErrorNote>{error}</ErrorNote>}
+            {active !== 'calendar' && <ErrorNote>{error}</ErrorNote>}
 
             {!ready ? <Spinner /> : (
                 <>
-                    {tab === 'calendar' && (
+                    {active === 'calendar' && (
                         <DepartmentCalendar
                             cursor={cursor} onCursor={setCursor}
                             departments={departments} deptFilter={deptFilter} onDeptFilter={setDeptFilter}
@@ -165,7 +170,7 @@ export default function DepartmentHub({ user }) {
                         />
                     )}
 
-                    {tab === 'attendance' && canSeeTeam && (
+                    {active === 'attendance' && canSeeTeam && (
                         <AttendanceMonitor
                             cursor={cursor} onCursor={setCursor}
                             departments={departments} scopeDepartments={scopeDepartments}
@@ -175,16 +180,20 @@ export default function DepartmentHub({ user }) {
                         />
                     )}
 
-                    {tab === 'history' && canSeeTeam && (
+                    {active === 'history' && canSeeTeam && (
                         <LeaveHistory user={user} requests={requests} users={people} departments={departments} scopeDepartments={scopeDepartments} onChanged={() => { loadTeam(); loadEvents() }} />
                     )}
 
-                    {tab === 'setup' && isAdmin && (
-                        <div className="space-y-6">
-                            <DepartmentsAdmin departments={departments} users={people} onChanged={async () => { await loadStatic(); await loadTeam() }} />
-                            <PeopleAdmin users={people} departments={departments} onChanged={loadTeam} />
-                            <HolidaysAdmin stored={storedHolidays} onChanged={loadStatic} />
-                        </div>
+                    {active === 'holidays' && isAdmin && (
+                        <HolidaysAdmin stored={storedHolidays} onChanged={loadStatic} />
+                    )}
+
+                    {active === 'people' && isAdmin && (
+                        <PeopleAdmin users={people} departments={departments} onChanged={loadTeam} />
+                    )}
+
+                    {active === 'departments' && isAdmin && (
+                        <DepartmentsAdmin departments={departments} users={people} onChanged={async () => { await loadStatic(); await loadTeam() }} />
                     )}
                 </>
             )}

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Search, User as UserIcon, Loader2, FileSpreadsheet, Users, Folder, X, Square, CheckSquare, RotateCcw, Trash2 } from 'lucide-react'
+import { Search, User as UserIcon, Loader2, FileSpreadsheet, Users, Folder, X, Square, CheckSquare, RotateCcw, Trash2, CalendarCheck, History, UserCog, Building2 } from 'lucide-react'
 import { Timestamp } from 'firebase/firestore'
 import { api, defaultSubmitBy, reminderApi, leaveApi, orgApi } from '../services/api'
-import { canSeeOvertimeOffset, toYMD, parseYMD } from '../services/leave'
+import { canSeeOvertimeOffset, canUseDepartment, toYMD, parseYMD } from '../services/leave'
 import { exportRows, cutoffText, longDate } from '../services/dtrExport'
 import { buildDtrWorkbook } from '../services/dtrWorkbook'
 import { typeLines } from '../services/otTypes'
@@ -10,6 +10,7 @@ import { cutoffWindow, formatDuration, otHoursFromLogs, otForPeriod } from '../s
 import DtrDecisionBar from './DtrDecisionBar'
 import AdminManageMenu from './AdminManageMenu'
 import PersonProfileEditor from './PersonProfileEditor'
+import DepartmentHub from './department/DepartmentHub'
 import DTRTable from './DTRTable'
 import RecentActivityTable from './RecentActivityTable'
 import CutoffsView from './CutoffsView'
@@ -18,7 +19,9 @@ import { narrowEmployees, countByState, applyStatus, seniorOptions } from '../se
 
 export default function AdminDashboard({ currentUser, focusRequest, onFocusHandled }) {
     const isSuperAdmin = currentUser.role === 'super_admin'
-    const [view, setView] = useState('employees') // 'employees' | 'cutoffs' (cutoffs is super_admin only)
+    // 'employees' | 'cutoffs' | 'attendance' | 'history' | 'people' | 'departments'
+    // — all but 'employees' are super admin only (the last four are DepartmentHub screens)
+    const [view, setView] = useState('employees')
     const [users, setUsers] = useState([])
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState('')
@@ -300,7 +303,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
             const department = departments.find(d => d.id === selectedUser.departmentId)
             const bytes = buildDtrWorkbook(template, {
                 name: selectedUser.name || '',
-                // Both come from Calendar → Setup → People; blank until HR fills them in.
+                // Both come from the Admin Dashboard’s People tab (or the person’s own panel); blank until HR fills them in.
                 positionDept: [selectedUser.position, department?.name].filter(Boolean).join(', '),
                 employmentDate: longDate(selectedUser.employmentDate),
                 cutoffLabel: cutoffText(parseYMD(startYMD), parseYMD(endYMD)),
@@ -469,6 +472,17 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
         setTimeout(() => row.classList.remove('bg-[var(--accent-amber)]/25'), 1800)
     }
 
+    // Attendance, leave history and the people / department editors live here, with
+    // the other admin work, rather than on the Calendar page.
+    const hubTabs = canUseDepartment(currentUser) ? [
+        { id: 'attendance', label: 'Attendance', icon: CalendarCheck },
+        { id: 'history', label: 'Leave history', icon: History },
+        { id: 'people', label: 'People', icon: UserCog },
+        { id: 'departments', label: 'Departments', icon: Building2 },
+    ] : []
+    const viewTabs = [{ id: 'employees', label: 'Employees', icon: Users }, { id: 'cutoffs', label: 'Cutoffs', icon: Folder }, ...hubTabs]
+    const hubView = hubTabs.some(t => t.id === view)
+
     return (
         <div className="flex flex-col lg:h-full gap-4 sm:gap-6 animate-in fade-in duration-500">
             {/* Top Bar: Cutoff Management */}
@@ -487,6 +501,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                     </div>
                 </div>
 
+                {!hubView && (
                 <div className="w-full md:w-auto min-w-0 flex flex-wrap items-center gap-y-3 gap-x-4 bg-[var(--surface-3)] p-2 rounded-xl border border-[var(--border-strong)]">
                     <div className="px-2">
                         <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-bold">Active Cutoff</p>
@@ -575,8 +590,11 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                         </div>
                     </div>
                 </div>
+                )}
             </div>
 
+            {!hubView && (
+            <>
             {/* DTR reminder. Runs on a Cloudflare Worker and posts as a bot into
                 Punx Messenger, so nothing here needs anyone to be online — the
                 buttons only ask it to run now instead of on schedule. */}
@@ -620,30 +638,32 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                 </button>
             </div>
 
-            {/* View Switcher: only super admins can see the Cutoffs folder view */}
+            </>
+            )}
+
+            {/* View switcher: only super admins get more than Employees */}
             {isSuperAdmin && (
-                <div className="flex items-center gap-2 bg-[var(--surface-1)] rounded-2xl border border-[var(--border)] p-1.5 w-full sm:w-fit">
-                    <button
-                        onClick={() => setView('employees')}
-                        className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-colors
-                            ${view === 'employees' ? 'bg-[var(--accent-purple)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
-                    >
-                        <Users size={14} />
-                        Employees
-                    </button>
-                    <button
-                        onClick={() => setView('cutoffs')}
-                        className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-colors
-                            ${view === 'cutoffs' ? 'bg-[var(--accent-purple)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
-                    >
-                        <Folder size={14} />
-                        Cutoffs
-                    </button>
+                <div role="tablist" className="flex items-center gap-2 bg-[var(--surface-1)] rounded-2xl border border-[var(--border)] p-1.5 w-full sm:w-fit overflow-x-auto">
+                    {viewTabs.map(t => (
+                        <button
+                            key={t.id}
+                            role="tab"
+                            aria-selected={view === t.id}
+                            onClick={() => setView(t.id)}
+                            className={`flex items-center gap-2 whitespace-nowrap px-4 py-2 text-xs font-bold rounded-xl transition-colors
+                                ${view === t.id ? 'bg-[var(--accent-purple)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                        >
+                            <t.icon size={14} />
+                            {t.label}
+                        </button>
+                    ))}
                 </div>
             )}
 
             {view === 'cutoffs' && isSuperAdmin ? (
                 <CutoffsView />
+            ) : hubView ? (
+                <DepartmentHub user={currentUser} section={view} />
             ) : (
             <div className="flex flex-col lg:flex-row flex-1 min-h-0 gap-4 lg:gap-6 lg:overflow-hidden">
                 {/* User List Panel */}

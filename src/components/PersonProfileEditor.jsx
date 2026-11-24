@@ -8,7 +8,7 @@ const control = 'bg-[var(--surface-3)] text-[var(--text-primary)] text-xs font-b
 /**
  * A super admin fixing the three things the exported DTR's header asks for —
  * department, position and the day someone started — without leaving the person's
- * DTR. It writes exactly what Calendar → Setup → People writes: a department
+ * DTR. It writes exactly what the People tab writes: a department
  * change goes through orgFields() so a manager's or director's derived scope
  * (managedDepartmentIds, which the security rules read) is recomputed with it.
  *
