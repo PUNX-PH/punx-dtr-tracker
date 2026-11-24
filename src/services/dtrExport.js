@@ -6,7 +6,7 @@
 // per extra session (no day or date on it), so every OT row has its own times and
 // its own reason and every time stays a real time Excel can calculate with.
 
-import { toYMD, leaveForDate, dtrLabel, isPartialDay, LEAVE_TYPES } from './leave.js'
+import { toYMD, parseYMD, leaveForDate, dtrLabel, isPartialDay, LEAVE_TYPES } from './leave.js'
 
 const asDate = (ts) => (ts instanceof Date ? ts : new Date(ts))
 
@@ -76,6 +76,12 @@ export function exportRows({ dates, logs = [], leaves = [], holidaysByDate = {} 
         }
     }
     return rows
+}
+
+/** '2025-03-17' -> "March 17, 2025"; '' (or nothing usable) -> ''. */
+export function longDate(ymd) {
+    const d = parseYMD(ymd || '')
+    return d ? d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : ''
 }
 
 /** "November 1, 2026 – November 15, 2026" */

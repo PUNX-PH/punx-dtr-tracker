@@ -73,6 +73,21 @@ export function orgFields({ departmentId = '', isManager = false, isDirector = f
     }
 }
 
+/**
+ * The two things the DTR sheet's header asks for that nothing else records: a
+ * person's job title and the day they started. Both optional; a bad date is
+ * dropped rather than saved.
+ */
+export function profileFields({ position = '', employmentDate = '' } = {}) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(employmentDate || '')
+    let date = ''
+    if (m) {
+        const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+        if (d.getFullYear() === Number(m[1]) && d.getMonth() === Number(m[2]) - 1 && d.getDate() === Number(m[3])) date = employmentDate
+    }
+    return { position: String(position || '').trim().slice(0, 80), employmentDate: date }
+}
+
 /** "Manager", "Director", "Manager · Director" — or '' for everyone else. */
 export function orgTitle(user) {
     return [user?.isManager === true && 'Manager', user?.isDirector === true && 'Director'].filter(Boolean).join(' · ')

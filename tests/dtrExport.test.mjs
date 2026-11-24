@@ -3,7 +3,8 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import * as XLSX from 'xlsx'
-import { exportRows, cutoffText } from '../src/services/dtrExport.js'
+import { exportRows, cutoffText, longDate } from '../src/services/dtrExport.js'
+import { profileFields } from '../src/services/org.js'
 import { buildDtrWorkbook } from '../src/services/dtrWorkbook.js'
 
 let pass = 0, fail = 0
@@ -53,6 +54,19 @@ it('edit and note logs are ignored; ISO strings work', () => {
   assert.equal(rows[0].regIn.getMinutes(), 30)
 })
 it('the cut off reads in full', () => assert.equal(cutoffText(day(1), day(15)), 'November 1, 2026 – November 15, 2026'))
+
+console.log('\nthe header lines: position and employment date')
+it('a start date reads in full; nothing or junk reads as blank', () => {
+  assert.equal(longDate('2025-03-17'), 'March 17, 2025')
+  assert.equal(longDate(''), ''); assert.equal(longDate(undefined), ''); assert.equal(longDate('soon'), '')
+})
+it('profile fields are trimmed, capped and validated before they are saved', () => {
+  assert.deepEqual(profileFields({ position: '  Designer ', employmentDate: '2025-03-17' }), { position: 'Designer', employmentDate: '2025-03-17' })
+  assert.equal(profileFields({ position: 'x'.repeat(200) }).position.length, 80)
+  assert.equal(profileFields({ employmentDate: '2025-02-30' }).employmentDate, '') // not a real day
+  assert.equal(profileFields({ employmentDate: '17/03/2025' }).employmentDate, '')
+  assert.deepEqual(profileFields(), { position: '', employmentDate: '' })
+})
 
 console.log('\nthe workbook, built from the real template')
 const template = new Uint8Array(fs.readFileSync(new URL('../public/templates/dtr-template.xlsx', import.meta.url)))

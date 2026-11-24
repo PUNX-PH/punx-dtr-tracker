@@ -3,7 +3,7 @@ import { Search, User as UserIcon, Loader2, FileSpreadsheet, Users, Folder, X, S
 import { Timestamp } from 'firebase/firestore'
 import { api, defaultSubmitBy, reminderApi, leaveApi, orgApi } from '../services/api'
 import { canSeeOvertimeOffset, toYMD, parseYMD } from '../services/leave'
-import { exportRows, cutoffText } from '../services/dtrExport'
+import { exportRows, cutoffText, longDate } from '../services/dtrExport'
 import { buildDtrWorkbook } from '../services/dtrWorkbook'
 import { typeLines } from '../services/otTypes'
 import { cutoffWindow, formatDuration, otHoursFromLogs, otForPeriod } from '../services/overtime'
@@ -299,8 +299,9 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
             const department = departments.find(d => d.id === selectedUser.departmentId)
             const bytes = buildDtrWorkbook(template, {
                 name: selectedUser.name || '',
-                positionDept: department?.name || '',
-                employmentDate: '', // the app doesn't keep one; left for HR to fill in
+                // Both come from Calendar → Setup → People; blank until HR fills them in.
+                positionDept: [selectedUser.position, department?.name].filter(Boolean).join(', '),
+                employmentDate: longDate(selectedUser.employmentDate),
                 cutoffLabel: cutoffText(parseYMD(startYMD), parseYMD(endYMD)),
                 rows: exportRows({ dates, logs: userHistory, leaves: userLeaves, holidaysByDate: holidayIndex }),
                 summary: { lines: typeLines(ot.types), totalMinutes: ot.minutes },

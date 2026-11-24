@@ -1,7 +1,7 @@
 import { auth, db } from '../firebase';
 import { collection, query, where, getDocs, getDoc, setDoc, addDoc, updateDoc, deleteDoc, doc, Timestamp, orderBy, limit, onSnapshot, writeBatch, runTransaction } from "firebase/firestore";
 import { DEFAULT_ALLOTMENT, LEAVE_TYPE_KEYS, LEAVE_TYPES, STATUS, summarize, validateRequest, formatAmount, formatRange, requestAmount, requestLabel, canSeeOvertimeOffset } from './leave';
-import { orgFields } from './org';
+import { orgFields, profileFields } from './org';
 import { spanDays, MAX_SPAN_DAYS, holidaysForYears, holidaysByDate } from './holidays';
 import { makeDayKind } from './workday';
 import { calendarEventFrom } from './calendar';
@@ -1253,6 +1253,17 @@ export const orgApi = {
             return { success: true };
         } catch (error) {
             console.error("Set user org error", error);
+            return { success: false, message: error.message };
+        }
+    },
+
+    /** HR setting a person's job title and start date, which the exported DTR's header shows. */
+    setUserProfile: async (userId, input) => {
+        try {
+            await updateDoc(doc(db, "users", userId), profileFields(input));
+            return { success: true };
+        } catch (error) {
+            console.error("Set user profile error", error);
             return { success: false, message: error.message };
         }
     },

@@ -43,6 +43,16 @@ export default function PeopleAdmin({ users, departments, onChanged }) {
         setSaving(null)
     }
 
+    // Job title and start date for the DTR sheet's header. Saved when the box is left
+    // (title) or the date is picked, and only if it actually changed.
+    const saveProfile = async (user, patch) => {
+        setSaving(user.id); setError('')
+        const res = await orgApi.setUserProfile(user.id, { position: user.position || '', employmentDate: user.employmentDate || '', ...patch })
+        if (res.success) await onChanged()
+        else setError(`Could not update ${user.name || 'that person'}: ${res.message}`)
+        setSaving(null)
+    }
+
     const toggleDirectorDept = (user, deptId) => {
         const cur = user.directorDepartmentIds || []
         change(user, { directorDepartmentIds: cur.includes(deptId) ? cur.filter(i => i !== deptId) : [...cur, deptId] })
@@ -78,11 +88,13 @@ export default function PeopleAdmin({ users, departments, onChanged }) {
 
             <div className="relative overflow-x-auto">
                 <table className="w-full text-sm">
-                    <caption className="sr-only">Department, manager and director for each person</caption>
+                    <caption className="sr-only">Department, position, start date, manager and director for each person</caption>
                     <thead>
                         <tr className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--border)]">
                             <th scope="col" className="text-left px-2 py-3">Person</th>
                             <th scope="col" className="text-left px-2 py-3">Department</th>
+                            <th scope="col" className="text-left px-2 py-3">Position</th>
+                            <th scope="col" className="text-left px-2 py-3">Employed since</th>
                             <th scope="col" className="px-2 py-3 text-center">Manager</th>
                             <th scope="col" className="px-2 py-3 text-center">Director</th>
                         </tr>
@@ -105,6 +117,29 @@ export default function PeopleAdmin({ users, departments, onChanged }) {
                                         <option value="">— None —</option>
                                         {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                                     </select>
+                                </td>
+                                <td className="px-2 py-3">
+                                    <input
+                                        key={`pos-${u.id}-${u.position || ''}`}
+                                        type="text"
+                                        maxLength={80}
+                                        defaultValue={u.position || ''}
+                                        aria-label={`Position for ${u.name || u.email}`}
+                                        placeholder="e.g. Designer"
+                                        disabled={saving === u.id}
+                                        onBlur={(e) => { if (e.target.value.trim() !== (u.position || '')) saveProfile(u, { position: e.target.value }) }}
+                                        className={`${selectClass} w-40`}
+                                    />
+                                </td>
+                                <td className="px-2 py-3">
+                                    <input
+                                        type="date"
+                                        value={u.employmentDate || ''}
+                                        aria-label={`Employment date for ${u.name || u.email}`}
+                                        disabled={saving === u.id}
+                                        onChange={(e) => saveProfile(u, { employmentDate: e.target.value })}
+                                        className={`${selectClass} w-40`}
+                                    />
                                 </td>
                                 <td className="px-2 py-3 text-center">
                                     <input
