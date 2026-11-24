@@ -57,6 +57,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
     // half-entered time never reaches the save, so Save refuses until they're fixed
     // rather than quietly skipping them.
     const [timeHints, setTimeHints] = useState({})
+    const isPhone = useIsPhone()
     const setHint = (key, hint) => setTimeHints(prev => {
         if ((prev[key] || null) === (hint || null)) return prev
         const next = { ...prev }
@@ -628,8 +629,239 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
         }
     }
 
+    // ---- Phone layout: one card per day instead of a wide table. Big touch
+    // targets (44px+), inputs at 16px so iPhones don't zoom on focus, and nothing
+    // to swipe sideways. The same handlers and state as the table below.
+    const renderCard = (date, i) => {
+        const leave = leaveForDate(leaves, date)
+        const dayKey = toYMD(date)
+        const flagged = !!flaggedDays && flaggedDays.includes(dayKey)
+        const dayOffLabel = leave && leave.type !== 'offset' && !isPartialDay(leave) ? LEAVE_TYPES[leave.type].short : null
+        const holiday = holidayOn(date)
+        const hType = holiday ? HOLIDAY_TYPES[holiday.type] : null
+        const viewSessions = getVisibleOTSessions(date)
+        // A day with nothing on it collapses to one line when just reading.
+        const hasAny = !!(getDisplayValue(date, 'IN') || getDisplayValue(date, 'OUT') || viewSessions.length || leave || getDisplayValue(date, 'REASON'))
+        const label = 'block mb-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]'
+
+        const timeRow = (type, text) => (
+            <div>
+                <span className={label}>{text}</span>
+                <div className="h-12">
+                    {editMode ? (
+                        <TimeCellEditor
+                            size="lg"
+                            value={getInputValue(date, type)}
+                            onChange={(v) => handleEditChange(date, type, v)}
+                            onDelete={() => handleCellDelete(date, type)}
+                            onHint={(h) => setHint(getCellKey(date, type), h)}
+                            ringColor="var(--accent-green)"
+                        />
+                    ) : (
+                        <div className="h-full flex items-center justify-center rounded-xl bg-[var(--accent-green)]/5 font-mono text-base text-[var(--text-primary)]">
+                            {getDisplayValue(date, type) || (dayOffLabel
+                                ? <span className="font-bold text-sm tracking-wider" style={{ color: LEAVE_TYPES[leave.type].color }}>{dayOffLabel}</span>
+                                : '–')}
+                        </div>
+                    )}
+                </div>
+            </div>
+        )
+
+        return (
+            <section
+                key={i}
+                data-dtr-day={dayKey}
+                className={`rounded-2xl ${!editMode && !hasAny ? 'p-3 space-y-2' : 'p-4 space-y-4'} bg-[var(--surface-2)]/40 border-2 ${flagged ? 'border-[var(--accent-amber)]/60' : 'border-[var(--border)]'}`}
+                style={hType ? { borderColor: hType.color } : undefined}
+            >
+                {/* Which day */}
+                <div className="flex items-start justify-between gap-3">
+                    <div>
+                        <p className="text-lg font-bold text-[var(--text-primary)] leading-tight">{date.toLocaleDateString('en-GB', { weekday: 'long' })}</p>
+                        <p className="text-xs font-mono text-[var(--text-secondary)] mt-0.5">{date.toLocaleDateString('en-GB')}</p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1.5 min-w-0">
+                        {leave && (
+                            <span
+                                className="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider"
+                                style={{ color: LEAVE_TYPES[leave.type].color, background: `color-mix(in srgb, ${LEAVE_TYPES[leave.type].color} 14%, transparent)` }}
+                            >
+                                {leave.type === 'offset' || isPartialDay(leave) ? dtrLabel(leave) : LEAVE_TYPES[leave.type].label}
+                            </span>
+                        )}
+                        {holiday && (
+                            <span
+                                className="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider leading-snug text-right"
+                                style={{ color: hType.color, background: `color-mix(in srgb, ${hType.color} 16%, transparent)` }}
+                            >
+                                {holiday.name}{holiday.days > 1 ? ` (${holiday.day}/${holiday.days})` : ''}
+                            </span>
+                        )}
+                    </div>
+                </div>
+
+                {/* Regular time */}
+                {!editMode && !hasAny ? (
+                    <p className="text-sm text-[var(--text-muted)]">No time recorded</p>
+                ) : (
+                    <div className="space-y-3">
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--accent-green)]">Regular time</p>
+                        <div className={editMode ? 'space-y-3' : 'grid grid-cols-2 gap-3'}>
+                            {timeRow('IN', 'Time in')}
+                            {timeRow('OUT', 'Time out')}
+                        </div>
+                    </div>
+                )}
+
+                {/* Overtime */}
+                {editMode ? (
+                    <div className="space-y-3">
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--accent-purple)]">Overtime</p>
+                        {getOTSessionsForDate(date).map((session, n) => {
+                            const inV = getInputValue(date, 'OT_IN', session)
+                            const outV = getInputValue(date, 'OT_OUT', session)
+                            const reasonV = getOTReason(date, session)
+                            const hasTimes = !!(inV || outV)
+                            // The reason box appears as soon as a session is being filled in, even half a time,
+                            // so it is clear every session has its own.
+                            const active = hasTimes || !!timeHints[getCellKey(date, 'OT_IN', session)] || !!timeHints[getCellKey(date, 'OT_OUT', session)]
+                            const problems = hasTimes ? checkOTSession({ date, inTime: inV, outTime: outV, reason: reasonV }, isWorkday) : []
+                            const workProblem = problems.find(p => p.kind === 'work-time')
+                            const needsReason = problems.some(p => p.kind === 'reason')
+                            return (
+                                <div key={session} className="rounded-xl border border-[var(--border)] bg-[var(--accent-purple)]/5 p-3 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs font-bold text-[var(--text-secondary)]">Session {n + 1}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleSessionDelete(date, session)}
+                                            aria-label={`Remove overtime session ${n + 1}`}
+                                            className="w-11 h-11 -m-2 flex items-center justify-center rounded-full text-[var(--text-muted)] active:bg-[var(--accent-red)]/20 active:text-[var(--accent-red)]"
+                                        >
+                                            <Trash2 size={18} />
+                                        </button>
+                                    </div>
+                                    {[['OT_IN', 'Start', inV], ['OT_OUT', 'End', outV]].map(([type, text, v]) => (
+                                        <div key={type}>
+                                            <span className={label}>{text}</span>
+                                            <div className="h-12">
+                                                <TimeCellEditor
+                                                    size="lg"
+                                                    value={v}
+                                                    onChange={(val) => handleEditChange(date, type, val, session)}
+                                                    onDelete={() => handleCellDelete(date, type, session)}
+                                                    onHint={(h) => setHint(getCellKey(date, type, session), h)}
+                                                    ringColor="var(--accent-purple)"
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {active && (
+                                        <div>
+                                            <span className={label}>Reason (required)</span>
+                                            <input
+                                                type="text"
+                                                maxLength={200}
+                                                required
+                                                aria-label={`Reason for overtime session ${n + 1}`}
+                                                placeholder="Why was this overtime needed?"
+                                                value={reasonV}
+                                                onChange={(e) => handleEditChange(date, 'OT_REASON', e.target.value, session)}
+                                                className={`w-full h-12 rounded-xl bg-black/50 text-white px-3 text-base font-sans focus:outline-none focus:ring-2 ring-[var(--accent-purple)] ${needsReason ? 'ring-1 ring-[var(--accent-red)]' : ''}`}
+                                            />
+                                        </div>
+                                    )}
+                                    {[['Start', 'OT_IN'], ['End', 'OT_OUT']].map(([text, type]) => {
+                                        const hint = timeHints[getCellKey(date, type, session)]
+                                        return hint ? (
+                                            <p key={type} role="alert" className="flex items-start gap-1.5 text-xs font-bold font-sans leading-snug text-[var(--accent-amber)]">
+                                                <AlertTriangle size={14} className="shrink-0 mt-px" />
+                                                {text}: {hint}
+                                            </p>
+                                        ) : null
+                                    })}
+                                    {workProblem && (
+                                        <p role="alert" className="flex items-start gap-1.5 text-xs font-bold font-sans leading-snug text-[var(--accent-red)]">
+                                            <AlertTriangle size={14} className="shrink-0 mt-px" />
+                                            {workProblem.message}
+                                        </p>
+                                    )}
+                                </div>
+                            )
+                        })}
+                        <button
+                            type="button"
+                            onClick={() => handleAddSession(date)}
+                            className="w-full h-12 flex items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--accent-purple)]/50 text-sm font-bold text-[var(--accent-purple)] active:bg-[var(--accent-purple)]/10"
+                        >
+                            <Plus size={16} />
+                            Add overtime session
+                        </button>
+                    </div>
+                ) : viewSessions.length > 0 ? (
+                    <div className="space-y-2">
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--accent-purple)]">Overtime</p>
+                        {viewSessions.map(session => {
+                            const overlap = overlapBySession.get(`${dayKey}_${session}`)
+                            const reasonText = getOTReason(date, session)
+                            return (
+                                <div key={session} className="rounded-xl bg-[var(--accent-purple)]/5 px-3 py-2.5">
+                                    <p className="font-mono text-base text-[var(--text-primary)]">{getDisplayValue(date, 'OT_IN', session) || '–'} – {getDisplayValue(date, 'OT_OUT', session) || '–'}</p>
+                                    {reasonText ? (
+                                        <p className="mt-1 text-sm font-sans text-[var(--text-secondary)] whitespace-pre-wrap break-words">{reasonText}</p>
+                                    ) : canEdit ? (
+                                        <p className="mt-1 flex items-center gap-1.5 text-xs font-bold font-sans text-[var(--accent-amber)]"><AlertTriangle size={13} /> Reason needed — tap Edit Records to add one</p>
+                                    ) : (
+                                        <p className="mt-1 text-xs font-sans text-[var(--text-muted)]">No reason given</p>
+                                    )}
+                                    {overlap && (
+                                        <p className="mt-1 flex items-start gap-1.5 text-xs font-bold font-sans text-[var(--accent-amber)]">
+                                            <AlertTriangle size={13} className="shrink-0 mt-px" />
+                                            {overlap.countedMinutes > 0
+                                                ? `Runs into regular hours — ${formatDuration(overlap.overlapMinutes)} not counted`
+                                                : 'Inside regular hours — not counted'}
+                                        </p>
+                                    )}
+                                </div>
+                            )
+                        })}
+                        {((otTotals && otTotals[dayKey] > 0) || flagged) && (
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-bold font-sans">
+                                {otTotals && otTotals[dayKey] > 0 && <span className="text-[var(--accent-purple)]">Total {formatDuration(otTotals[dayKey])}</span>}
+                                {flagged && <span className="flex items-center gap-1 text-[var(--accent-amber)]"><AlertTriangle size={13} /> Incomplete OT — not counted</span>}
+                            </div>
+                        )}
+                    </div>
+                ) : null}
+
+                {/* Notes */}
+                {editMode ? (
+                    <div>
+                        <span className={label}>Notes</span>
+                        <input
+                            type="text"
+                            placeholder={leave ? leaveNote(leave) : 'Notes for the day'}
+                            className="w-full h-12 rounded-xl bg-black/50 text-white px-3 text-base font-sans focus:outline-none focus:ring-2 ring-slate-500"
+                            value={getInputValue(date, 'REASON')}
+                            onChange={(e) => handleEditChange(date, 'REASON', e.target.value)}
+                        />
+                    </div>
+                ) : (leave || getDisplayValue(date, 'REASON')) ? (
+                    <div>
+                        <span className={label}>Notes</span>
+                        <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap break-words">
+                            {leave && <span className="block font-bold" style={{ color: LEAVE_TYPES[leave.type].color }}>{leaveNote(leave)}</span>}
+                            {getDisplayValue(date, 'REASON')}
+                        </p>
+                    </div>
+                ) : null}
+            </section>
+        )
+    }
+
     return (
-        <div className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] overflow-hidden">
+        <div className="bg-[var(--surface-1)] rounded-3xl border border-[var(--border)] md:overflow-hidden">
             {/* Header Metadata Area */}
             <div className="p-4 sm:p-6 border-b border-[var(--border)] flex flex-col md:flex-row justify-between md:items-center gap-4">
                 <div>
@@ -721,18 +953,38 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                 </div>
             )}
 
-            {/* Swipe hint — the grid below scrolls sideways on phones. */}
-            <p className="md:hidden px-4 pt-3 text-[10px] font-medium uppercase tracking-widest text-[var(--text-muted)]">
-                Swipe the table sideways to see overtime and notes
-            </p>
-
             {editMode && (
                 <p className="px-4 sm:px-6 pt-3 text-[11px] text-[var(--text-muted)]">
-                    Type the numbers of the time, like <strong className="text-[var(--text-secondary)]">930</strong>, then tap AM or PM (or press A or P). Press ↑ or ↓ to move it 15 minutes.
+                    Type the numbers of the time, like <strong className="text-[var(--text-secondary)]">930</strong>, then tap AM or PM.<span className="hidden md:inline"> On a keyboard, A and P pick AM/PM and ↑ ↓ move it 15 minutes.</span>
                 </p>
             )}
 
-            {/* The Grid */}
+            {/* The Grid — cards on a phone, the table from tablets up */}
+            {isPhone ? (
+                <div className="p-3 space-y-3">
+                    {rows.map(renderCard)}
+                    {editMode && (
+                        <div className="sticky bottom-3 z-10 flex gap-2 p-2 rounded-2xl bg-[var(--surface-1)]/95 backdrop-blur border border-[var(--border-strong)] shadow-xl">
+                            <button
+                                type="button"
+                                onClick={handleCancel}
+                                disabled={saving}
+                                className="flex-1 h-12 flex items-center justify-center gap-2 rounded-xl bg-[var(--surface-3)] text-[var(--text-secondary)] text-sm font-bold"
+                            >
+                                <X size={16} /> Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSave}
+                                disabled={saving}
+                                className="flex-[2] h-12 flex items-center justify-center gap-2 rounded-xl bg-[var(--accent-green)] text-black text-sm font-bold shadow-lg shadow-green-900/20"
+                            >
+                                {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Save Changes
+                            </button>
+                        </div>
+                    )}
+                </div>
+            ) : (
             <div className="overflow-x-auto overscroll-x-contain">
                 <table className="w-full min-w-[840px] text-center border-collapse">
                     <thead>
@@ -864,6 +1116,9 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                                 const outV = getInputValue(date, 'OT_OUT', session)
                                                 const reasonV = getOTReason(date, session)
                                                 const hasTimes = !!(inV || outV)
+                                                // The reason box appears as soon as a session is being filled in, even half a time,
+                                                // so it is clear every session has its own.
+                                                const active = hasTimes || !!timeHints[getCellKey(date, 'OT_IN', session)] || !!timeHints[getCellKey(date, 'OT_OUT', session)]
                                                 const problems = hasTimes ? checkOTSession({ date, inTime: inV, outTime: outV, reason: reasonV }, isWorkday) : []
                                                 const workProblem = problems.find(p => p.kind === 'work-time')
                                                 const needsReason = problems.some(p => p.kind === 'reason')
@@ -898,7 +1153,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                                             <Trash2 size={11} />
                                                         </button>
                                                     </div>
-                                                    {hasTimes && (
+                                                    {active && (
                                                         <input
                                                             type="text"
                                                             maxLength={200}
@@ -1014,6 +1269,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                     </tbody>
                 </table>
             </div>
+            )}
         </div>
     )
 }
@@ -1030,7 +1286,8 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
 // only hears a time once the hour, minutes AND AM/PM are all known (or '' once
 // it is emptied); anything half-entered stays here, outlined in amber, and
 // never reaches the save.
-function TimeSelect({ value, onChange, onHint, ringColor }) {
+function TimeSelect({ value, onChange, onHint, ringColor, size = 'sm' }) {
+    const lg = size === 'lg'
     const initial = parseTime(value)
     const [text, setText] = useState(initial.h ? formatClock(initial) : '')
     const [ap, setAp] = useState(initial.p)
@@ -1101,7 +1358,7 @@ function TimeSelect({ value, onChange, onHint, ringColor }) {
             tabIndex={-1}
             aria-pressed={finalAp === label}
             onClick={() => pickAp(label)}
-            className={`h-6 px-1.5 rounded text-[10px] font-bold leading-none transition-colors ${finalAp === label ? 'text-black' : 'text-white/45 hover:text-white'}`}
+            className={`${lg ? 'h-11 w-12 rounded-lg text-sm' : 'h-6 px-1.5 rounded text-[10px]'} font-bold leading-none transition-colors ${finalAp === label ? 'text-black' : 'text-white/45 hover:text-white'}`}
             style={finalAp === label ? { background: ringColor } : undefined}
         >
             {label}
@@ -1110,7 +1367,7 @@ function TimeSelect({ value, onChange, onHint, ringColor }) {
 
     return (
         <div
-            className="flex items-center justify-center gap-1.5 w-full h-full bg-black/50 pl-1 pr-6 focus-within:ring-1"
+            className={lg ? 'flex items-center gap-2 w-full h-full bg-black/50 rounded-xl pl-3 pr-12 focus-within:ring-2' : 'flex items-center justify-center gap-1.5 w-full h-full bg-black/50 pl-1 pr-6 focus-within:ring-1'}
             style={{ '--tw-ring-color': incomplete ? 'var(--accent-amber)' : ringColor, ...(incomplete ? { boxShadow: 'inset 0 0 0 1px var(--accent-amber)' } : null) }}
             title={hint}
         >
@@ -1135,7 +1392,7 @@ function TimeSelect({ value, onChange, onHint, ringColor }) {
                 onBlur={onBlur}
                 onKeyDown={onKeyDown}
                 maxLength={5}
-                className="w-12 min-w-0 h-6 bg-transparent text-white text-center text-xs font-mono placeholder:text-white/30 focus:outline-none"
+                className={lg ? 'flex-1 min-w-0 h-full bg-transparent text-white text-center text-xl font-mono placeholder:text-white/30 focus:outline-none' : 'w-12 min-w-0 h-6 bg-transparent text-white text-center text-xs font-mono placeholder:text-white/30 focus:outline-none'}
             />
             <div role="group" aria-label="AM or PM" className="flex items-center gap-px shrink-0">
                 {['AM', 'PM'].map(toggle)}
@@ -1146,7 +1403,7 @@ function TimeSelect({ value, onChange, onHint, ringColor }) {
 
 // Time input with an explicit delete button. Clicking × calls onDelete which
 // removes the matching Firestore log immediately (no batched-save dance).
-function TimeCellEditor({ value, onChange, onDelete, onHint, ringColor }) {
+function TimeCellEditor({ value, onChange, onDelete, onHint, ringColor, size = 'sm' }) {
     const hasValue = value !== '' && value != null
     const [deleting, setDeleting] = useState(false)
 
@@ -1162,18 +1419,35 @@ function TimeCellEditor({ value, onChange, onDelete, onHint, ringColor }) {
 
     return (
         <div className="relative w-full h-full">
-            <TimeSelect value={value} onChange={onChange} onHint={onHint} ringColor={ringColor} />
+            <TimeSelect value={value} onChange={onChange} onHint={onHint} ringColor={ringColor} size={size} />
             {hasValue && (
                 <button
                     type="button"
                     onClick={handleDeleteClick}
                     disabled={deleting}
                     title="Delete this entry"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded-full bg-[var(--accent-red)]/20 text-[var(--accent-red)] hover:bg-[var(--accent-red)] hover:text-white text-[10px] leading-none transition-colors disabled:opacity-50"
+                    aria-label="Clear this time"
+                    className={`absolute top-1/2 -translate-y-1/2 flex items-center justify-center rounded-full bg-[var(--accent-red)]/20 text-[var(--accent-red)] hover:bg-[var(--accent-red)] hover:text-white text-[10px] leading-none transition-colors disabled:opacity-50 ${size === 'lg' ? 'right-2 w-9 h-9' : 'right-1 w-4 h-4'}`}
                 >
-                    {deleting ? <Loader2 size={10} className="animate-spin" /> : <X size={10} strokeWidth={3} />}
+                    {deleting ? <Loader2 size={size === 'lg' ? 16 : 10} className="animate-spin" /> : <X size={size === 'lg' ? 16 : 10} strokeWidth={3} />}
                 </button>
             )}
         </div>
     )
+}
+
+// True below the md breakpoint (768px): phones, where the DTR becomes cards.
+function useIsPhone() {
+    const query = '(max-width: 767px)'
+    const read = () => typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia(query).matches
+    const [phone, setPhone] = useState(read)
+    useEffect(() => {
+        if (typeof window === 'undefined' || !window.matchMedia) return undefined
+        const mq = window.matchMedia(query)
+        const on = () => setPhone(mq.matches)
+        on()
+        if (mq.addEventListener) mq.addEventListener('change', on); else mq.addListener(on)
+        return () => { if (mq.removeEventListener) mq.removeEventListener('change', on); else mq.removeListener(on) }
+    }, [])
+    return phone
 }
