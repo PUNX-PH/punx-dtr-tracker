@@ -73,3 +73,29 @@ export function stepTime24(hhmm, delta) {
     const total = (((Number(m[1]) * 60 + Number(m[2]) + delta) % 1440) + 1440) % 1440
     return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
 }
+
+/**
+ * What a time box should show after a keystroke, from the text it would hold
+ * now — digits only, with the colon put in for you — or null to REFUSE the
+ * keystroke because no time could ever start that way.
+ *   "9" -> "9"   "93" -> "9:3"   "930" -> "9:30"   "0930" -> "09:30"
+ *   "1930" -> "19:30" (24-hour)   "13" -> "13"
+ * Refused: a fifth digit, an hour past 23, minutes past 59 ("9:75", "2530").
+ * Anything that isn't a digit is simply dropped, so letters can't get in.
+ */
+export function formatTypedDigits(raw) {
+    const d = String(raw || '').replace(/\D/g, '')
+    if (d.length > 4) return null
+    const n = (s) => Number(s)
+    if (d.length <= 1) return d
+    if (d.length === 2) {
+        if (n(d) <= 23) return d // an hour
+        return n(d[1]) <= 5 ? `${d[0]}:${d[1]}` : null // 9 then the first minute digit
+    }
+    if (d.length === 3) {
+        if (n(d[1]) <= 5) return `${d[0]}:${d.slice(1)}` // 9:30
+        // "193": the hour is 19 and the minutes have only just begun
+        return n(d.slice(0, 2)) <= 23 && n(d[2]) <= 5 ? `${d.slice(0, 2)}:${d[2]}` : null
+    }
+    return n(d.slice(0, 2)) <= 23 && n(d.slice(2)) <= 59 ? `${d.slice(0, 2)}:${d.slice(2)}` : null
+}

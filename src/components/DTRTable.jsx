@@ -6,7 +6,7 @@ import { formatDuration, otHoursFromLogs } from '../services/overtime'
 import { checkOTSession } from '../services/workday'
 import { HOLIDAY_TYPES } from '../services/holidays'
 import { useHolidays } from './useHolidays'
-import { parseTime, toTime24, formatHHMM, parseTypedTime, formatClock, stepTime24 } from '../services/time'
+import { parseTime, toTime24, formatHHMM, parseTypedTime, formatClock, stepTime24, formatTypedDigits } from '../services/time'
 
 // `leaves` is the person's leave/offset requests (any status — only approved
 // ones are drawn). They are overlaid at read time rather than written into
@@ -53,6 +53,16 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
     const [saving, setSaving] = useState(false)
     const [anchorDate, setAnchorDate] = useState(new Date())
     const [restoredDraft, setRestoredDraft] = useState(!!initialDraft)
+    // Time boxes that are half-entered right now: { cellKey: 'what it needs' }. A
+    // half-entered time never reaches the save, so Save refuses until they're fixed
+    // rather than quietly skipping them.
+    const [timeHints, setTimeHints] = useState({})
+    const setHint = (key, hint) => setTimeHints(prev => {
+        if ((prev[key] || null) === (hint || null)) return prev
+        const next = { ...prev }
+        if (hint) next[key] = hint; else delete next[key]
+        return next
+    })
 
     const hasMountedRestoreRef = useRef(false)
     const hasMountedPersistRef = useRef(false)
@@ -391,6 +401,17 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
     }
 
     const handleSave = async () => {
+        const half = Object.entries(timeHints)
+        if (half.length > 0) {
+            const names = { IN: 'Time in', OUT: 'Time out', OT_IN: 'OT start', OT_OUT: 'OT end' }
+            const lines = half.map(([key, hint]) => {
+                const m = key.match(/^(.+?)_(OT_IN|OT_OUT|IN|OUT)(?:_(\d+))?$/)
+                const day = m ? new Date(m[1]).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : key
+                return `• ${day}, ${m ? names[m[2]] : 'time'}: ${hint}`
+            })
+            alert(`Nothing was saved. Finish these times first:\n\n${lines.join('\n')}`)
+            return
+        }
         // Refuse before anything is written: overtime inside regular hours, or
         // overtime with no reason. Nothing is half-saved.
         const problems = findOTProblems()
@@ -707,7 +728,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
 
             {editMode && (
                 <p className="px-4 sm:px-6 pt-3 text-[11px] text-[var(--text-muted)]">
-                    Type a time like <strong className="text-[var(--text-secondary)]">9:30</strong> or <strong className="text-[var(--text-secondary)]">9pm</strong>, then tap AM or PM. Press ↑ or ↓ to move it 15 minutes.
+                    Type the numbers of the time, like <strong className="text-[var(--text-secondary)]">930</strong>, then tap AM or PM (or press A or P). Press ↑ or ↓ to move it 15 minutes.
                 </p>
             )}
 
@@ -807,6 +828,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                                 value={getInputValue(date, 'IN')}
                                                 onChange={(v) => handleEditChange(date, 'IN', v)}
                                                 onDelete={() => handleCellDelete(date, 'IN')}
+                                                onHint={(h) => setHint(getCellKey(date, 'IN'), h)}
                                                 ringColor="var(--accent-green)"
                                             />
                                         </div>
@@ -823,6 +845,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                                 value={getInputValue(date, 'OUT')}
                                                 onChange={(v) => handleEditChange(date, 'OUT', v)}
                                                 onDelete={() => handleCellDelete(date, 'OUT')}
+                                                onHint={(h) => setHint(getCellKey(date, 'OUT'), h)}
                                                 ringColor="var(--accent-green)"
                                             />
                                         </div>
@@ -852,6 +875,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                                                 value={inV}
                                                                 onChange={(v) => handleEditChange(date, 'OT_IN', v, session)}
                                                                 onDelete={() => handleCellDelete(date, 'OT_IN', session)}
+                                                                onHint={(h) => setHint(getCellKey(date, 'OT_IN', session), h)}
                                                                 ringColor="var(--accent-purple)"
                                                             />
                                                         </div>
@@ -861,6 +885,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                                                 value={outV}
                                                                 onChange={(v) => handleEditChange(date, 'OT_OUT', v, session)}
                                                                 onDelete={() => handleCellDelete(date, 'OT_OUT', session)}
+                                                                onHint={(h) => setHint(getCellKey(date, 'OT_OUT', session), h)}
                                                                 ringColor="var(--accent-purple)"
                                                             />
                                                         </div>
@@ -885,6 +910,15 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                                             className={`w-full h-8 rounded bg-black/50 text-white px-2 text-xs font-sans focus:outline-none focus:ring-1 ring-[var(--accent-purple)] ${needsReason ? 'ring-1 ring-[var(--accent-red)]' : ''}`}
                                                         />
                                                     )}
+                                                    {[['Start', 'OT_IN'], ['End', 'OT_OUT']].map(([label, type]) => {
+                                                        const hint = timeHints[getCellKey(date, type, session)]
+                                                        return hint ? (
+                                                            <p key={type} role="alert" className="flex items-start gap-1 text-[10px] font-bold font-sans leading-snug text-[var(--accent-amber)]">
+                                                                <AlertTriangle size={11} className="shrink-0 mt-px" />
+                                                                {label}: {hint}
+                                                            </p>
+                                                        ) : null
+                                                    })}
                                                     {workProblem && (
                                                         <p role="alert" className="flex items-start gap-1 text-[10px] font-bold font-sans leading-snug text-[var(--accent-red)]">
                                                             <AlertTriangle size={11} className="shrink-0 mt-px" />
@@ -986,15 +1020,17 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
 
 // One field to type a time into, with an AM / PM toggle beside it, instead of
 // three dropdowns (a minute list of 00–59 is slow to use and got clipped at the
-// edge of the table). It takes what people actually type — "9:30", "930", "9pm",
-// "21:30" — and ↑ / ↓ nudge it by 15 minutes.
+// edge of the table). It only lets NUMBERS in — the colon is put in for you as you
+// type ("930" shows "9:30") and a time that can't exist (minutes past 59) is
+// refused as it is typed. AM / PM is the toggle, or the A and P keys. ↑ / ↓ nudge
+// the time by 15 minutes. On a phone the number pad comes up.
 //
 // It still follows the rule the dropdowns were built for: Safari's native time
 // field committed "9:00 PM" as 9:00 AM before AM/PM was chosen. Here the parent
 // only hears a time once the hour, minutes AND AM/PM are all known (or '' once
 // it is emptied); anything half-entered stays here, outlined in amber, and
 // never reaches the save.
-function TimeSelect({ value, onChange, ringColor }) {
+function TimeSelect({ value, onChange, onHint, ringColor }) {
     const initial = parseTime(value)
     const [text, setText] = useState(initial.h ? formatClock(initial) : '')
     const [ap, setAp] = useState(initial.p)
@@ -1017,10 +1053,16 @@ function TimeSelect({ value, onChange, ringColor }) {
     const incomplete = (text.trim() !== '' || ap !== '') && !complete
     const hint = !incomplete ? undefined
         : text.trim() === '' ? 'Type the time, like 9:30'
-        : !parsed ? 'Type a time like 9:30 — the minutes need two digits'
+        : !parsed ? 'Type the minutes as two digits, like 9:30'
         : 'Choose AM or PM'
 
     const emit = (v) => { lastEmitted.current = v; onChange(v) }
+
+    // Tell the table when this box is half-entered, and when it stops being.
+    const hintRef = useRef(onHint)
+    hintRef.current = onHint
+    useEffect(() => { hintRef.current?.(hint || null) }, [hint])
+    useEffect(() => () => hintRef.current?.(null), [])
 
     // Text typed (or stepped): tell the parent when it is a whole time, or empty.
     const typed = (nextText, nextAp) => {
@@ -1039,6 +1081,8 @@ function TimeSelect({ value, onChange, ringColor }) {
     }
 
     const onKeyDown = (e) => {
+        // A and P choose AM / PM without leaving the keyboard (they are never typed into the box)
+        if (!e.ctrlKey && !e.metaKey && !e.altKey && /^[ap]$/i.test(e.key)) { e.preventDefault(); pickAp(e.key.toLowerCase() === 'a' ? 'AM' : 'PM'); return }
         if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
         e.preventDefault()
         if (!complete) return
@@ -1072,16 +1116,25 @@ function TimeSelect({ value, onChange, ringColor }) {
         >
             <input
                 type="text"
-                inputMode="text"
+                inputMode="numeric"
                 autoComplete="off"
                 aria-label="Time, for example 9:30"
                 placeholder="h:mm"
                 value={text}
-                onChange={(e) => typed(e.target.value, ap)}
+                onChange={(e) => {
+                    const next = formatTypedDigits(e.target.value)
+                    if (next !== null) typed(next, ap) // null: that keystroke can't be part of a time
+                }}
+                onPaste={(e) => {
+                    // "9:30 pm" pasted whole is understood; anything else is ignored
+                    e.preventDefault()
+                    const p = parseTypedTime(e.clipboardData?.getData('text'))
+                    if (p) typed(formatClock(p), p.p || ap)
+                }}
                 onFocus={(e) => e.target.select()}
                 onBlur={onBlur}
                 onKeyDown={onKeyDown}
-                maxLength={8}
+                maxLength={5}
                 className="w-12 min-w-0 h-6 bg-transparent text-white text-center text-xs font-mono placeholder:text-white/30 focus:outline-none"
             />
             <div role="group" aria-label="AM or PM" className="flex items-center gap-px shrink-0">
@@ -1093,7 +1146,7 @@ function TimeSelect({ value, onChange, ringColor }) {
 
 // Time input with an explicit delete button. Clicking × calls onDelete which
 // removes the matching Firestore log immediately (no batched-save dance).
-function TimeCellEditor({ value, onChange, onDelete, ringColor }) {
+function TimeCellEditor({ value, onChange, onDelete, onHint, ringColor }) {
     const hasValue = value !== '' && value != null
     const [deleting, setDeleting] = useState(false)
 
@@ -1109,7 +1162,7 @@ function TimeCellEditor({ value, onChange, onDelete, ringColor }) {
 
     return (
         <div className="relative w-full h-full">
-            <TimeSelect value={value} onChange={onChange} ringColor={ringColor} />
+            <TimeSelect value={value} onChange={onChange} onHint={onHint} ringColor={ringColor} />
             {hasValue && (
                 <button
                     type="button"

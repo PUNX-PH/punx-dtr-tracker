@@ -2,7 +2,7 @@
 // the DTR time dropdowns. The cases that matter are the 12s and midnight: 12 AM
 // is 00:xx, 12 PM is 12:xx, and a late-night entry must never read back as 24:xx.
 import assert from 'node:assert/strict'
-import { parseTime, toTime24, isComplete, isEmpty, formatHHMM, parseTypedTime, formatClock, stepTime24 } from '../src/services/time.js'
+import { parseTime, toTime24, isComplete, isEmpty, formatHHMM, parseTypedTime, formatClock, stepTime24, formatTypedDigits } from '../src/services/time.js'
 
 let pass = 0, fail = 0
 function it(name, fn) {
@@ -90,6 +90,34 @@ it('arrow keys step by minutes and wrap round midnight', () => {
   assert.equal(stepTime24('23:55', 15), '00:10')
   assert.equal(stepTime24('00:05', -15), '23:50')
   assert.equal(stepTime24('', 15), '')
+})
+
+console.log('\nonly numbers get in')
+const d = formatTypedDigits
+it('digits build up a time with the colon put in for you', () => {
+  assert.equal(d(''), ''); assert.equal(d('9'), '9'); assert.equal(d('93'), '9:3'); assert.equal(d('930'), '9:30'); assert.equal(d('0930'), '09:30')
+  assert.equal(d('12'), '12'); assert.equal(d('123'), '1:23'); assert.equal(d('1230'), '12:30')
+})
+it('typing a colon changes nothing: the app puts the colon in itself', () => {
+  assert.equal(d('9:'), '9'); assert.equal(d('9:3'), '9:3'); assert.equal(d('9:30'), '9:30'); assert.equal(d('12:30'), '12:30')
+})
+it('24-hour times can be typed all the way through', () => {
+  assert.equal(d('13'), '13'); assert.equal(d('19'), '19'); assert.equal(d('193'), '19:3'); assert.equal(d('1930'), '19:30'); assert.equal(d('2359'), '23:59')
+})
+it('letters and symbols never get in', () => {
+  assert.equal(d('aa'), ''); assert.equal(d('9a'), '9'); assert.equal(d('9pm'), '9'); assert.equal(d('-'), ''); assert.equal(d('9.30'), '9:30')
+})
+it('impossible times are refused: minutes past 59, hours past 23, a fifth digit', () => {
+  assert.equal(d('97'), null); assert.equal(d('9:75'), null); assert.equal(d('960'), null)
+  assert.equal(d('2530'), null); assert.equal(d('1260'), null); assert.equal(d('2460'), null); assert.equal(d('12345'), null); assert.equal(d('93059'), null)
+  assert.equal(d('673'), null)
+})
+it('anything it allows is something parseTypedTime can finish or is waiting on', () => {
+  for (const full of ['9', '9:30', '09:30', '12:00', '1:23', '19:30', '23:59', '0:05']) {
+    const shown = d(full); assert.ok(shown !== null, full)
+    assert.ok(parseTypedTime(shown), 'parses ' + shown)
+  }
+  assert.equal(parseTypedTime(d('93')), null) // "9:3": still waiting on a second minute digit
 })
 
 console.log(`\n${pass} passed, ${fail} failed`)
