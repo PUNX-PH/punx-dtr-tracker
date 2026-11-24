@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, Pencil, Plus, Repeat, RotateCcw, Trash2 } from 'lucide-react'
 import { holidayApi } from '../../services/api'
-import { HOLIDAY_TYPES, MAX_SPAN_DAYS, holidaysForYears, spanDays } from '../../services/holidays'
+import { resetHolidayCache } from '../useHolidays'
+import { HOLIDAY_TYPES, MAX_SPAN_DAYS, PAY_AS, holidaysForYears, spanDays } from '../../services/holidays'
 import { formatYMD } from '../../services/leave'
 import { inputClass } from '../leave/shared'
 
@@ -17,7 +18,7 @@ function Field({ label, children }) {
 }
 
 const SOURCE_LABEL = { ph: 'Built-in', 'ph-edited': 'Edited', company: 'Company' }
-const blank = (year) => ({ id: null, date: `${year}-01-01`, endDate: '', multi: false, name: '', type: 'company', recurring: false })
+const blank = (year) => ({ id: null, date: `${year}-01-01`, endDate: '', multi: false, name: '', type: 'company', recurring: false, payAs: 'rest' })
 
 // "Thu, 1 Jan" for one day, "Mon, 2 Nov – Wed, 4 Nov" for a run (the year only when it changes).
 const noYear = (ymd) => formatYMD(ymd).replace(/ \d{4}$/, '')
@@ -53,6 +54,7 @@ export default function HolidaysAdmin({ stored, onChanged }) {
         try {
             const res = await fn()
             if (!res.success) { setError(res.message); return false }
+            resetHolidayCache() // DTR tables mounted after this read the new list
             await onChanged()
             return true
         } finally { setBusy(false) }
@@ -71,7 +73,7 @@ export default function HolidaysAdmin({ stored, onChanged }) {
         const base = stored.find(d => d.id === h.seriesId) || h
         const end = base.endDate && base.endDate !== base.date ? base.endDate : ''
         setError('')
-        setForm({ id: h.seriesId, date: base.date, endDate: end, multi: !!end, name: base.name, type: base.type, recurring: base.recurring === true })
+        setForm({ id: h.seriesId, date: base.date, endDate: end, multi: !!end, name: base.name, type: base.type, recurring: base.recurring === true, payAs: base.payAs || 'rest' })
     }
 
     const remove = (h) => {
@@ -157,6 +159,29 @@ export default function HolidaysAdmin({ stored, onChanged }) {
                         )}
                     </div>
 
+                    {/* How work on a company holiday is classified */}
+                    {form.type === 'company' && (
+                        <Field label="Counts for pay as">
+                            <div role="radiogroup" aria-label="Counts for pay as" className="flex flex-wrap rounded-xl overflow-hidden border border-[var(--border-strong)] w-fit">
+                                {Object.entries(PAY_AS).map(([k, p]) => (
+                                    <button
+                                        key={k}
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={form.payAs === k}
+                                        onClick={() => setForm({ ...form, payAs: k })}
+                                        className={`px-4 py-2.5 text-xs font-bold transition-colors ${form.payAs === k ? 'bg-[var(--accent-purple)] text-white' : 'bg-[var(--surface-3)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                                    >
+                                        {p.label}
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="mt-1.5 text-xs text-[var(--text-muted)]">
+                                Decides how hours worked on this day are sorted on the DTR: the first 8 hours as work and the rest as OT, at the holiday or rest-day type you pick.
+                            </p>
+                        </Field>
+                    )}
+
                     {/* Whether it comes back */}
                     <label className={`flex items-start gap-3 p-3 rounded-xl border ${isBuiltInEdit ? 'border-[var(--border)] opacity-60' : 'border-[var(--border-strong)] hover:border-[var(--accent-purple)]/50 cursor-pointer'} bg-[var(--surface-1)] transition-colors`}>
                         <input
@@ -195,6 +220,7 @@ export default function HolidaysAdmin({ stored, onChanged }) {
                             <span className="block text-sm font-semibold text-[var(--text-primary)] truncate">{h.name}</span>
                             <span className="block text-[10px] font-bold uppercase" style={{ color: HOLIDAY_TYPES[h.type].color }}>
                                 {HOLIDAY_TYPES[h.type].label}<span className="text-[var(--text-muted)] font-semibold normal-case"> · {SOURCE_LABEL[h.source]}{h.days > 1 ? ` · ${h.days} days` : ''}</span>
+                                {h.type === 'company' && h.payAs && <span className="text-[var(--text-muted)] font-semibold normal-case"> · Paid as {PAY_AS[h.payAs].label.toLowerCase()}</span>}
                                 {h.recurring && <span className="ml-2 inline-flex items-center gap-1 text-[var(--accent-purple)] normal-case font-semibold"><Repeat size={10} /> Every year</span>}
                             </span>
                         </span>

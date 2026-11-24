@@ -5,6 +5,9 @@
 // constants below, so the text and the maths cannot disagree):
 //   • OT is counted per CUTOFF, from the OT_IN / OT_OUT pairs on the DTR. The
 //     counter starts again at zero with every new cutoff.
+//   • Only time OUTSIDE regular hours (9:00 AM – 6:00 PM on a working day) is
+//     overtime. A session that overlaps regular hours counts only the part
+//     outside them; on weekends and holidays all of it counts (workday.js).
 //   • The first OT_THRESHOLD_HOURS (20) of a cutoff stay ordinary overtime.
 //   • Every hour past that becomes offset, 1 hour of OT = 1 hour of offset.
 //   • It is credited when the cutoff's DTR is APPROVED, as a snapshot stored on
@@ -14,77 +17,97 @@
 //     remaining offset passes OFFSET_WARN_HOURS (30); the excess still counts.
 
 import { parseYMD, toYMD } from './leave.js'
+import { MAX_OT_SESSION_HOURS, workOverlapMinutes, actualMinutes, makeDayKind } from './workday.js'
+import { otSessions, classifyOT } from './otTypes.js'
+
+export { MAX_OT_SESSION_HOURS }
 
 export const OT_THRESHOLD_HOURS = 20
 export const OFFSET_WARN_HOURS = 30
-// The longest single OT session accepted. It is what lets an overnight session
-// (6 PM → 2 AM, both typed on the same row) count as 8 hours, while a mistyped
-// AM/PM (9 PM → 7 PM would be 22 hours) is still flagged instead of counted.
-export const MAX_OT_SESSION_HOURS = 16
 
 const round2 = (n) => Math.round(n * 100) / 100
 
 /**
- * OT sessions from raw logs. A session is an OT_IN and an OT_OUT with the same
- * local calendar day and session number (a day can have several — "split OT").
- * Returns { hours, minutes, sessions, skipped, incomplete, byDay }:
- *   hours     total of the complete, sensible sessions (2 decimals)
+ * Overtime from raw logs. A session is an OT_IN and an OT_OUT with the same local
+ * calendar day and session number (a day can have several — "split OT").
+ *
+ *   opts.dayKind    (Date) => 'work' | 'rest' | 'regularHoliday' | 'specialHoliday',
+ *                   from workday.makeDayKind(holidays). Callers that know the
+ *                   holidays should pass it; without it only weekends have no
+ *                   regular hours.
+ *   opts.isWorkday  older form of the same thing: (Date) => boolean.
+ *
+ * What counts, per session: the minutes OUTSIDE regular hours (9–6 on a working
+ * day), less 1 hour for the break when that is longer than 5 hours
+ * (workday.actualMinutes). 6:00 PM → 2:00 AM is 8 hours elapsed, 7 counted.
+ *
+ * Returns { hours, minutes, sessions, skipped, incomplete, overlaps, noReason, byDay, types }:
+ *   hours     total of the counted sessions (2 decimals)
  *   minutes   the same total in whole minutes — what "X hrs Y mins" is built from
- *   sessions  how many were counted
+ *   sessions  how many sessions added anything to the total
  *   skipped   sessions with an IN but no OUT (or the reverse), or an OUT that
  *             can't be made sense of. They count for nothing rather than guessing.
- *             An OUT earlier than the IN is an OVERNIGHT session (6 PM → 2:13 AM
- *             is 8h 13m: the OUT is the next morning) as long as that comes to no
- *             more than MAX_OT_SESSION_HOURS; past that it is almost certainly a
- *             mistyped AM/PM and is reported as 'bad-order'.
+ *             An OUT earlier than the IN is an OVERNIGHT session (6 PM → 2:13 AM:
+ *             the OUT is the next morning) as long as that comes to no more than
+ *             MAX_OT_SESSION_HOURS; past that it is almost certainly a mistyped
+ *             AM/PM and is reported as 'bad-order'.
  *   incomplete  WHICH sessions were skipped, so a reviewer can go and look:
  *               [{ day:'YYYY-MM-DD', session, problem, inAt, outAt }] where problem
- *               is 'no-end', 'no-start' or 'bad-order' (end not after start)
- *   byDay       { 'YYYY-MM-DD': minutes } — each day's counted overtime
+ *               is 'no-end', 'no-start' or 'bad-order'
+ *   overlaps  sessions that run into regular hours on a working day. Only the part
+ *             OUTSIDE 9–6 is counted; this says how much was left out:
+ *             [{ day, session, inAt, outAt, overlapMinutes, countedMinutes }]
+ *   noReason  sessions with no reason written for them (the otReason on their
+ *             logs): [{ day, session }]
+ *   byDay     { 'YYYY-MM-DD': minutes } — each day's counted overtime
+ *   types     the same hours sorted into the DTR guidelines' types — Regular OT,
+ *             Rest Day Work, Holiday OT, … with ND carved out: classifyOT()
  */
-export function otHoursFromLogs(logs = []) {
-    const groups = new Map()
-    for (const log of logs) {
-        if (log.type !== 'OT_IN' && log.type !== 'OT_OUT') continue
-        const ts = log.timestamp instanceof Date ? log.timestamp : new Date(log.timestamp)
-        if (Number.isNaN(ts.getTime())) continue
-        const key = `${toYMD(ts)}_${log.session || 0}`
-        const g = groups.get(key) || { ins: [], outs: [] }
-        ;(log.type === 'OT_IN' ? g.ins : g.outs).push(ts)
-        groups.set(key, g)
-    }
+export function otHoursFromLogs(logs = [], opts = {}) {
+    const dayKind = opts.dayKind || (opts.isWorkday ? (d) => (opts.isWorkday(d) ? 'work' : 'rest') : makeDayKind())
+    const isWorkday = (d) => dayKind(d) === 'work'
+
     let minutes = 0
     let sessions = 0
     const incomplete = []
+    const overlaps = []
+    const noReason = []
     const byDay = {}
-    for (const [key, g] of groups) {
-        const [day, session] = key.split('_')
-        const inAt = g.ins.length ? new Date(Math.min(...g.ins)) : null
-        const outAt = g.outs.length ? new Date(Math.max(...g.outs)) : null
-        let m = inAt && outAt ? Math.round((outAt - inAt) / 60000) : 0
-        if (inAt && outAt && m <= 0) m += 24 * 60 // ended after midnight
-        const problem = !inAt ? 'no-start' : !outAt ? 'no-end' : (m <= 0 || m > MAX_OT_SESSION_HOURS * 60) ? 'bad-order' : null
-        if (problem) { incomplete.push({ day, session: Number(session), problem, inAt, outAt }); continue }
-        minutes += m
-        byDay[day] = (byDay[day] || 0) + m
-        sessions++
+    for (const s of otSessions(logs)) {
+        const { day, session, inAt, outAt } = s
+        if (!s.reason) noReason.push({ day, session })
+        if (s.problem) { incomplete.push({ day, session, problem: s.problem, inAt, outAt }); continue }
+
+        // Only the part outside regular hours is overtime, less the break.
+        const end = new Date(inAt.getTime() + s.elapsed * 60000)
+        const overlapMinutes = workOverlapMinutes(inAt, end, isWorkday)
+        const counted = actualMinutes(inAt, end, isWorkday).minutes.length
+        if (overlapMinutes > 0) overlaps.push({ day, session, inAt, outAt, overlapMinutes, countedMinutes: counted })
+        if (counted > 0) {
+            minutes += counted
+            byDay[day] = (byDay[day] || 0) + counted
+            sessions++
+        }
     }
-    incomplete.sort((a, b) => a.day.localeCompare(b.day) || a.session - b.session)
-    return { hours: round2(minutes / 60), minutes, sessions, skipped: incomplete.length, incomplete, byDay }
+    return {
+        hours: round2(minutes / 60), minutes, sessions, skipped: incomplete.length,
+        incomplete, overlaps, noReason, byDay,
+        types: classifyOT(logs, { dayKind }),
+    }
 }
 
 /**
  * Overtime for the period a DTR is showing: only logs inside the cutoff's days
  * when there is one, else everything given. Adds `window` (or null).
  */
-export function otForPeriod(logs = [], cutoff = null) {
-    if (!cutoff) return { ...otHoursFromLogs(logs), window: null }
+export function otForPeriod(logs = [], cutoff = null, opts = {}) {
+    if (!cutoff) return { ...otHoursFromLogs(logs, opts), window: null }
     const win = cutoffWindow(cutoff)
     const inside = logs.filter(l => {
         const t = new Date(l.timestamp)
         return t >= win.from && t <= win.to
     })
-    return { ...otHoursFromLogs(inside), window: win }
+    return { ...otHoursFromLogs(inside, opts), window: win }
 }
 
 /** 1590 → "26 hrs 30 mins"; 60 → "1 hr"; 61 → "1 hr 1 min"; 0 → "0 mins". */

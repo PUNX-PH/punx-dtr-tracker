@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react'
 import { Search, User as UserIcon, Loader2, FileSpreadsheet, Users, Folder, X, Square, CheckSquare, RotateCcw, Trash2 } from 'lucide-react'
 import { Timestamp } from 'firebase/firestore'
-import * as XLSX from 'xlsx'
-import { api, defaultSubmitBy, reminderApi, leaveApi } from '../services/api'
-import { leaveForDate, leaveNote, canSeeOvertimeOffset } from '../services/leave'
+import { api, defaultSubmitBy, reminderApi, leaveApi, orgApi } from '../services/api'
+import { canSeeOvertimeOffset, toYMD, parseYMD } from '../services/leave'
+import { exportRows, cutoffText } from '../services/dtrExport'
+import { buildDtrWorkbook } from '../services/dtrWorkbook'
+import { typeLines } from '../services/otTypes'
 import { cutoffWindow, formatDuration, otHoursFromLogs, otForPeriod } from '../services/overtime'
 import DtrDecisionBar from './DtrDecisionBar'
 import AdminManageMenu from './AdminManageMenu'
 import DTRTable from './DTRTable'
 import RecentActivityTable from './RecentActivityTable'
 import CutoffsView from './CutoffsView'
+import { useHolidays } from './useHolidays'
 import { narrowEmployees, countByState, applyStatus, seniorOptions } from '../services/employeeFilters'
 
 export default function AdminDashboard({ currentUser, focusRequest, onFocusHandled }) {
@@ -39,6 +42,15 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
     const [selectedIds, setSelectedIds] = useState(new Set())
     const [showRemoved, setShowRemoved] = useState(false)
     const [removing, setRemoving] = useState(false)
+
+    // Which days have regular hours (9–6, weekdays, not holidays). Overtime is only
+    // the time outside them, so the totals, flags and export all need the same answer.
+    const holidayYears = [new Date().getFullYear()]
+    if (cutoff) holidayYears.push(cutoff.startDate.toDate().getFullYear(), cutoff.endDate.toDate().getFullYear())
+    const { dayKind, byDate: holidayIndex } = useHolidays(holidayYears)
+    // Department names, for the "Position and Department" line of the exported DTR.
+    const [departments, setDepartments] = useState([])
+    useEffect(() => { orgApi.getDepartments().then(setDepartments).catch(() => {}) }, [])
 
     useEffect(() => {
         loadUsers()
@@ -260,106 +272,53 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
         return submissions[userId]
     }
 
-    const handleExportDTR = () => {
+    // Downloads the person's period as the company's DTR sheet: their
+    // template with the name, cut off, every day's times, each OT's reason, and a
+    // summary of the OT types under the table (see services/dtrWorkbook.js).
+    const handleExportDTR = async () => {
         if (!selectedUser) return
+        if (!cutoff) { alert("Please select a cutoff period to export."); return }
 
-        let start, end;
+        const startYMD = toYMD(cutoff.startDate.toDate())
+        const endYMD = toYMD(cutoff.endDate.toDate())
+        const dates = []
+        for (let d = parseYMD(startYMD); toYMD(d) <= endYMD; d.setDate(d.getDate() + 1)) dates.push(new Date(d))
 
-        if (cutoff) {
-            start = cutoff.startDate.toDate();
-            end = cutoff.endDate.toDate();
-        } else {
-            // Fallback if no cutoff is selected (e.g. export all or something? but DTRTable allows viewing history)
-            // For now let's enforce cutoff for simplified export
-            if (userHistory.length === 0) return alert("No history to export");
-            // Just take the range from the history?
-            // Let's rely on the current view which is driven by cutoff
-            alert("Please select a cutoff period to export.");
-            return;
+        try {
+            const res = await fetch(`${import.meta.env.BASE_URL}templates/dtr-template.xlsx`)
+            if (!res.ok) throw new Error(`The DTR template could not be loaded (${res.status}).`)
+            const template = new Uint8Array(await res.arrayBuffer())
+
+            // Overtime for the period, to the minute — the same counting as the card on screen.
+            const win = cutoffWindow(cutoff)
+            const ot = otHoursFromLogs(userHistory.filter(l => {
+                const t = new Date(l.timestamp)
+                return t >= win.from && t <= win.to
+            }), { dayKind })
+
+            const department = departments.find(d => d.id === selectedUser.departmentId)
+            const bytes = buildDtrWorkbook(template, {
+                name: selectedUser.name || '',
+                positionDept: department?.name || '',
+                employmentDate: '', // the app doesn't keep one; left for HR to fill in
+                cutoffLabel: cutoffText(parseYMD(startYMD), parseYMD(endYMD)),
+                rows: exportRows({ dates, logs: userHistory, leaves: userLeaves, holidaysByDate: holidayIndex }),
+                summary: { lines: typeLines(ot.types), totalMinutes: ot.minutes },
+            })
+
+            const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+            const url = URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = url
+            link.download = `DTR_${(selectedUser.name || 'employee').replace(/\s+/g, '_')}_${startYMD}_to_${endYMD}.xlsx`
+            document.body.appendChild(link)
+            link.click()
+            link.remove()
+            setTimeout(() => URL.revokeObjectURL(url), 1000)
+        } catch (err) {
+            console.error('Export failed', err)
+            alert('Could not export the DTR: ' + err.message)
         }
-
-        const dates = [];
-        // Generate dates
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-            dates.push(new Date(d));
-        }
-
-        const exportData = dates.map(date => {
-            const dateStr = date.toLocaleDateString('en-GB');
-            const dayStr = date.toLocaleDateString('en-GB', { weekday: 'long' });
-
-            const findLog = (type) => userHistory.find(h =>
-                new Date(h.timestamp).toDateString() === date.toDateString() &&
-                h.type === type
-            );
-
-            // Reason logic: find any log for the date
-            const findAnyLog = () => userHistory.find(h =>
-                h.type !== 'EDIT' && new Date(h.timestamp).toDateString() === date.toDateString()
-            );
-
-            const formatTime = (log) => log ? new Date(log.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : '';
-
-            // Split OT: a day can have multiple OT_IN/OT_OUT pairs, distinguished
-            // by a `session` index. Join them into one "9:00 AM-10:00 AM, 3:00 PM-6:00 PM" cell.
-            const otLogs = userHistory.filter(h =>
-                (h.type === 'OT_IN' || h.type === 'OT_OUT') &&
-                new Date(h.timestamp).toDateString() === date.toDateString()
-            );
-            const otBySession = {};
-            otLogs.forEach(l => {
-                const s = l.session || 0;
-                otBySession[s] = otBySession[s] || {};
-                otBySession[s][l.type] = l;
-            });
-            const otSessions = Object.keys(otBySession)
-                .sort((a, b) => a - b)
-                .map(s => `${formatTime(otBySession[s].OT_IN) || '—'}-${formatTime(otBySession[s].OT_OUT) || '—'}`)
-                .join(', ');
-
-            return {
-                Date: dateStr,
-                Day: dayStr,
-                "Time In": formatTime(findLog('IN')),
-                "Time Out": formatTime(findLog('OUT')),
-                "Overtime": otSessions,
-                // Approved leave / offset for the day, same overlay the DTR screen draws.
-                "Leave": (() => {
-                    const leave = leaveForDate(userLeaves, date);
-                    return leave ? leaveNote(leave) : '';
-                })(),
-                "Notes": findAnyLog()?.reason || ''
-            };
-        });
-
-        // Total overtime for the period, to the minute — same counting as the card on screen.
-        const win = cutoffWindow(cutoff);
-        const otTotal = otHoursFromLogs(userHistory.filter(l => {
-            const t = new Date(l.timestamp);
-            return t >= win.from && t <= win.to;
-        }));
-        exportData.push({}, { Date: 'TOTAL OVERTIME', Overtime: formatDuration(otTotal.minutes) });
-
-        const wb = XLSX.utils.book_new();
-        const ws = XLSX.utils.json_to_sheet(exportData);
-
-        // Adjust column widths
-        const wscols = [
-            { wch: 15 }, // Date
-            { wch: 15 }, // Day
-            { wch: 15 }, // In
-            { wch: 15 }, // Out
-            { wch: 30 }, // Overtime
-            { wch: 40 }, // Leave (type + reason)
-            { wch: 30 }  // Notes
-        ];
-        ws['!cols'] = wscols;
-
-        XLSX.utils.book_append_sheet(wb, ws, "DTR Record");
-
-        const fileName = `DTR_${selectedUser.name.replace(/\s+/g, '_')}_${start.toISOString().split('T')[0]}_to_${end.toISOString().split('T')[0]}.xlsx`;
-
-        XLSX.writeFile(wb, fileName);
     }
 
     // Everyone visible except yourself — removing your own account would lock
@@ -487,7 +446,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
 
     // For the selected person: this period's overtime, their submission, and whether
     // THIS viewer may decide it (a super admin, when no senior is assigned to do so).
-    const ot = otForPeriod(userHistory, cutoff)
+    const ot = otForPeriod(userHistory, cutoff, { dayKind })
     const submissionOfSelected = selectedUser ? (getSubmissionStatus(selectedUser.id) || null) : null
     const canDecideSelected = !!selectedUser && currentUser.role === 'super_admin' && !selectedUser.assignedSeniorId
         && !!submissionOfSelected && ['pending', 'pending_senior'].includes(submissionOfSelected.status)

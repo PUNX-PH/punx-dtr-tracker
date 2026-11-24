@@ -6,6 +6,7 @@ import {
   OT_THRESHOLD_HOURS, OFFSET_WARN_HOURS, MAX_OT_SESSION_HOURS, formatDuration, otHoursFromLogs, otForPeriod, splitOT, cutoffWindow, offsetEarnedByUser, offsetOverWarning,
 } from '../src/services/overtime.js'
 import { canSeeOvertimeOffset } from '../src/services/leave.js'
+import { makeIsWorkday } from '../src/services/workday.js'
 
 let pass = 0, fail = 0
 function it(name, fn) {
@@ -41,10 +42,21 @@ it('an IN with no OUT counts for nothing and is reported', () => {
   const r = otHoursFromLogs([ot('OT_IN', 5, 18, 0)])
   assert.equal(r.hours, 0); assert.equal(r.skipped, 1)
 })
-it('an overnight session on one row counts: 6:00 PM to 2:13 AM is 8h 13m', () => {
+it('an overnight session on one row counts: 6:00 PM to 2:13 AM is 8h 13m elapsed, 7h 13m after the break', () => {
   const r = otHoursFromLogs([ot('OT_IN', 5, 18, 0), ot('OT_OUT', 5, 2, 13)])
-  assert.equal(r.minutes, 493); assert.equal(r.skipped, 0); assert.equal(r.sessions, 1)
-  assert.deepEqual(r.byDay, { '2026-10-05': 493 }) // credited to the day it started
+  assert.equal(r.minutes, 433); assert.equal(r.skipped, 0); assert.equal(r.sessions, 1)
+  assert.deepEqual(r.byDay, { '2026-10-05': 433 }) // credited to the day it started
+})
+it('the guideline example: 6:00 PM to 2:00 AM is 8 hours elapsed, less the 1-hour break = 7', () =>
+  assert.equal(otHoursFromLogs([ot('OT_IN', 5, 18, 0), ot('OT_OUT', 5, 2, 0)]).hours, 7))
+it('the break comes off only a session LONGER than 5 hours: exactly 5 keeps all 5', () => {
+  assert.equal(otHoursFromLogs([ot('OT_IN', 5, 18, 0), ot('OT_OUT', 5, 23, 0)]).hours, 5)
+  assert.equal(otHoursFromLogs([ot('OT_IN', 5, 18, 0), ot('OT_OUT', 5, 23, 1)]).minutes, 241) // 5h01m - 1h
+})
+it('the break applies to each session on its own, not to the day', () => {
+  // two 3-hour sessions are 6 hours in the day but neither is longer than 5
+  const r = otHoursFromLogs([ot('OT_IN', 5, 18, 0, 0), ot('OT_OUT', 5, 21, 0, 0), ot('OT_IN', 5, 22, 0, 1), ot('OT_OUT', 5, 23, 59, 1)])
+  assert.equal(r.minutes, 180 + 119)
 })
 it('an OUT that would make the session longer than the limit is a mistake, not an overnight', () => {
   assert.equal(MAX_OT_SESSION_HOURS, 16)
@@ -56,14 +68,72 @@ it('an OUT equal to its IN is not 24 hours of overtime', () => {
   assert.equal(r.hours, 0); assert.equal(r.incomplete[0].problem, 'bad-order')
 })
 it('exactly the limit counts, one minute more does not', () => {
-  assert.equal(otHoursFromLogs([ot('OT_IN', 5, 18, 0), ot('OT_OUT', 5, 10, 0)]).hours, 16)
+  assert.equal(otHoursFromLogs([ot('OT_IN', 9, 18, 0), ot('OT_OUT', 9, 10, 0)]).hours, 15) // 16h elapsed less the break; Friday night into Saturday has no regular hours to overlap
   assert.equal(otHoursFromLogs([ot('OT_IN', 5, 18, 0), ot('OT_OUT', 5, 10, 1)]).skipped, 1)
 })
 it('minutes are kept: 1h20m is 1.33 hours', () =>
   assert.equal(otHoursFromLogs([ot('OT_IN', 5, 18, 0), ot('OT_OUT', 5, 19, 20)]).hours, 1.33))
 it('works from ISO strings as the api returns them', () =>
   assert.equal(otHoursFromLogs([{ type: 'OT_IN', timestamp: at(5, 18, 0).toISOString() }, { type: 'OT_OUT', timestamp: at(5, 20, 0).toISOString() }]).hours, 2))
-it('no logs is zero, not an error', () => assert.deepEqual(otHoursFromLogs(), { hours: 0, minutes: 0, sessions: 0, skipped: 0, incomplete: [], byDay: {} }))
+it('no logs is zero, not an error', () => { const { types, ...rest } = otHoursFromLogs(); assert.deepEqual(rest, { hours: 0, minutes: 0, sessions: 0, skipped: 0, incomplete: [], overlaps: [], noReason: [], byDay: {} }); assert.equal(types.total, 0) })
+
+console.log('\nonly time outside 9 AM to 6 PM is overtime')
+// 2026-10-05 is a Monday, 10-10 a Saturday.
+it('a session that starts before 6 PM counts only the part after it', () => {
+  const r = otHoursFromLogs([ot('OT_IN', 5, 17, 0), ot('OT_OUT', 5, 20, 0)])
+  assert.equal(r.minutes, 120); assert.equal(r.skipped, 0); assert.equal(r.sessions, 1)
+  assert.deepEqual(r.overlaps.map(o => [o.day, o.overlapMinutes, o.countedMinutes]), [['2026-10-05', 60, 120]])
+  assert.deepEqual(r.byDay, { '2026-10-05': 120 })
+})
+it('early overtime before 9 AM counts, up to 9', () => {
+  const r = otHoursFromLogs([ot('OT_IN', 5, 7, 0), ot('OT_OUT', 5, 10, 0)])
+  assert.equal(r.minutes, 120); assert.equal(r.overlaps[0].overlapMinutes, 60)
+})
+it('a session entirely inside regular hours counts nothing, and is reported', () => {
+  const r = otHoursFromLogs([ot('OT_IN', 5, 10, 0), ot('OT_OUT', 5, 12, 0)])
+  assert.equal(r.minutes, 0); assert.equal(r.sessions, 0); assert.equal(r.skipped, 0)
+  assert.deepEqual(r.overlaps.map(o => [o.overlapMinutes, o.countedMinutes]), [[120, 0]])
+  assert.deepEqual(r.byDay, {})
+})
+it('exactly 6 PM to 9 PM and 6 AM to 9 AM overlap nothing', () => {
+  assert.equal(otHoursFromLogs([ot('OT_IN', 5, 18, 0), ot('OT_OUT', 5, 21, 0)]).overlaps.length, 0)
+  assert.equal(otHoursFromLogs([ot('OT_IN', 5, 6, 0), ot('OT_OUT', 5, 9, 0)]).minutes, 180)
+})
+it('on a weekend all of it counts', () => {
+  const r = otHoursFromLogs([ot('OT_IN', 10, 10, 0), ot('OT_OUT', 10, 12, 0)])
+  assert.equal(r.minutes, 120); assert.equal(r.overlaps.length, 0)
+})
+it('on a holiday all of it counts, when the caller knows the holidays', () => {
+  const isWorkday = makeIsWorkday({ '2026-10-05': [{ name: 'Test Holiday' }] })
+  assert.equal(otHoursFromLogs([ot('OT_IN', 5, 10, 0), ot('OT_OUT', 5, 12, 0)], { isWorkday }).minutes, 120)
+  assert.equal(otHoursFromLogs([ot('OT_IN', 5, 10, 0), ot('OT_OUT', 5, 12, 0)]).minutes, 0) // without it, a plain Monday
+})
+it('a long overnight session into the next working morning loses that morning', () => {
+  const r = otHoursFromLogs([ot('OT_IN', 5, 18, 0), ot('OT_OUT', 5, 10, 0)]) // 16h, Mon 6 PM to Tue 10 AM
+  assert.equal(r.minutes, 14 * 60); assert.equal(r.overlaps[0].overlapMinutes, 60) // 16h - Tuesday 9-10 AM - the break
+})
+it('otForPeriod passes the working-day test through', () => {
+  const isWorkday = makeIsWorkday({ '2026-10-05': true })
+  const logs = [ot('OT_IN', 5, 10, 0), ot('OT_OUT', 5, 11, 0)]
+  assert.equal(otForPeriod(logs, null, { isWorkday }).minutes, 60)
+  assert.equal(otForPeriod(logs, null).minutes, 0)
+})
+
+console.log('\nreasons, one per session')
+it('a session with an otReason on its logs has a reason; one without is listed', () => {
+  const r = otHoursFromLogs([
+    { ...ot('OT_IN', 5, 18, 0, 0), otReason: 'Deploy' }, ot('OT_OUT', 5, 19, 0, 0),
+    ot('OT_IN', 5, 21, 0, 1), ot('OT_OUT', 5, 22, 0, 1),
+  ])
+  assert.deepEqual(r.noReason, [{ day: '2026-10-05', session: 1 }])
+})
+it('either log of the session carrying the reason is enough, and blanks do not count', () => {
+  assert.equal(otHoursFromLogs([ot('OT_IN', 5, 18, 0), { ...ot('OT_OUT', 5, 19, 0), otReason: 'Client call' }]).noReason.length, 0)
+  assert.equal(otHoursFromLogs([{ ...ot('OT_IN', 5, 18, 0), otReason: '   ' }, ot('OT_OUT', 5, 19, 0)]).noReason.length, 1)
+})
+it('an incomplete session still needs its reason', () => {
+  assert.deepEqual(otHoursFromLogs([ot('OT_IN', 5, 18, 0)]).noReason, [{ day: '2026-10-05', session: 0 }])
+})
 
 console.log('\nwhere the incomplete entries are')
 it('names the day, the session and what is wrong, in date order', () => {

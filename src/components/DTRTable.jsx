@@ -2,7 +2,10 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { Pencil, Save, X, Loader2, Zap, Trash2, Plus, AlertTriangle } from 'lucide-react'
 import { api } from '../services/api'
 import { leaveForDate, dtrLabel, leaveNote, isPartialDay, toYMD, LEAVE_TYPES } from '../services/leave'
-import { formatDuration } from '../services/overtime'
+import { formatDuration, otHoursFromLogs } from '../services/overtime'
+import { checkOTSession } from '../services/workday'
+import { HOLIDAY_TYPES } from '../services/holidays'
+import { useHolidays } from './useHolidays'
 import { parseTime, toTime24, isComplete, isEmpty, formatHHMM } from '../services/time'
 
 // `leaves` is the person's leave/offset requests (any status — only approved
@@ -15,6 +18,12 @@ import { parseTime, toTime24, isComplete, isEmpty, formatHHMM } from '../service
 //                or end — drawn with an amber edge and a "not counted" note
 //   otTotals     { 'YYYY-MM-DD': minutes } each day's counted overtime, shown under
 //                that day's sessions
+// Holidays are drawn from the shared holiday list: a coloured outline round the
+// row (teal regular, amber special, pink company) and the holiday's name under
+// the day. They are not written into the DTR — like leave, they are overlaid.
+// Overtime is only ever time outside 9:00 AM – 6:00 PM on a working day: saving
+// OT inside regular hours is refused, every OT session needs its own reason, and
+// anything already inside regular hours is flagged and left out of the count.
 // Every row also carries data-dtr-day so a reviewer can be scrolled to it.
 export default function DTRTable({ user, history, onRefresh, initialDate, periodEnd, canEdit = true, leaves = [], flaggedDays = null, otTotals = null }) {
     const draftStorageKey = `dtr_draft_${user.id}`
@@ -122,6 +131,16 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
         return dates
     }, [anchorDate, periodEnd])
 
+    // Holidays for the years on screen, and the working-day test built from them.
+    const holidayYears = [...new Set(rows.map(d => d.getFullYear()))]
+    const { byDate: holidayIndex, isWorkday, dayKind } = useHolidays(holidayYears)
+    const holidayOn = (date) => holidayIndex[toYMD(date)]?.[0] || null
+    const holidayTypesInView = [...new Set(rows.map(holidayOn).filter(Boolean).map(h => h.type))]
+
+    // What the OT rules make of the logs on screen, per session.
+    const otInfo = useMemo(() => otHoursFromLogs(history, { dayKind }), [history, dayKind])
+    const overlapBySession = useMemo(() => new Map(otInfo.overlaps.map(o => [`${o.day}_${o.session}`, o])), [otInfo])
+
     // session is only meaningful for OT_IN/OT_OUT (multiple OT sessions per day).
     // Omit it for IN/OUT/REASON to keep their keys unchanged.
     const getCellKey = (date, type, session) =>
@@ -157,7 +176,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
             }
         })
         Object.keys(edits).forEach(key => {
-            const m = key.match(/^(.+)_OT_(?:IN|OUT)_(\d+)$/)
+            const m = key.match(/^(.+)_OT_(?:IN|OUT|REASON)_(\d+)$/)
             if (m && m[1] === dateStr) sessions.add(parseInt(m[2]))
         })
         return [...sessions].sort((a, b) => a - b)
@@ -188,6 +207,36 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
             return formatHHMM(new Date(log.timestamp))
         }
         return ''
+    }
+
+    // The reason written for ONE overtime session. It lives on the session's logs
+    // (otReason), separately from the day's Notes, so each OT says why.
+    const getOTReason = (date, session) => {
+        const key = getCellKey(date, 'OT_REASON', session)
+        if (edits[key] !== undefined) return edits[key] ?? ''
+        const log = [findLog(date, 'OT_IN', session), findLog(date, 'OT_OUT', session)].find(l => l?.otReason)
+        return log?.otReason || ''
+    }
+
+    // Everything wrong with the OT sessions this save would touch. Only touched
+    // ones: an old session without a reason must not block an unrelated edit.
+    const findOTProblems = () => {
+        const touched = new Map()
+        for (const key of Object.keys(edits)) {
+            const m = key.match(/^(.+)_(OT_IN|OT_OUT|OT_REASON)_(\d+)$/)
+            if (m) touched.set(`${m[1]}|${m[3]}`, { dateStr: m[1], session: parseInt(m[3]) })
+        }
+        const found = []
+        for (const { dateStr, session } of touched.values()) {
+            const date = new Date(dateStr)
+            checkOTSession({
+                date,
+                inTime: getInputValue(date, 'OT_IN', session),
+                outTime: getInputValue(date, 'OT_OUT', session),
+                reason: getOTReason(date, session),
+            }, isWorkday).forEach(p => found.push({ date, session, ...p }))
+        }
+        return found.sort((a, b) => a.date - b.date || a.session - b.session)
     }
 
     const getDisplayValue = (date, type, session) => {
@@ -279,7 +328,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
     }
 
     const handleSmartFill = () => {
-        if (!window.confirm("Auto-fill Regular Time (9:00 AM - 6:00 PM) for Mon-Fri?\n\nThis will fill entries for the displayed period (excluding weekends). Existing entries won't be overwritten.")) return;
+        if (!window.confirm("Auto-fill Regular Time (9:00 AM - 6:00 PM) for Mon-Fri?\n\nThis will fill entries for the displayed period (excluding weekends, holidays and days on leave). Existing entries won't be overwritten.")) return;
 
         const newEdits = { ...edits }
 
@@ -296,7 +345,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
             // Only skip if it's strictly beyond the defined period end (if it exists)
             // or if it's a weekend. An approved leave/offset day is skipped too:
             // 9-to-6 would be wrong for someone who was off (or off part of it).
-            if (!isWeekend && !isFuture && !leaveForDate(leaves, date)) {
+            if (!isWeekend && !isFuture && !leaveForDate(leaves, date) && !holidayOn(date)) {
                 // key generators
                 const keyIn = getCellKey(date, 'IN')
                 const keyOut = getCellKey(date, 'OUT')
@@ -342,6 +391,14 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
     }
 
     const handleSave = async () => {
+        // Refuse before anything is written: overtime inside regular hours, or
+        // overtime with no reason. Nothing is half-saved.
+        const problems = findOTProblems()
+        if (problems.length > 0) {
+            const lines = problems.map(p => `• ${p.date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}, OT ${p.session + 1}: ${p.message}`)
+            alert(`Nothing was saved. Fix these first:\n\n${lines.join('\n')}`)
+            return
+        }
         setSaving(true)
         console.log("Saving edits:", edits)
 
@@ -351,7 +408,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
             // 1. Parse edit keys into { dateStr, type, session }. OT keys carry a
             //    session index (`..._OT_IN_2`); IN/OUT/REASON never do.
             const parseEditKey = (key) => {
-                let m = key.match(/^(.+)_(OT_IN|OT_OUT)_(\d+)$/)
+                let m = key.match(/^(.+)_(OT_IN|OT_OUT|OT_REASON)_(\d+)$/)
                 if (m) return { dateStr: m[1], type: m[2], session: parseInt(m[3]) }
                 m = key.match(/^(.+)_(IN|OUT|REASON)$/)
                 if (m) return { dateStr: m[1], type: m[2], session: undefined }
@@ -381,7 +438,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                 const reasonEdited = reason !== undefined
 
                 // Time edits
-                const timeEntries = parsedEntries.filter(p => p.dateStr === dateStr && p.type !== 'REASON')
+                const timeEntries = parsedEntries.filter(p => p.dateStr === dateStr && p.type !== 'REASON' && p.type !== 'OT_REASON')
                 for (const { key, type, session } of timeEntries) {
                     const timeStr = edits[key]
                     if (timeStr === undefined) continue
@@ -413,6 +470,29 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                         newLogs.push({ type, dateObj, timeStr, dateStr, reason: undefined, session })
                         addChange(dateStr, `${label} set to ${timeStr}`)
                     }
+                }
+
+                // The reason for each OT session touched today, stored on that session's
+                // logs (both of them, so deleting one half keeps it).
+                const touchedSessions = [...new Set(parsedEntries.filter(p => p.dateStr === dateStr && p.session !== undefined).map(p => p.session))]
+                for (const session of touchedSessions) {
+                    const finalReason = getOTReason(dateObj, session).trim()
+                    let changed = false
+                    history.filter(h =>
+                        (h.type === 'OT_IN' || h.type === 'OT_OUT') &&
+                        (h.session || 0) === session &&
+                        new Date(h.timestamp).toDateString() === dateObj.toDateString() &&
+                        !deletes.has(h.id)
+                    ).forEach(log => {
+                        if ((log.otReason || '') !== finalReason) {
+                            const u = logUpdates.get(log.id) || { logId: log.id, log }
+                            u.newOtReason = finalReason
+                            logUpdates.set(log.id, u)
+                            changed = true
+                        }
+                    })
+                    newLogs.filter(nl => nl.dateStr === dateStr && nl.session === session).forEach(nl => { nl.otReason = finalReason; changed = true })
+                    if (changed && finalReason) addChange(dateStr, `OT session ${session + 1} reason: ${finalReason}`)
                 }
 
                 // Propagate reason to every surviving log on this day
@@ -459,7 +539,8 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                 batchUpdates.push({
                     logId: u.logId,
                     newTimestamp: u.newTimestamp || new Date(u.log.timestamp),
-                    newReason: u.newReason
+                    newReason: u.newReason,
+                    newOtReason: u.newOtReason
                 })
             }
 
@@ -476,7 +557,8 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                     dateObj: nl.dateObj,
                     timeStr: nl.timeStr,
                     reason: nl.reason || '',
-                    session: nl.session
+                    session: nl.session,
+                    otReason: nl.otReason
                 })),
                 deletes: [...deletes]
             })
@@ -611,6 +693,19 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                 Swipe the table sideways to see overtime and notes
             </p>
 
+            {/* Holiday outline key — only the kinds that are in this period */}
+            {holidayTypesInView.length > 0 && (
+                <div className="px-4 sm:px-6 pt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--text-secondary)]" aria-label="Holiday outline colours">
+                    <span className="font-bold uppercase tracking-widest text-[10px] text-[var(--text-muted)]">Outlined rows</span>
+                    {holidayTypesInView.map(t => (
+                        <span key={t} className="flex items-center gap-1.5">
+                            <span aria-hidden="true" className="w-3 h-3 rounded-[4px] border-2" style={{ borderColor: HOLIDAY_TYPES[t].color }} />
+                            {HOLIDAY_TYPES[t].label}
+                        </span>
+                    ))}
+                </div>
+            )}
+
             {/* The Grid */}
             <div className="overflow-x-auto overscroll-x-contain">
                 <table className="w-full min-w-[720px] text-center border-collapse">
@@ -653,6 +748,19 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                             const dayOffCell = dayOffLabel
                                 ? <span className="font-bold text-xs tracking-wider" style={{ color: LEAVE_TYPES[leave.type].color }} title={LEAVE_TYPES[leave.type].label}>{dayOffLabel}</span>
                                 : '-'
+                            const holiday = holidayOn(date)
+                            const hType = holiday ? HOLIDAY_TYPES[holiday.type] : null
+                            // A coloured outline round the whole row, drawn per cell (inset
+                            // shadows) because a table row can't carry its own border
+                            // reliably. pos: 'first' / 'last' close the row's two ends.
+                            const edge = (pos, tint = false) => {
+                                if (!hType) return undefined
+                                const c = hType.color
+                                const lines = [`inset 0 2px 0 ${c}`, `inset 0 -2px 0 ${c}`]
+                                if (pos === 'first') lines.push(`inset 2px 0 0 ${c}`)
+                                if (pos === 'last') lines.push(`inset -2px 0 0 ${c}`)
+                                return { boxShadow: lines.join(', '), ...(tint ? { background: `color-mix(in srgb, ${c} 9%, transparent)` } : null) }
+                            }
                             return (
                             <tr
                                 key={i}
@@ -660,7 +768,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                 className={`border-b border-[var(--border)] group hover:bg-white/5 transition-colors ${flagged ? 'bg-[var(--accent-amber)]/5 shadow-[inset_3px_0_0_var(--accent-amber)]' : ''}`}
                             >
                                 {/* Day */}
-                                <td className="py-4 text-[var(--text-primary)] border-r border-[var(--border)] font-bold text-left px-4 text-base">
+                                <td style={edge('first', true)} className="py-4 text-[var(--text-primary)] border-r border-[var(--border)] font-bold text-left px-4 text-base">
                                     {date.toLocaleDateString('en-GB', { weekday: 'long' })}
                                     {leave && (
                                         <span
@@ -671,14 +779,23 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                             {leave.type === 'offset' || isPartialDay(leave) ? dtrLabel(leave) : LEAVE_TYPES[leave.type].label}
                                         </span>
                                     )}
+                                    {holiday && (
+                                        <span
+                                            className="block mt-1 w-fit max-w-[12rem] px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider leading-snug"
+                                            style={{ color: hType.color, background: `color-mix(in srgb, ${hType.color} 16%, transparent)` }}
+                                            title={`${hType.label}: ${holiday.name}`}
+                                        >
+                                            {holiday.name}{holiday.days > 1 ? ` (${holiday.day}/${holiday.days})` : ''}
+                                        </span>
+                                    )}
                                 </td>
                                 {/* Date */}
-                                <td className="py-4 text-[var(--text-primary)] border-r border-[var(--border)] font-mono text-center text-base">
+                                <td style={edge(undefined, true)} className="py-4 text-[var(--text-primary)] border-r border-[var(--border)] font-mono text-center text-base">
                                     {date.toLocaleDateString('en-GB')}
                                 </td>
 
                                 {/* Regular IN */}
-                                <td className="p-0 border-r border-[var(--border)] border-dashed border-white/10 bg-[var(--accent-green)]/5 font-mono h-12">
+                                <td style={edge()} className="p-0 border-r border-[var(--border)] border-dashed border-white/10 bg-[var(--accent-green)]/5 font-mono h-12">
                                     {editMode ? (
                                         <TimeCellEditor
                                             value={getInputValue(date, 'IN')}
@@ -692,7 +809,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                 </td>
 
                                 {/* Regular OUT */}
-                                <td className="p-0 border-r border-[var(--border)] bg-[var(--accent-green)]/5 font-mono h-12">
+                                <td style={edge()} className="p-0 border-r border-[var(--border)] bg-[var(--accent-green)]/5 font-mono h-12">
                                     {editMode ? (
                                         <TimeCellEditor
                                             value={getInputValue(date, 'OUT')}
@@ -707,38 +824,67 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
 
                                 {/* Overtime — one or more sessions per day, each row matching the
                                     h-12 height/flush edges of the Regular Time cells beside it */}
-                                <td colSpan={2} className="p-0 border-r border-[var(--border)] bg-[var(--accent-purple)]/5 font-mono align-top">
+                                <td colSpan={2} style={edge()} className="p-0 border-r border-[var(--border)] bg-[var(--accent-purple)]/5 font-mono align-top">
                                     {editMode ? (
                                         <div className="flex flex-col divide-y divide-[var(--border)]/60">
-                                            {getOTSessionsForDate(date).map(session => (
-                                                <div key={session} className="h-12 flex items-center gap-2 px-2">
-                                                    <div className="w-32 h-8 shrink-0">
-                                                        <TimeCellEditor
-                                                            value={getInputValue(date, 'OT_IN', session)}
-                                                            onChange={(v) => handleEditChange(date, 'OT_IN', v, session)}
-                                                            onDelete={() => handleCellDelete(date, 'OT_IN', session)}
-                                                            ringColor="var(--accent-purple)"
-                                                        />
+                                            {getOTSessionsForDate(date).map(session => {
+                                                const inV = getInputValue(date, 'OT_IN', session)
+                                                const outV = getInputValue(date, 'OT_OUT', session)
+                                                const reasonV = getOTReason(date, session)
+                                                const hasTimes = !!(inV || outV)
+                                                const problems = hasTimes ? checkOTSession({ date, inTime: inV, outTime: outV, reason: reasonV }, isWorkday) : []
+                                                const workProblem = problems.find(p => p.kind === 'work-time')
+                                                const needsReason = problems.some(p => p.kind === 'reason')
+                                                return (
+                                                <div key={session} className="px-2 py-2 min-h-12 flex flex-col justify-center gap-1.5">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-32 h-8 shrink-0">
+                                                            <TimeCellEditor
+                                                                value={inV}
+                                                                onChange={(v) => handleEditChange(date, 'OT_IN', v, session)}
+                                                                onDelete={() => handleCellDelete(date, 'OT_IN', session)}
+                                                                ringColor="var(--accent-purple)"
+                                                            />
+                                                        </div>
+                                                        <span className="text-[var(--text-muted)] text-xs shrink-0">-</span>
+                                                        <div className="w-32 h-8 shrink-0">
+                                                            <TimeCellEditor
+                                                                value={outV}
+                                                                onChange={(v) => handleEditChange(date, 'OT_OUT', v, session)}
+                                                                onDelete={() => handleCellDelete(date, 'OT_OUT', session)}
+                                                                ringColor="var(--accent-purple)"
+                                                            />
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleSessionDelete(date, session)}
+                                                            title="Remove this OT session"
+                                                            className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-[var(--text-muted)] hover:bg-[var(--accent-red)]/20 hover:text-[var(--accent-red)] transition-colors"
+                                                        >
+                                                            <Trash2 size={11} />
+                                                        </button>
                                                     </div>
-                                                    <span className="text-[var(--text-muted)] text-xs shrink-0">-</span>
-                                                    <div className="w-32 h-8 shrink-0">
-                                                        <TimeCellEditor
-                                                            value={getInputValue(date, 'OT_OUT', session)}
-                                                            onChange={(v) => handleEditChange(date, 'OT_OUT', v, session)}
-                                                            onDelete={() => handleCellDelete(date, 'OT_OUT', session)}
-                                                            ringColor="var(--accent-purple)"
+                                                    {hasTimes && (
+                                                        <input
+                                                            type="text"
+                                                            maxLength={200}
+                                                            required
+                                                            aria-label={`Reason for overtime session ${session + 1}`}
+                                                            placeholder="Reason for this overtime (required)"
+                                                            value={reasonV}
+                                                            onChange={(e) => handleEditChange(date, 'OT_REASON', e.target.value, session)}
+                                                            className={`w-full h-8 rounded bg-black/50 text-white px-2 text-xs font-sans focus:outline-none focus:ring-1 ring-[var(--accent-purple)] ${needsReason ? 'ring-1 ring-[var(--accent-red)]' : ''}`}
                                                         />
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleSessionDelete(date, session)}
-                                                        title="Remove this OT session"
-                                                        className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-[var(--text-muted)] hover:bg-[var(--accent-red)]/20 hover:text-[var(--accent-red)] transition-colors"
-                                                    >
-                                                        <Trash2 size={11} />
-                                                    </button>
+                                                    )}
+                                                    {workProblem && (
+                                                        <p role="alert" className="flex items-start gap-1 text-[10px] font-bold font-sans leading-snug text-[var(--accent-red)]">
+                                                            <AlertTriangle size={11} className="shrink-0 mt-px" />
+                                                            {workProblem.message}
+                                                        </p>
+                                                    )}
                                                 </div>
-                                            ))}
+                                                )
+                                            })}
                                             <div className="px-2 py-2">
                                                 <button
                                                     type="button"
@@ -753,11 +899,30 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                     ) : getVisibleOTSessions(date).length > 0 ? (
                                         <>
                                             <div className="flex flex-col divide-y divide-[var(--border)]/60">
-                                                {getVisibleOTSessions(date).map(session => (
-                                                    <div key={session} className="h-12 flex items-center px-2 text-[var(--text-primary)]">
-                                                        {getDisplayValue(date, 'OT_IN', session) || '–'} – {getDisplayValue(date, 'OT_OUT', session) || '–'}
-                                                    </div>
-                                                ))}
+                                                {getVisibleOTSessions(date).map(session => {
+                                                    const overlap = overlapBySession.get(`${dayKey}_${session}`)
+                                                    const reasonText = getOTReason(date, session)
+                                                    return (
+                                                        <div key={session} className="min-h-12 py-1.5 flex flex-col justify-center px-2 text-[var(--text-primary)] text-left">
+                                                            <span>{getDisplayValue(date, 'OT_IN', session) || '–'} – {getDisplayValue(date, 'OT_OUT', session) || '–'}</span>
+                                                            {reasonText ? (
+                                                                <span className="mt-0.5 text-[11px] font-sans text-[var(--text-secondary)] whitespace-pre-wrap break-words">{reasonText}</span>
+                                                            ) : canEdit ? (
+                                                                <span className="mt-0.5 flex items-center gap-1 text-[10px] font-bold font-sans text-[var(--accent-amber)]"><AlertTriangle size={10} /> Reason needed — edit to add one</span>
+                                                            ) : (
+                                                                <span className="mt-0.5 text-[10px] font-sans text-[var(--text-muted)]">No reason given</span>
+                                                            )}
+                                                            {overlap && (
+                                                                <span className="mt-0.5 flex items-start gap-1 text-[10px] font-bold font-sans text-[var(--accent-amber)]">
+                                                                    <AlertTriangle size={10} className="shrink-0 mt-px" />
+                                                                    {overlap.countedMinutes > 0
+                                                                        ? `Runs into regular hours — ${formatDuration(overlap.overlapMinutes)} not counted`
+                                                                        : 'Inside regular hours — not counted'}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )
+                                                })}
                                             </div>
                                             {((otTotals && otTotals[dayKey] > 0) || flagged) && (
                                                 <div className="px-2 py-1.5 border-t border-[var(--border)]/60 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] font-bold font-sans">
@@ -776,7 +941,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                 </td>
 
                                 {/* Reason / Notes */}
-                                <td className="p-0 border-r border-[var(--border)] text-[var(--text-secondary)] font-mono">
+                                <td style={edge('last')} className="p-0 border-r border-[var(--border)] text-[var(--text-secondary)] font-mono">
                                     {editMode ? (
                                         <input
                                             type="text"

@@ -75,10 +75,13 @@ export default function HowItWorks({ isSuperAdmin = false }) {
 
                             <Section title="Overtime → offset">
                                 <li>Overtime is added up <strong>per cutoff</strong> from the OT in/out times on your DTR. The counter <strong>starts again at zero</strong> with every new cutoff.</li>
+                                <li>Only time <strong>outside regular hours</strong> is overtime: before 9:00 AM or after 6:00 PM on a working day, or any time on a weekend or holiday. OT inside 9:00 AM – 6:00 PM can’t be saved, and if some is already there only the part outside regular hours counts.</li>
+                                <li>A continuous stretch of OT <strong>longer than 5 hours</strong> has <strong>1 hour taken off</strong> for the break: 6:00 PM to 2:00 AM is 8 hours, 7 count. Shorter stretches keep every minute.</li>
+                                <li>Every OT entry needs <strong>its own reason</strong>. You add it next to the times when you edit your DTR.</li>
                                 <li>The first <strong>{OT_THRESHOLD_HOURS} hours</strong> of a cutoff stay ordinary overtime.</li>
                                 <li>Every hour <strong>past {OT_THRESHOLD_HOURS}</strong> becomes offset, 1 hour of overtime = 1 hour of offset. Example: {OT_THRESHOLD_HOURS + 6.5} hours of OT → {OT_THRESHOLD_HOURS} stay overtime, 6.5 become offset.</li>
                                 <li>It is credited when your DTR for that cutoff is <strong>approved</strong>. What was approved is what counts — changing your DTR afterwards doesn’t change it.</li>
-                                <li>OT that runs past midnight counts: 6:00 PM to 2:00 AM is 8 hours. An OT entry with a start but no end, or one that would run longer than {MAX_OT_SESSION_HOURS} hours (usually a wrong AM/PM), is skipped. Fix it before submitting so it counts.</li>
+                                <li>OT that runs past midnight counts. An OT entry with a start but no end, or one that would run longer than {MAX_OT_SESSION_HOURS} hours (usually a wrong AM/PM), is skipped. Fix it before submitting so it counts.</li>
                             </Section>
                         </div>
                     </div>

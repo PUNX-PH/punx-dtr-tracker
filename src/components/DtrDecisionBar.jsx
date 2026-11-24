@@ -1,5 +1,6 @@
 import { AlertTriangle, Check, Clock, Timer, X } from 'lucide-react'
 import { OT_THRESHOLD_HOURS, formatDuration, splitOT } from '../services/overtime'
+import { typeLines } from '../services/otTypes'
 import { formatYMD } from '../services/leave'
 
 const STATUS_LOOK = {
@@ -10,6 +11,7 @@ const STATUS_LOOK = {
 }
 
 const clock = (d) => (d ? d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '')
+const plural = (n, one, many) => (n === 1 ? one : many)
 const problemText = (i) => {
     if (i.problem === 'no-end') return `OT starts ${clock(i.inAt)} but never ends`
     if (i.problem === 'no-start') return `OT ends ${clock(i.outAt)} but never starts`
@@ -26,10 +28,40 @@ const problemText = (i) => {
  *   canDecide         whether THIS viewer may approve/reject it
  *   showOffsetPreview the offset preview is a super-admin feature (canSeeOvertimeOffset)
  */
+/** An amber box: a heading and one row per day, each jumping to that day in the table. Nothing when the list is empty. */
+function FlagList({ items, title, text, onJump }) {
+    if (!items.length) return null
+    return (
+        <div role="alert" className="rounded-2xl border border-[var(--accent-amber)]/30 bg-[var(--accent-amber)]/10 p-3">
+            <p className="flex items-center gap-2 text-xs font-bold text-[var(--accent-amber)]">
+                <AlertTriangle size={14} />
+                {title(items.length)}
+            </p>
+            <ul className="mt-2 flex flex-col gap-1.5">
+                {items.map(i => (
+                    <li key={`${i.day}_${i.session}`}>
+                        <button
+                            type="button"
+                            onClick={() => onJump?.(i.day)}
+                            className="w-full text-left flex flex-wrap items-baseline gap-x-3 px-2.5 py-1.5 rounded-lg bg-[var(--surface-1)]/60 hover:bg-[var(--surface-1)] border border-transparent hover:border-[var(--accent-amber)]/40 transition-colors"
+                            title="Scroll to this day in the table"
+                        >
+                            <span className="text-xs font-bold text-[var(--text-primary)]">{formatYMD(i.day).replace(/ \d{4}$/, '')}</span>
+                            <span className="text-xs text-[var(--text-secondary)]">{text(i)}</span>
+                            <span className="text-[10px] font-bold text-[var(--accent-amber)] ml-auto">Go to row →</span>
+                        </button>
+                    </li>
+                ))}
+            </ul>
+        </div>
+    )
+}
+
 export default function DtrDecisionBar({ ot, sub, canDecide, onDecide, seniorName, showOffsetPreview, onJump }) {
     const status = sub ? (STATUS_LOOK[sub.status] || STATUS_LOOK.pending) : null
     const pending = sub && ['pending', 'pending_senior'].includes(sub.status)
     const { excess } = splitOT(ot.hours)
+    const lines = typeLines(ot.types)
     const pct = Math.min(100, (ot.hours / OT_THRESHOLD_HOURS) * 100)
     const label = ot.window
         ? `${formatYMD(ot.window.startYMD).replace(/ \d{4}$/, '')} – ${formatYMD(ot.window.endYMD).replace(/ \d{4}$/, '')}`
@@ -96,30 +128,44 @@ export default function DtrDecisionBar({ ot, sub, canDecide, onDecide, seniorNam
                 </div>
             </div>
 
-            {/* What is wrong with it */}
-            {ot.incomplete.length > 0 && (
-                <div role="alert" className="rounded-2xl border border-[var(--accent-amber)]/30 bg-[var(--accent-amber)]/10 p-3">
-                    <p className="flex items-center gap-2 text-xs font-bold text-[var(--accent-amber)]">
-                        <AlertTriangle size={14} />
-                        {ot.incomplete.length} OT {ot.incomplete.length === 1 ? 'entry isn’t' : 'entries aren’t'} counted — fix {ot.incomplete.length === 1 ? 'it' : 'them'} before approving
-                    </p>
-                    <ul className="mt-2 flex flex-col gap-1.5">
-                        {ot.incomplete.map(i => (
-                            <li key={`${i.day}_${i.session}`}>
-                                <button
-                                    type="button"
-                                    onClick={() => onJump?.(i.day)}
-                                    className="w-full text-left flex flex-wrap items-baseline gap-x-3 px-2.5 py-1.5 rounded-lg bg-[var(--surface-1)]/60 hover:bg-[var(--surface-1)] border border-transparent hover:border-[var(--accent-amber)]/40 transition-colors"
-                                    title="Scroll to this day in the table"
-                                >
-                                    <span className="text-xs font-bold text-[var(--text-primary)]">{formatYMD(i.day).replace(/ \d{4}$/, '')}</span>
-                                    <span className="text-xs text-[var(--text-secondary)]">{problemText(i)}</span>
-                                    <span className="text-[10px] font-bold text-[var(--accent-amber)] ml-auto">Go to row →</span>
-                                </button>
+            {/* The hours sorted by the DTR guidelines' types, for payroll */}
+            {lines.length > 0 && (
+                <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-2">By type</p>
+                    <ul className="flex flex-wrap gap-2">
+                        {lines.map(l => (
+                            <li key={l.key} className="flex items-baseline gap-2 px-3 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)]">
+                                <span className="text-xs text-[var(--text-secondary)]">{l.label}</span>
+                                <strong className="text-xs text-[var(--text-primary)] tabular-nums">{formatDuration(l.minutes)}</strong>
                             </li>
                         ))}
                     </ul>
+                    <p className="mt-2 text-[11px] text-[var(--text-muted)]">
+                        Night differential (10 PM – 6 AM) is part of the overtime, not extra. One continuous stretch longer than 5 hours has 1 hour taken off for the break.
+                    </p>
                 </div>
+            )}
+
+            {/* What is wrong with it. Each kind is a list of days that jump to their row. */}
+            <FlagList
+                items={ot.incomplete}
+                title={(n) => `${n} OT ${plural(n, 'entry isn’t', 'entries aren’t')} counted — fix ${plural(n, 'it', 'them')} before approving`}
+                text={problemText}
+                onJump={onJump}
+            />
+            <FlagList
+                items={ot.overlaps || []}
+                title={(n) => `${n} OT ${plural(n, 'entry runs', 'entries run')} into regular hours — only the time outside 9:00 AM – 6:00 PM is counted`}
+                text={(i) => `OT ${clock(i.inAt)} to ${clock(i.outAt)}: ${formatDuration(i.overlapMinutes)} left out, ${formatDuration(i.countedMinutes)} counted`}
+                onJump={onJump}
+            />
+            {sub?.status !== 'approved' && (
+                <FlagList
+                    items={ot.noReason || []}
+                    title={(n) => `${n} OT ${plural(n, 'entry has', 'entries have')} no reason`}
+                    text={(i) => 'No reason was written for this overtime'}
+                    onJump={onJump}
+                />
             )}
         </section>
     )

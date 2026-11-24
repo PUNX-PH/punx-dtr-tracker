@@ -2,9 +2,29 @@ import { auth, db } from '../firebase';
 import { collection, query, where, getDocs, getDoc, setDoc, addDoc, updateDoc, deleteDoc, doc, Timestamp, orderBy, limit, onSnapshot, writeBatch, runTransaction } from "firebase/firestore";
 import { DEFAULT_ALLOTMENT, LEAVE_TYPE_KEYS, LEAVE_TYPES, STATUS, summarize, validateRequest, formatAmount, formatRange, requestAmount, requestLabel, canSeeOvertimeOffset } from './leave';
 import { orgFields } from './org';
-import { spanDays, MAX_SPAN_DAYS } from './holidays';
+import { spanDays, MAX_SPAN_DAYS, holidaysForYears, holidaysByDate } from './holidays';
+import { makeDayKind } from './workday';
 import { calendarEventFrom } from './calendar';
 import { otHoursFromLogs, splitOT, cutoffWindow, offsetEarnedByUser, OT_THRESHOLD_HOURS } from './overtime';
+
+/**
+ * What KIND of day each date is (work / rest / regular or special holiday) for a
+ * stretch of dates. OT is only the time outside 9–6 on working days and is sorted
+ * by the kind of day, so what counts has to be the same at approval as on screen.
+ * If the holidays can't be read it falls back to weekends only rather than
+ * blocking an approval.
+ */
+const dayKindFor = async (from, to) => {
+    try {
+        const stored = await holidayApi.list();
+        const years = [];
+        for (let y = from.getFullYear() - 1; y <= to.getFullYear() + 1; y++) years.push(y);
+        return makeDayKind(holidaysByDate(holidaysForYears(years, stored)));
+    } catch (error) {
+        console.warn("Couldn't read holidays; counting weekends only", error);
+        return makeDayKind();
+    }
+};
 
 const millis = (ts) => (ts && typeof ts.toMillis === 'function' ? ts.toMillis() : 0);
 
@@ -206,8 +226,8 @@ export const api = {
     // replaces the prior fire-and-pray Promise.all of individual writes, which
     // could silently leave a day half-written (fragmented).
     //
-    // updates: [{ logId, newTimestamp?: Date, newReason?: string }]
-    // creates: [{ type, dateObj: Date, timeStr: "HH:MM", reason?: string, session?: number }]
+    // updates: [{ logId, newTimestamp?: Date, newReason?: string, newOtReason?: string }]
+    // creates: [{ type, dateObj: Date, timeStr: "HH:MM", reason?: string, session?: number, otReason?: string }]
     // deletes: iterable of logId strings
     saveDTRBatch: async (userId, { updates = [], creates = [], deletes = [] }) => {
         const batch = writeBatch(db);
@@ -217,6 +237,7 @@ export const api = {
             const fields = {};
             if (u.newTimestamp) fields.timestamp = Timestamp.fromDate(u.newTimestamp);
             if (u.newReason !== undefined) fields.reason = u.newReason;
+            if (u.newOtReason !== undefined) fields.otReason = u.newOtReason;
             if (Object.keys(fields).length > 0) batch.update(logRef, fields);
         }
 
@@ -238,6 +259,8 @@ export const api = {
             // session distinguishes multiple OT_IN/OT_OUT pairs on the same day
             // (split overtime). Omitted for IN/OUT/NOTE, which only ever have one.
             if (c.session !== undefined) newLog.session = c.session;
+            // The reason for THIS overtime session (the day's note is `reason`).
+            if (c.otReason) newLog.otReason = c.otReason;
             batch.set(newRef, newLog);
         }
 
@@ -553,7 +576,7 @@ export const api = {
                 if (!cutoffSnap.exists()) return { success: false, message: "Couldn't find this DTR's cutoff, so its overtime can't be worked out. Nothing was approved." };
                 const win = cutoffWindow(cutoffSnap.data());
                 const logs = await api.getLogsBetween(sub.userId, win.from, win.to);
-                const ot = otHoursFromLogs(logs);
+                const ot = otHoursFromLogs(logs, { dayKind: await dayKindFor(win.from, win.to) });
                 converted = splitOT(ot.hours).excess;
                 fields.otHours = ot.hours;
                 fields.otSessionsSkipped = ot.skipped;
@@ -1145,7 +1168,7 @@ export const overtimeApi = {
         if (!cutoff) return { cutoff: null };
         const win = cutoffWindow(cutoff);
         const logs = await api.getLogsBetween(userId, win.from, win.to);
-        const ot = otHoursFromLogs(logs);
+        const ot = otHoursFromLogs(logs, { dayKind: await dayKindFor(win.from, win.to) });
         return { cutoff, window: win, ...ot, ...splitOT(ot.hours) };
     },
 
@@ -1259,7 +1282,7 @@ export const holidayApi = {
      * Add a company holiday (id = null) or save an edit. Editing a built-in
      * holiday writes a doc under its own `ph-…` id, which overrides it.
      */
-    save: async (id, { date, endDate = '', name, type, recurring = false }) => {
+    save: async (id, { date, endDate = '', name, type, recurring = false, payAs = 'rest' }) => {
         try {
             const clean = (name || '').trim().slice(0, 80);
             if (!clean) return { success: false, message: "Give the holiday a name." };
@@ -1274,6 +1297,8 @@ export const holidayApi = {
             // generates every year, so it never repeats.
             const repeats = recurring === true && !(id && id.startsWith('ph-'));
             const data = { date, endDate: endDate && endDate !== date ? endDate : '', name: clean, type, recurring: repeats, hidden: false, updatedAt: Timestamp.now() };
+            // Only a company holiday needs saying how it is paid; the others are what their type says.
+            data.payAs = type === 'company' ? (['regular', 'special', 'rest'].includes(payAs) ? payAs : 'rest') : '';
             if (id) await setDoc(doc(db, "holidays", id), data);
             else await addDoc(collection(db, "holidays"), data);
             return { success: true };

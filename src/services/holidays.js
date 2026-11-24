@@ -26,6 +26,13 @@ export const HOLIDAY_TYPES = {
     company: { label: 'Company Holiday', short: 'Company', color: 'var(--accent-pink)' },
 }
 
+/** What a company holiday counts as for pay (set by a super admin; the built-in ones are what their type says). */
+export const PAY_AS = {
+    regular: { label: 'Regular holiday' },
+    special: { label: 'Special holiday' },
+    rest: { label: 'Rest day' },
+}
+
 const pad = (n) => String(n).padStart(2, '0')
 const ymd = (y, m, d) => `${y}-${pad(m)}-${pad(d)}`
 
@@ -171,6 +178,8 @@ export function mergeHolidays(builtIn, stored = [], years = []) {
             out.set(id, {
                 id, seriesId: doc.id, date: occ.date, endDate: occ.endDate, days: spanDays(occ.date, occ.endDate),
                 name: doc.name || 'Holiday', type: doc.type, recurring: repeats,
+                // How work on a COMPANY holiday is classified on the DTR: 'regular', 'special' or 'rest'.
+                payAs: doc.type === 'company' ? (PAY_AS[doc.payAs] ? doc.payAs : 'rest') : '',
                 source: isOverride ? 'ph-edited' : 'company',
             })
         }
