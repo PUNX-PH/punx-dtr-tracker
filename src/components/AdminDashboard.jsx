@@ -9,6 +9,7 @@ import { typeLines } from '../services/otTypes'
 import { cutoffWindow, formatDuration, otHoursFromLogs, otForPeriod } from '../services/overtime'
 import DtrDecisionBar from './DtrDecisionBar'
 import AdminManageMenu from './AdminManageMenu'
+import PersonProfileEditor from './PersonProfileEditor'
 import DTRTable from './DTRTable'
 import RecentActivityTable from './RecentActivityTable'
 import CutoffsView from './CutoffsView'
@@ -430,6 +431,13 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
         } else {
             alert("Failed to update senior status: " + res.message);
         }
+    }
+
+    // Department / position / start date saved from the person's own panel: show it
+    // straight away, in the list and on the open person (so the next export has it).
+    const handleProfileSaved = (patch) => {
+        setUsers(prev => prev.map(u => (u.id === selectedUser.id ? { ...u, ...patch } : u)))
+        setSelectedUser(prev => ({ ...prev, ...patch }))
     }
 
     const handleAssignSenior = async (seniorId) => {
@@ -944,6 +952,10 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                             />
                                         )}
                                     </div>
+                                    {/* Super admins can fix the DTR header's department, position and start date right here. */}
+                                    {isSuperAdmin && (
+                                        <PersonProfileEditor key={selectedUser.id} person={selectedUser} departments={departments} onSaved={handleProfileSaved} />
+                                    )}
                                 </div>
 
                                 {/* Attachment Viewer */}
