@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Search, User as UserIcon, Loader2, UserCheck } from 'lucide-react'
 import { api, leaveApi } from '../services/api'
+import AttachmentThumbs from './AttachmentThumbs'
 import DTRTable from './DTRTable'
 import RecentActivityTable from './RecentActivityTable'
 
@@ -282,46 +283,8 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
                                             </div>
                                         )}
 
-                                        {/* Image Attachments */}
-                                        {(() => {
-                                            const attachments = selectedSub.attachments || (selectedSub.attachmentUrl ? [selectedSub.attachmentUrl] : [])
-                                            if (attachments.length === 0) return null
-                                            return (
-                                                <div className="flex flex-wrap gap-2 justify-start lg:justify-end max-w-full lg:max-w-sm">
-                                                    {attachments.map((url, idx) => (
-                                                        <button
-                                                            key={idx}
-                                                            onClick={() => {
-                                                                const link = document.createElement('a')
-                                                                link.href = url
-                                                                link.download = `DTR_${selectedUser.name}_${idx + 1}_${new Date().toISOString().split('T')[0]}.png`
-                                                                document.body.appendChild(link)
-                                                                link.click()
-                                                                document.body.removeChild(link)
-                                                            }}
-                                                            className="group relative block w-24 h-24 bg-[var(--surface-3)] rounded-lg border border-[var(--border-strong)] overflow-hidden hover:border-[var(--accent-amber)] hover:ring-2 hover:ring-[var(--accent-amber)]/20 transition-all cursor-pointer"
-                                                            title={`Click to Download Image ${idx + 1}`}
-                                                        >
-                                                            <img
-                                                                src={url}
-                                                                alt={`Attachment ${idx + 1}`}
-                                                                className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity"
-                                                            />
-                                                            <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                <span className="text-[9px] bg-black text-white px-1.5 py-0.5 rounded font-bold">
-                                                                    Download
-                                                                </span>
-                                                            </div>
-                                                            {attachments.length > 1 && (
-                                                                <span className="absolute bottom-0 right-0 bg-black/50 text-white text-[9px] px-1">
-                                                                    {idx + 1}
-                                                                </span>
-                                                            )}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            )
-                                        })()}
+                                        {/* Attachments: the old inline ones and the newer stored ones */}
+                                        <AttachmentThumbs sub={selectedSub} ownerName={selectedUser.name} accent="amber" />
 
                                         {selectedSub.attachmentComments && selectedSub.attachmentComments.length > 0 && (
                                             <div className="mt-3 space-y-2 w-full max-w-full lg:max-w-sm">

@@ -11,6 +11,7 @@ import DtrDecisionBar from './DtrDecisionBar'
 import AdminManageMenu from './AdminManageMenu'
 import PersonProfileEditor from './PersonProfileEditor'
 import DepartmentHub from './department/DepartmentHub'
+import AttachmentThumbs from './AttachmentThumbs'
 import DTRTable from './DTRTable'
 import RecentActivityTable from './RecentActivityTable'
 import CutoffsView from './CutoffsView'
@@ -1004,47 +1005,8 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
                                             return null;
                                         })()}
 
-                                        {/* Image Attachments */}
-                                        <div className="flex flex-wrap gap-2 justify-start lg:justify-end max-w-full lg:max-w-sm">
-                                            {(() => {
-                                                const sub = getSubmissionStatus(selectedUser.id);
-                                                // Handle both new array format and old string format
-                                                const attachments = sub.attachments || (sub.attachmentUrl ? [sub.attachmentUrl] : []);
-
-                                                return attachments.map((url, idx) => (
-                                                    <button
-                                                        key={idx}
-                                                        onClick={() => {
-                                                            const link = document.createElement('a');
-                                                            link.href = url;
-                                                            link.download = `DTR_${selectedUser.name}_${idx + 1}_${new Date().toISOString().split('T')[0]}.png`;
-                                                            document.body.appendChild(link);
-                                                            link.click();
-                                                            document.body.removeChild(link);
-                                                        }}
-                                                        className="group relative block w-24 h-24 bg-[var(--surface-3)] rounded-lg border border-[var(--border-strong)] overflow-hidden hover:border-[var(--accent-green)] hover:ring-2 hover:ring-[var(--accent-green)]/20 transition-all cursor-pointer"
-                                                        title={`Click to Download Image ${idx + 1}`}
-                                                    >
-                                                        {/* Preview Image */}
-                                                        <img
-                                                            src={url}
-                                                            alt={`Attachment ${idx + 1}`}
-                                                            className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity"
-                                                        />
-                                                        <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <span className="text-[9px] bg-black text-white px-1.5 py-0.5 rounded font-bold">
-                                                                Download
-                                                            </span>
-                                                        </div>
-                                                        {attachments.length > 1 && (
-                                                            <span className="absolute bottom-0 right-0 bg-black/50 text-white text-[9px] px-1">
-                                                                {idx + 1}
-                                                            </span>
-                                                        )}
-                                                    </button>
-                                                ))
-                                            })()}
-                                        </div>
+                                        {/* Attachments: the old inline ones and the newer stored ones */}
+                                        <AttachmentThumbs sub={getSubmissionStatus(selectedUser.id)} ownerName={selectedUser.name} accent="green" />
 
                                         {/* Attachment Comments */}
                                         {(() => {

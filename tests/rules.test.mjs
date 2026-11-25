@@ -232,6 +232,33 @@ await it('cannot delete another employee\'s submission', () =>
 await it('a removed person cannot probe for a missing submission', () =>
   assertFails(getDoc(doc(as(GONE), 'submissions', `${GONE}_cutoff2`))))
 
+console.log('\nDTR attachments — stored as chunks under the submission (api.attachmentApi)')
+const chunk = (uid, extra = {}) => ({ userId: uid, fileId: 'f1', index: 0, chunks: 1, data: 'AAAA', ...extra })
+await it('an employee stores a chunk under their own submission id', () =>
+  assertSucceeds(setDoc(doc(as(EMP2), 'submissions', `${EMP2}_cutoff5`, 'files', 'f1_0'), chunk(EMP2))))
+await it('and reads it back by id (a single get, never a list)', () =>
+  assertSucceeds(getDoc(doc(as(EMP2), 'submissions', `${EMP2}_cutoff5`, 'files', 'f1_0'))))
+await it('cannot store a chunk under someone else\'s submission id', () =>
+  assertFails(setDoc(doc(as(EMP2), 'submissions', `${EMP}_cutoff5`, 'files', 'f1_0'), chunk(EMP2))))
+await it('cannot store a chunk that names someone else as its owner', () =>
+  assertFails(setDoc(doc(as(EMP2), 'submissions', `${EMP2}_cutoff5`, 'files', 'f2_0'), chunk(EMP))))
+await it('a chunk is never rewritten', () =>
+  assertFails(updateDoc(doc(as(EMP2), 'submissions', `${EMP2}_cutoff5`, 'files', 'f1_0'), { data: 'BBBB' })))
+await it('an employee cannot list the chunks', () =>
+  assertFails(getDocs(collection(as(EMP2), 'submissions', `${EMP2}_cutoff5`, 'files'))))
+await it('another employee cannot read them', () =>
+  assertFails(getDoc(doc(as(EMP), 'submissions', `${EMP2}_cutoff5`, 'files', 'f1_0'))))
+await it('an admin reads them', () =>
+  assertSucceeds(getDoc(doc(as(ADMIN), 'submissions', `${EMP2}_cutoff5`, 'files', 'f1_0'))))
+await it('the owner removes a chunk while the DTR is not approved (Resubmit / Update cleans up)', () =>
+  assertSucceeds(deleteDoc(doc(as(EMP2), 'submissions', `${EMP2}_cutoff5`, 'files', 'f1_0'))))
+await it('but not once the DTR is approved — that is the record of what was sent', async () => {
+  await testEnv.withSecurityRulesDisabled(ctx => setDoc(doc(ctx.firestore(), 'submissions', `${EMP2}_cutoff4`, 'files', 'f9_0'), chunk(EMP2, { fileId: 'f9' })))
+  await assertFails(deleteDoc(doc(as(EMP2), 'submissions', `${EMP2}_cutoff4`, 'files', 'f9_0')))
+})
+await it('a removed person cannot store attachments', () =>
+  assertFails(setDoc(doc(as(GONE), 'submissions', `${GONE}_cutoff5`, 'files', 'f1_0'), chunk(GONE))))
+
 console.log('\nremoving people who have left')
 await it('a plain admin cannot remove anyone', () =>
   assertFails(updateDoc(doc(as(PLAIN_ADMIN), 'users', LEAVER), { removed: true, removedAt: new Date(), removedBy: PLAIN_ADMIN })))

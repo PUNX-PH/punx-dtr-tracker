@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { CheckCircle2, Clock, CheckCircle, XCircle, Send, Upload, MessageSquare, X, Save, Pencil, ChevronLeft, ChevronRight, Eye, Link as LinkIcon } from 'lucide-react'
 import { api, leaveApi } from '../services/api'
+import { checkFiles, prepareFile, isImage, IMAGE_TARGET_BYTES } from '../services/attachments'
 import ClockComp from './Clock'
 import DTRTable from './DTRTable'
 import RecentActivityTable from './RecentActivityTable'
@@ -130,7 +131,16 @@ export default function Dashboard({ user }) {
 
     const handleFileChange = (e) => {
         if (e.target.files && e.target.files.length > 0) {
-            setFiles(Array.from(e.target.files))
+            const picked = Array.from(e.target.files)
+            // What is already queued counts too, so the total can't creep past the limit.
+            const queued = attachmentGroups.flatMap(g => g.files).reduce((n, f) => n + (isImage(f) ? Math.min(f.size, IMAGE_TARGET_BYTES) : f.size), 0)
+            const problem = checkFiles(picked, queued)
+            if (problem) {
+                alert(problem)
+                e.target.value = '' // so picking the same file again after fixing it still registers
+                return
+            }
+            setFiles(picked)
             setShowCommentBox(true)
             setShowLinkBox(false)
             setAttachmentComment('')
@@ -164,26 +174,19 @@ export default function Dashboard({ user }) {
 
         setUploading(true)
         try {
-            // Convert ALL files from ALL groups to Base64
-            const allBase64 = []
+            // Get every file ready: photos are shrunk to a sensible size, other files go as
+            // they are. Each is then stored on its own (api.submitDTR), so there is no
+            // shared size limit to run into.
+            const allFiles = []
             const allComments = []
 
             for (const group of attachmentGroups) {
-                const promises = group.files.map(file => {
-                    return new Promise((resolve, reject) => {
-                        const reader = new FileReader();
-                        reader.readAsDataURL(file);
-                        reader.onload = () => resolve(reader.result);
-                        reader.onerror = reject;
-                    })
-                })
-                const base64Files = await Promise.all(promises)
-                allBase64.push(...base64Files)
+                for (const file of group.files) allFiles.push(await prepareFile(file))
                 // Store each group's comment with its file count for admin reference
                 allComments.push({ comment: group.comment, fileCount: group.files.length })
             }
 
-            const res = await api.submitDTR(user.id, activeCutoff.id, allBase64, allComments, submissionLinks)
+            const res = await api.submitDTR(user.id, activeCutoff.id, allFiles, allComments, submissionLinks)
             if (res.success) {
                 alert("DTR Submitted Successfully!")
                 setAttachmentGroups([])
@@ -423,7 +426,7 @@ export default function Dashboard({ user }) {
                                 )}
 
                                 {/* Render previous attachments if rejected */}
-                                {submission && submission.attachments && submission.attachments.length > 0 && (
+                                {submission && ((submission.attachments?.length || 0) + (submission.attachmentFiles?.length || 0)) > 0 && (
                                     <div className="space-y-3">
                                         <p className="text-xs text-[var(--text-muted)] font-bold uppercase tracking-wider">
                                             Previously Uploaded Attachments
@@ -510,6 +513,7 @@ export default function Dashboard({ user }) {
                                     <p className="text-sm text-[var(--text-secondary)]">
                                         {attachmentGroups.length > 0 || submissionLinks.length > 0 ? 'Add another attachment' : 'Upload image/ attachments (Optional)'}
                                     </p>
+                                    <p className="text-[11px] text-[var(--text-muted)]">Photos are shrunk automatically. Other files can be up to 8 MB each.</p>
                                     <input
                                         type="file"
                                         accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.ppt,.pptx,.zip,.rar"

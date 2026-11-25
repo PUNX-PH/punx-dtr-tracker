@@ -242,6 +242,32 @@ service cloud.firestore {
       // it can be redone. Never an approved one.
       allow delete: if isStaff()
         || (active() && resource.data.userId == myUid() && pending(resource.data));
+
+      // The attachments of this submission, stored as chunks (api.js attachmentApi)
+      // because one record cannot hold more than 1 MiB. Their path carries the
+      // submission id, which says whose they are — and a chunk is never rewritten.
+      //   read    staff, or the owner. Always single gets by id: an owner's LIST could not
+      //           be proven to be their own, so none is ever made.
+      //   create  the owner, into their own submission id, naming themselves.
+      //   delete  the owner, but not once the DTR is approved (that is the record of
+      //           what was sent); staff always.
+      match /files/{chunkId} {
+        allow get: if isStaff()
+          || (active() && resource.data.userId == myUid());
+
+        allow list: if isStaff();
+
+        allow create: if isStaff()
+          || (active() && isMyId() && request.resource.data.userId == myUid());
+
+        allow update: if false;
+
+        allow delete: if isStaff()
+          || (active() && isMyId() && resource.data.userId == myUid()
+              && (!exists(/databases/$(database)/documents/submissions/$(submissionId))
+                  || get(/databases/$(database)/documents/submissions/$(submissionId)).data.get('status', 'pending')
+                       in ['pending', 'pending_senior', 'rejected']));
+      }
     }
 
     // ---- notifications ----

@@ -4,6 +4,7 @@ import { DEFAULT_ALLOTMENT, LEAVE_TYPE_KEYS, LEAVE_TYPES, STATUS, summarize, val
 import { orgFields, profileFields } from './org';
 import { spanDays, MAX_SPAN_DAYS, holidaysForYears, holidaysByDate } from './holidays';
 import { makeDayKind } from './workday';
+import { newFileId, splitChunks, joinChunks, dataUrlBytes } from './attachments';
 import { calendarEventFrom } from './calendar';
 import { otHoursFromLogs, splitOT, cutoffWindow, offsetEarnedByUser, OT_THRESHOLD_HOURS } from './overtime';
 
@@ -715,11 +716,17 @@ export const api = {
         }
     },
 
-    // DTR Submission
-        submitDTR: async (userId, cutoffId, attachments, attachmentComments = [], links = []) => {
+    // DTR Submission.
+    //   files: [{ name, mime, dataUrl }] — each is stored in its OWN records
+    //   (attachmentApi), not inside this one: a record tops out at 1 MiB, which two
+    //   phone photos filled. The submission keeps only a small list of what was
+    //   attached (attachmentFiles). Submissions from before this keep their files
+    //   inline in `attachments`, and they are still read.
+    submitDTR: async (userId, cutoffId, files = [], attachmentComments = [], links = []) => {
+        // Use composite ID to prevent duplicates per cutoff
+        const submissionId = `${userId}_${cutoffId}`;
+        let uploaded = [];
         try {
-            // Use composite ID to prevent duplicates per cutoff
-            const submissionId = `${userId}_${cutoffId}`;
             const subRef = doc(db, "submissions", submissionId);
 
             // Fetch user to get assigned senior before creating submission
@@ -734,16 +741,18 @@ export const api = {
 
             const initialStatus = assignedSeniorId ? 'pending_senior' : 'pending';
 
-            // Combine with existing attachments if present (so we don't lose previous files on resubmission)
-            let finalAttachments = attachments;
+            // Keep what was attached before (a resubmission must not lose earlier files).
+            let keptInline = [];
+            let keptFiles = [];
             let finalComments = attachmentComments;
             let finalLinks = links;
 
             const existingSub = await getDoc(subRef);
             if (existingSub.exists()) {
                 const prevData = existingSub.data();
-                if (prevData.attachments && prevData.attachments.length > 0) {
-                    finalAttachments = [...prevData.attachments, ...attachments];
+                keptInline = prevData.attachments || [];
+                keptFiles = prevData.attachmentFiles || [];
+                if (keptInline.length > 0 || keptFiles.length > 0) {
                     finalComments = [...(prevData.attachmentComments || []), ...attachmentComments];
                 }
                 if (prevData.links && prevData.links.length > 0) {
@@ -751,10 +760,13 @@ export const api = {
                 }
             }
 
+            uploaded = await attachmentApi.upload(userId, submissionId, files);
+
             const submission = {
                 userId,
                 cutoffId,
-                attachments: finalAttachments,
+                attachments: keptInline,
+                attachmentFiles: [...keptFiles, ...uploaded],
                 attachmentComments: finalComments,
                 links: finalLinks,
                 status: initialStatus,
@@ -776,6 +788,8 @@ export const api = {
 
             return { success: true };
         } catch (error) {
+            // Don't leave files nobody will ever reference.
+            if (uploaded.length > 0) await attachmentApi.remove(submissionId, uploaded);
             console.error("Submit DTR error", error);
             return { success: false, message: error.message };
         }
@@ -800,6 +814,12 @@ export const api = {
         try {
             const { deleteDoc } = await import("firebase/firestore");
             const subRef = doc(db, "submissions", submissionId);
+            // The files hang off this submission, so they go with it. Best effort: a
+            // leftover chunk is only wasted space, never something that gets shown.
+            const snap = await getDoc(subRef);
+            if (snap.exists() && (snap.data().attachmentFiles || []).length > 0) {
+                await attachmentApi.remove(submissionId, snap.data().attachmentFiles);
+            }
             await deleteDoc(subRef);
             return { success: true };
         } catch (error) {
@@ -1452,3 +1472,45 @@ export const reminderApi = {
         body: JSON.stringify({ enabled }),
     }),
 }
+
+// ---- DTR attachments ----
+// Each attachment is stored as chunks in `submissions/{id}/files/{fileId}_{n}`, every
+// chunk well under Firestore's 1 MiB record limit (attachments.js CHUNK_CHARS), so the
+// number and total size of attachments is no longer squeezed into one record.
+export const attachmentApi = {
+    /** files: [{ name, mime, dataUrl }] -> [{ id, name, mime, size, chunks }]. Throws; cleans up after itself. */
+    upload: async (userId, submissionId, files) => {
+        const written = [];
+        try {
+            const metas = [];
+            for (const file of files) {
+                const id = newFileId();
+                const chunks = splitChunks(file.dataUrl);
+                await Promise.all(chunks.map((data, index) => {
+                    const ref = doc(db, "submissions", submissionId, "files", `${id}_${index}`);
+                    written.push(ref);
+                    return setDoc(ref, { userId, fileId: id, index, chunks: chunks.length, data });
+                }));
+                metas.push({ id, name: file.name, mime: file.mime, size: dataUrlBytes(file.dataUrl), chunks: chunks.length });
+            }
+            return metas;
+        } catch (error) {
+            await Promise.all(written.map(ref => deleteDoc(ref).catch(() => {})));
+            throw new Error(`Couldn't upload your attachments: ${error.message}`);
+        }
+    },
+
+    /** One attachment back as a data URL. Throws if any piece is missing. */
+    load: async (submissionId, meta) => {
+        const parts = await Promise.all(Array.from({ length: meta.chunks }, (_, i) =>
+            getDoc(doc(db, "submissions", submissionId, "files", `${meta.id}_${i}`))));
+        if (parts.some(p => !p.exists())) throw new Error(`"${meta.name}" is missing some of its data.`);
+        return joinChunks(parts.map(p => p.data().data));
+    },
+
+    /** Best-effort removal of attachments' chunks. Never throws. */
+    remove: async (submissionId, metas) => {
+        const refs = (metas || []).flatMap(m => Array.from({ length: m.chunks || 0 }, (_, i) => doc(db, "submissions", submissionId, "files", `${m.id}_${i}`)));
+        await Promise.all(refs.map(ref => deleteDoc(ref).catch(() => {})));
+    },
+};
