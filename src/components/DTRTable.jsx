@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { Pencil, Save, X, Loader2, Zap, Trash2, Plus, AlertTriangle } from 'lucide-react'
+import { Pencil, Save, X, Loader2, Zap, Trash2, Plus, AlertTriangle, Info } from 'lucide-react'
 import { api } from '../services/api'
 import { leaveForDate, dtrLabel, leaveNote, isPartialDay, toYMD, LEAVE_TYPES } from '../services/leave'
 import { formatDuration, otHoursFromLogs } from '../services/overtime'
@@ -225,8 +225,12 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
     const getOTReason = (date, session) => {
         const key = getCellKey(date, 'OT_REASON', session)
         if (edits[key] !== undefined) return edits[key] ?? ''
-        const log = [findLog(date, 'OT_IN', session), findLog(date, 'OT_OUT', session)].find(l => l?.otReason)
-        return log?.otReason || ''
+        const logs = [findLog(date, 'OT_IN', session), findLog(date, 'OT_OUT', session)]
+        const own = logs.find(l => l?.otReason)?.otReason
+        if (own) return own
+        // Before each OT had its own reason box people wrote it in the day's Notes, which
+        // is saved on every log of the day. That is still its reason — don't ask again.
+        return logs.find(l => l?.reason)?.reason || ''
     }
 
     // Everything wrong with the OT sessions this save would touch. Only touched
@@ -245,6 +249,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                 inTime: getInputValue(date, 'OT_IN', session),
                 outTime: getInputValue(date, 'OT_OUT', session),
                 reason: getOTReason(date, session),
+                regularOutTime: getInputValue(date, 'OUT'),
             }, isWorkday).forEach(p => found.push({ date, session, ...p }))
         }
         return found.sort((a, b) => a.date - b.date || a.session - b.session)
@@ -416,8 +421,19 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
         // Refuse before anything is written: overtime inside regular hours, or
         // overtime with no reason. Nothing is half-saved.
         const problems = findOTProblems()
-        if (problems.length > 0) {
-            const lines = problems.map(p => `• ${p.date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}, OT ${p.session + 1}: ${p.message}`)
+        // On a holiday the hours go under Overtime, not Regular Time. Clearing a time is fine; entering one isn't.
+        const holidayLines = Object.entries(edits).flatMap(([key, value]) => {
+            const m = key.match(/^(.+?)_(IN|OUT)$/)
+            if (!m || !value) return []
+            const d = new Date(m[1])
+            const h = holidayOn(d)
+            return h ? [`• ${d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}: ${h.name} is a holiday — enter your hours under Overtime, not Regular Time.`] : []
+        })
+        if (problems.length > 0 || holidayLines.length > 0) {
+            const lines = [
+                ...holidayLines,
+                ...problems.map(p => `• ${p.date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}, OT ${p.session + 1}: ${p.message}`),
+            ]
             alert(`Nothing was saved. Fix these first:\n\n${lines.join('\n')}`)
             return
         }
@@ -648,7 +664,11 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
             <div>
                 <span className={label}>{text}</span>
                 <div className="h-12">
-                    {editMode ? (
+                    {editMode && holiday && !getInputValue(date, type) ? (
+                        <div className="h-full flex items-center justify-center px-3 rounded-xl bg-black/30 text-xs text-center text-[var(--text-muted)]">
+                            Holiday — enter your hours under Overtime
+                        </div>
+                    ) : editMode ? (
                         <TimeCellEditor
                             size="lg"
                             value={getInputValue(date, type)}
@@ -718,6 +738,9 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                 {editMode ? (
                     <div className="space-y-3">
                         <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--accent-purple)]">Overtime</p>
+                        {holiday && (
+                            <p className="text-xs font-bold leading-snug" style={{ color: hType.color }}>{holiday.name}: enter your hours here, with a reason.</p>
+                        )}
                         {getOTSessionsForDate(date).map((session, n) => {
                             const inV = getInputValue(date, 'OT_IN', session)
                             const outV = getInputValue(date, 'OT_OUT', session)
@@ -726,7 +749,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                             // The reason box appears as soon as a session is being filled in, even half a time,
                             // so it is clear every session has its own.
                             const active = hasTimes || !!timeHints[getCellKey(date, 'OT_IN', session)] || !!timeHints[getCellKey(date, 'OT_OUT', session)]
-                            const problems = hasTimes ? checkOTSession({ date, inTime: inV, outTime: outV, reason: reasonV }, isWorkday) : []
+                            const problems = hasTimes ? checkOTSession({ date, inTime: inV, outTime: outV, reason: reasonV, regularOutTime: getInputValue(date, 'OUT') }, isWorkday) : []
                             const workProblem = problems.find(p => p.kind === 'work-time')
                             const needsReason = problems.some(p => p.kind === 'reason')
                             return (
@@ -953,6 +976,17 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                 </div>
             )}
 
+            {canEdit && (
+                <div className="mx-4 sm:mx-6 mt-3 p-3 rounded-xl border border-[var(--accent-purple)]/30 bg-[var(--accent-purple)]/5 flex items-start gap-2.5">
+                    <Info size={15} className="text-[var(--accent-purple)] shrink-0 mt-0.5" />
+                    <p className="text-xs leading-relaxed text-[var(--text-secondary)]">
+                        <strong className="text-[var(--text-primary)]">Only hours entered under Overtime count as overtime.</strong>{' '}
+                        Regular time is your normal day — it can run a little past 6:00 PM (say 6:30) without being overtime.
+                        Each overtime needs a reason, and on a holiday all your hours go under Overtime.
+                    </p>
+                </div>
+            )}
+
             {editMode && (
                 <p className="px-4 sm:px-6 pt-3 text-[11px] text-[var(--text-muted)]">
                     Type the numbers of the time, like <strong className="text-[var(--text-secondary)]">930</strong>, then tap AM or PM.<span className="hidden md:inline"> On a keyboard, A and P pick AM/PM and ↑ ↓ move it 15 minutes.</span>
@@ -1000,7 +1034,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                             <th colSpan={2} className="p-2 border-r border-[var(--border)] bg-[var(--accent-purple)]/5">
                                 <div className="text-[var(--accent-purple)] font-bold text-xs uppercase tracking-wider">Overtime</div>
                             </th>
-                            <th className="p-3 bg-[var(--surface-2)] text-[var(--text-secondary)] font-medium text-xs border-r border-[var(--border)]">REASON / NOTES</th>
+                            <th className="p-3 bg-[var(--surface-2)] text-[var(--text-secondary)] font-medium text-xs border-r border-[var(--border)]">NOTES</th>
                         </tr>
 
                         <tr className="border-b border-[var(--border)] text-xs font-semibold">
@@ -1074,7 +1108,11 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
 
                                 {/* Regular IN */}
                                 <td style={edge()} className="p-0 border-r border-[var(--border)] border-dashed border-white/10 bg-[var(--accent-green)]/5 font-mono h-12">
-                                    {editMode ? (
+                                    {editMode && holiday && !getInputValue(date, 'IN') ? (
+                                        <div className="h-12 flex items-center justify-center px-2 text-center text-[10px] leading-tight text-[var(--text-muted)]" title="On a holiday, enter your hours under Overtime">
+                                            Holiday — use Overtime
+                                        </div>
+                                    ) : editMode ? (
                                         <div className="h-12">
                                             <TimeCellEditor
                                                 value={getInputValue(date, 'IN')}
@@ -1091,7 +1129,11 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
 
                                 {/* Regular OUT */}
                                 <td style={edge()} className="p-0 border-r border-[var(--border)] bg-[var(--accent-green)]/5 font-mono h-12">
-                                    {editMode ? (
+                                    {editMode && holiday && !getInputValue(date, 'OUT') ? (
+                                        <div className="h-12 flex items-center justify-center px-2 text-center text-[10px] leading-tight text-[var(--text-muted)]" title="On a holiday, enter your hours under Overtime">
+                                            Holiday — use Overtime
+                                        </div>
+                                    ) : editMode ? (
                                         <div className="h-12">
                                             <TimeCellEditor
                                                 value={getInputValue(date, 'OUT')}
@@ -1111,6 +1153,11 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                 <td colSpan={2} style={edge()} className="p-0 border-r border-[var(--border)] bg-[var(--accent-purple)]/5 font-mono align-middle">
                                     {editMode ? (
                                         <div className="flex flex-col divide-y divide-[var(--border)]/60">
+                                            {holiday && (
+                                                <p className="px-2 pt-2 text-[10px] font-bold font-sans leading-snug" style={{ color: hType.color }}>
+                                                    {holiday.name}: enter your hours here, with a reason.
+                                                </p>
+                                            )}
                                             {getOTSessionsForDate(date).map(session => {
                                                 const inV = getInputValue(date, 'OT_IN', session)
                                                 const outV = getInputValue(date, 'OT_OUT', session)
@@ -1119,7 +1166,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                                 // The reason box appears as soon as a session is being filled in, even half a time,
                                                 // so it is clear every session has its own.
                                                 const active = hasTimes || !!timeHints[getCellKey(date, 'OT_IN', session)] || !!timeHints[getCellKey(date, 'OT_OUT', session)]
-                                                const problems = hasTimes ? checkOTSession({ date, inTime: inV, outTime: outV, reason: reasonV }, isWorkday) : []
+                                                const problems = hasTimes ? checkOTSession({ date, inTime: inV, outTime: outV, reason: reasonV, regularOutTime: getInputValue(date, 'OUT') }, isWorkday) : []
                                                 const workProblem = problems.find(p => p.kind === 'work-time')
                                                 const needsReason = problems.some(p => p.kind === 'reason')
                                                 return (

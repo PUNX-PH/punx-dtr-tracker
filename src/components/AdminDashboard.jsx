@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react'
-import { Search, User as UserIcon, Loader2, FileSpreadsheet, Users, Folder, X, Square, CheckSquare, RotateCcw, Trash2, CalendarCheck, History, UserCog, Building2 } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Search, User as UserIcon, Loader2, FileSpreadsheet, Users, Folder, X, Square, CheckSquare, RotateCcw, Trash2, CalendarCheck, History, UserCog, Building2, AlertTriangle } from 'lucide-react'
 import { Timestamp } from 'firebase/firestore'
-import { api, defaultSubmitBy, reminderApi, leaveApi, orgApi } from '../services/api'
+import { api, defaultSubmitBy, reminderApi, leaveApi, orgApi, deadlineApi } from '../services/api'
 import { canSeeOvertimeOffset, canUseDepartment, toYMD, parseYMD } from '../services/leave'
 import { exportRows, cutoffText, longDate } from '../services/dtrExport'
 import { buildDtrWorkbook } from '../services/dtrWorkbook'
 import { typeLines } from '../services/otTypes'
+import { deadlineFor, deadlineText, overdueRecipients, periodText } from '../services/deadline'
 import { cutoffWindow, formatDuration, otHoursFromLogs, otForPeriod } from '../services/overtime'
 import DtrDecisionBar from './DtrDecisionBar'
 import AdminManageMenu from './AdminManageMenu'
@@ -41,6 +42,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
     // editable because that default is only right until a holiday moves it.
     const [submitBy, setSubmitBy] = useState('')
     const [submissions, setSubmissions] = useState({}) // Map userId -> submission
+    const [submissionsFor, setSubmissionsFor] = useState(null) // the cutoff id those submissions are for
     // Offboarding (super_admin only). `showRemoved` swaps the list to the
     // removed people so a mistaken removal can be restored.
     const [selectMode, setSelectMode] = useState(false)
@@ -120,6 +122,7 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
             subMap[s.userId] = s
         })
         setSubmissions(subMap)
+        setSubmissionsFor(cutoff.id)
     }
 
     const handleDTRAction = async (status) => {
@@ -136,6 +139,25 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
             alert("Failed to update status: " + res.message);
         }
     }
+
+    // After the LATEST cutoff's deadline, tell everyone who hasn't submitted (and the admins
+    // who they are). It happens when an admin opens this page — nothing here runs while
+    // nobody has the app open — and each notice goes out once, so reloads and other admins
+    // opening it later send nothing twice.
+    const overdueRan = useRef(new Set())
+    const [overdueNote, setOverdueNote] = useState('')
+    const isAdminRole = currentUser.role === 'admin' || currentUser.role === 'super_admin'
+    const isLatestCutoff = !!cutoff && cutoffs.length > 0 && cutoff.id === cutoffs[0].id
+    useEffect(() => {
+        if (!isAdminRole || !isLatestCutoff || loading || users.length === 0 || submissionsFor !== cutoff.id) return
+        const deadline = deadlineFor(cutoff)
+        if (!deadline || new Date() <= deadline || overdueRan.current.has(cutoff.id)) return
+        overdueRan.current.add(cutoff.id)
+        deadlineApi.notifyOverdue({ cutoff, users, submissions })
+            .then(r => { if (r.notified > 0) setOverdueNote(`${r.notified} ${r.notified === 1 ? 'person was' : 'people were'} notified automatically.`) })
+            .catch(e => console.error('Overdue notices failed', e))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isAdminRole, isLatestCutoff, loading, users, submissions, submissionsFor, cutoff])
 
     // Keep the deadline trailing endDate until someone edits it by hand; after
     // that it is theirs and picking a new end date must not silently overwrite
@@ -641,6 +663,28 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
 
             </>
             )}
+
+            {/* Past the deadline: who still hasn't submitted */}
+            {!hubView && isLatestCutoff && submissionsFor === cutoff.id && deadlineFor(cutoff) && new Date() > deadlineFor(cutoff) && (() => {
+                const missing = overdueRecipients(users, submissions)
+                if (missing.length === 0) return null
+                return (
+                    <div role="alert" className="flex flex-wrap items-center gap-3 bg-[var(--accent-amber)]/10 border border-[var(--accent-amber)]/30 rounded-2xl p-3">
+                        <AlertTriangle size={18} className="text-[var(--accent-amber)] shrink-0" />
+                        <p className="flex-1 min-w-[220px] text-xs text-[var(--text-secondary)] leading-relaxed">
+                            <strong className="text-[var(--text-primary)]">{missing.length} {missing.length === 1 ? 'person hasn’t' : 'people haven’t'} submitted</strong> their DTR for {periodText(cutoff)}.
+                            The deadline ({deadlineText(deadlineFor(cutoff))}) has passed. {overdueNote || 'They are notified automatically.'}
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => { setView('employees'); setStatusFilter('notsent'); setSeniorFilter('all') }}
+                            className="px-3 py-1.5 bg-[var(--surface-3)] hover:bg-[var(--surface-2)] text-[var(--text-primary)] text-xs font-bold rounded-lg border border-[var(--border-strong)] transition-colors"
+                        >
+                            Show them
+                        </button>
+                    </div>
+                )
+            })()}
 
             {/* View switcher: only super admins get more than Employees */}
             {isSuperAdmin && (

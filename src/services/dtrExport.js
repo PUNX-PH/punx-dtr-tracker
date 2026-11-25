@@ -56,13 +56,14 @@ export function exportRows({ dates, logs = [], leaves = [], holidaysByDate = {} 
         for (const l of dayLogs) {
             if (l.type !== 'OT_IN' && l.type !== 'OT_OUT') continue
             const s = l.session || 0
-            const g = sessions.get(s) || { otIn: null, otOut: null, reason: '' }
+            const g = sessions.get(s) || { otIn: null, otOut: null, reason: '', note: '' }
             if (l.type === 'OT_IN') g.otIn = l.ts
             else g.otOut = l.ts
             if (String(l.otReason || '').trim()) g.reason = String(l.otReason).trim()
+            if (String(l.reason || '').trim()) g.note = String(l.reason).trim() // the day's Notes: where the reason was written before each OT had its own box
             sessions.set(s, g)
         }
-        const ordered = [...sessions.entries()].sort((a, b) => a[0] - b[0]).map(([, g]) => g)
+        const ordered = [...sessions.entries()].sort((a, b) => a[0] - b[0]).map(([, g]) => ({ ...g, reason: g.reason || g.note }))
 
         const day = date.toLocaleDateString('en-US', { weekday: 'long' })
         if (ordered.length === 0) {

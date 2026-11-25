@@ -243,5 +243,21 @@ it('super admins only — not admins, seniors, managers or employees', () => {
 it('hidden from everyone when the master switch is off', () =>
   assert.equal(canSeeOvertimeOffset({ role: 'super_admin' }, false), false))
 
+console.log('\nregular time past 6 PM, and reasons written in the day note')
+const reg = (type, d, h, m) => ({ type, timestamp: at(d, h, m) })
+it('working to 6:30 and logging it as regular time is not overtime', () =>
+  assert.equal(otHoursFromLogs([reg('IN', 5, 9, 0), reg('OUT', 5, 18, 30)]).minutes, 0))
+it('overtime that overlaps that regular time only counts after it', () => {
+  const r = otHoursFromLogs([reg('IN', 5, 9, 0), reg('OUT', 5, 18, 30), ot('OT_IN', 5, 18, 0), ot('OT_OUT', 5, 20, 0)])
+  assert.equal(r.minutes, 90); assert.equal(r.overlaps[0].overlapMinutes, 30)
+})
+it('a Time out before 6 PM changes nothing', () =>
+  assert.equal(otHoursFromLogs([reg('IN', 5, 9, 0), reg('OUT', 5, 17, 0), ot('OT_IN', 5, 18, 0), ot('OT_OUT', 5, 20, 0)]).minutes, 120))
+it('a reason written in the day note still counts as the reason (older entries)', () => {
+  const withNote = [{ ...ot('OT_IN', 5, 18, 0), reason: 'Client deadline' }, { ...ot('OT_OUT', 5, 20, 0), reason: 'Client deadline' }]
+  assert.deepEqual(otHoursFromLogs(withNote).noReason, [])
+  assert.equal(otHoursFromLogs([ot('OT_IN', 5, 18, 0), ot('OT_OUT', 5, 20, 0)]).noReason.length, 1)
+})
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

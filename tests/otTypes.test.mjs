@@ -101,5 +101,14 @@ it('otSessions reads the same sessions the OT total does', () => {
   assert.deepEqual(s.map(x => [x.day, x.problem, x.elapsed]), [['2026-10-05', null, 480], ['2026-10-07', 'no-end', 0]])
 })
 
+console.log('\nregular time past 6 PM')
+it('regular Time out 6:30 PM: OT filed from 6:00 PM counts from 6:30', () =>
+  assert.deepEqual(only(m([...reg(5, 9, 0, 18, 30), ...ot(5, 18, 0, 5, 20, 0)])), { regularOT: 90 }))
+it('the same day with no OT filed has no OT at all', () => assert.equal(classifyOT(reg(5, 9, 0, 18, 30), { dayKind }).total, 0))
+it('a session reads the day note as its reason when it has none of its own', () => {
+  const s = otSessions([{ type: 'OT_IN', timestamp: at(5, 18, 0), reason: 'Month end' }, { type: 'OT_OUT', timestamp: at(5, 20, 0), reason: 'Month end' }])
+  assert.equal(s[0].reason, 'Month end')
+})
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

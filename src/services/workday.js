@@ -9,6 +9,12 @@
 //   refused when someone saves it, and left out of the count if it is already
 //   there.
 //
+//   Regular time is the person's own Time in / Time out. The 6:00 PM above is the
+//   usual end of the day, not a wall: someone who works until 6:30 PM and logs a
+//   Time out of 6:30 has done regular work, and that half hour is NOT overtime
+//   (overtime is only what is entered under Overtime). So the regular window ends
+//   at 6:00 PM or at that day's logged Time out, whichever is later.
+//
 //   Two more rules come from the DTR guidelines:
 //     • BREAK: one continuous stretch of work longer than 5 hours has 1 hour
 //       taken off for the break. The DTR doesn't record when the break was, so it
@@ -83,8 +89,12 @@ export function inND(date) {
     return m >= ND_START_MIN || m < ND_END_MIN
 }
 
-/** Minutes of [inAt, outAt] that fall inside regular hours, summed over every working day it touches. */
-export function workOverlapMinutes(inAt, outAt, isWorkday = defaultIsWorkday) {
+/**
+ * Minutes of [inAt, outAt] that fall inside regular hours, summed over every working
+ * day it touches. `workEnd` (optional, (Date) => minute of the day) is when that day's
+ * regular time actually ended, if later than 6:00 PM — see the note at the top.
+ */
+export function workOverlapMinutes(inAt, outAt, isWorkday = defaultIsWorkday, workEnd = null) {
     if (!(outAt > inAt)) return 0
     let total = 0
     const day = new Date(inAt.getFullYear(), inAt.getMonth(), inAt.getDate())
@@ -92,7 +102,7 @@ export function workOverlapMinutes(inAt, outAt, isWorkday = defaultIsWorkday) {
     for (; day <= last; day.setDate(day.getDate() + 1)) {
         if (!isWorkday(day)) continue
         const from = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, WORK_START_MIN)
-        const to = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, WORK_END_MIN)
+        const to = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, Math.max(WORK_END_MIN, workEnd ? workEnd(day) : 0))
         const ms = Math.min(outAt, to) - Math.max(inAt, from)
         if (ms > 0) total += ms
     }
@@ -103,21 +113,22 @@ export function workOverlapMinutes(inAt, outAt, isWorkday = defaultIsWorkday) {
  * The minutes that ACTUALLY count in one stretch of work, as a sorted list of
  * minute-start times (ms). Three things shape it:
  *   1. Regular hours are not overtime: on a working day the minutes inside
- *      9:00 AM – 6:00 PM are left out (isWorkday decides which days those are).
+ *      9:00 AM – 6:00 PM (or to that day's later logged Time out, via `workEnd`)
+ *      are left out (isWorkday decides which days those are).
  *   2. Break: if what remains is longer than 5 hours, 1 hour comes off.
  *   3. The break is taken from the earliest minutes OUTSIDE the ND window first,
  *      so the ND hours stay whole; it only eats ND minutes if there are not
  *      enough others.
  * Returns { minutes: number[], breakTaken: number } (breakTaken in minutes).
  */
-export function actualMinutes(inAt, outAt, isWorkday = () => false) {
+export function actualMinutes(inAt, outAt, isWorkday = () => false, workEnd = null) {
     const out = []
     const startMs = Math.ceil(inAt.getTime() / 60000) * 60000
     for (let t = startMs; t < outAt.getTime(); t += 60000) {
         const d = new Date(t)
         if (isWorkday(d)) {
             const m = d.getHours() * 60 + d.getMinutes()
-            if (m >= WORK_START_MIN && m < WORK_END_MIN) continue
+            if (m >= WORK_START_MIN && m < Math.max(WORK_END_MIN, workEnd ? workEnd(d) : 0)) continue
         }
         out.push(t)
     }
@@ -153,10 +164,13 @@ const toMin = (hhmm) => {
  *   inTime   'HH:MM' (24h) or '' / null
  *   outTime  'HH:MM' (24h) or '' / null
  *   reason   the reason typed for THIS session
+ *   regularOutTime  'HH:MM' of that day's regular Time out, if there is one. Regular
+ *            time that runs past 6:00 PM is not overtime, so overtime has to start
+ *            after it
  * Returns [{ kind: 'reason' | 'work-time', message }] — empty when it is fine.
  * A session with no times at all has nothing to check.
  */
-export function checkOTSession({ date, inTime, outTime, reason }, isWorkday = defaultIsWorkday) {
+export function checkOTSession({ date, inTime, outTime, reason, regularOutTime }, isWorkday = defaultIsWorkday) {
     const a = toMin(inTime)
     const b = toMin(outTime)
     if (a === null && b === null) return []
@@ -167,23 +181,28 @@ export function checkOTSession({ date, inTime, outTime, reason }, isWorkday = de
     }
 
     if (isWorkday(date)) {
+        const regOut = toMin(regularOutTime)
+        const endMin = Math.max(WORK_END_MIN, regOut ?? 0) // the regular day ends at 6:00 PM, or at their Time out if later
         const day = new Date(date.getFullYear(), date.getMonth(), date.getDate())
         const at = (min) => new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, min)
         let inside = false
         if (a !== null && b !== null) {
             let end = at(b)
             if (end <= at(a)) end = new Date(end.getTime() + 24 * 3600 * 1000) // runs past midnight
-            inside = workOverlapMinutes(at(a), end, isWorkday) > 0
+            inside = workOverlapMinutes(at(a), end, isWorkday, () => endMin) > 0
         } else if (a !== null) {
-            inside = a >= WORK_START_MIN && a < WORK_END_MIN
+            inside = a >= WORK_START_MIN && a < endMin
         } else {
-            inside = b > WORK_START_MIN && b < WORK_END_MIN
+            inside = b > WORK_START_MIN && b < endMin
         }
         if (inside) {
             const range = a !== null && b !== null ? `${clock12(a)} – ${clock12(b)}` : clock12(a ?? b)
+            const late = endMin > WORK_END_MIN // their Time out is past 6:00 PM
             problems.push({
                 kind: 'work-time',
-                message: `${range} is inside regular hours (${WORK_HOURS_TEXT}). Overtime has to be before 9:00 AM or after 6:00 PM.`,
+                message: late
+                    ? `${range} overlaps your regular time (9:00 AM – ${clock12(endMin)}). Overtime has to start after your Time out of ${clock12(endMin)}.`
+                    : `${range} is inside regular hours (${WORK_HOURS_TEXT}). Overtime has to be before 9:00 AM or after 6:00 PM.`,
             })
         }
     }

@@ -23,7 +23,7 @@
 // A session belongs to the day it STARTED on, which is the row it is on in the DTR.
 
 import { toYMD, parseYMD } from './leave.js'
-import { MAX_OT_SESSION_HOURS, FULL_DAY_MIN, actualMinutes, inND, makeDayKind } from './workday.js'
+import { MAX_OT_SESSION_HOURS, FULL_DAY_MIN, WORK_END_MIN, actualMinutes, inND, makeDayKind } from './workday.js'
 
 /** The lines of the breakdown, in the order the guidelines list them. */
 export const OT_TYPE_LINES = [
@@ -52,7 +52,8 @@ const asDate = (ts) => (ts instanceof Date ? ts : new Date(ts))
  *            session (it ends the next morning), 0 when either end is missing
  *   problem  null, or 'no-start' / 'no-end' / 'bad-order' (longer than
  *            MAX_OT_SESSION_HOURS — a mistyped AM/PM, not an overnight)
- *   reason   the session's otReason, '' if none
+ *   reason   the session's otReason; failing that the day's Notes, which is where
+ *            people wrote the reason before each OT had its own box; '' if neither
  */
 export function otSessions(logs = []) {
     const groups = new Map()
@@ -61,9 +62,10 @@ export function otSessions(logs = []) {
         const ts = asDate(log.timestamp)
         if (Number.isNaN(ts.getTime())) continue
         const key = `${toYMD(ts)}_${log.session || 0}`
-        const g = groups.get(key) || { ins: [], outs: [], reason: '' }
+        const g = groups.get(key) || { ins: [], outs: [], reason: '', note: '' }
         ;(log.type === 'OT_IN' ? g.ins : g.outs).push(ts)
         if (String(log.otReason || '').trim()) g.reason = String(log.otReason).trim()
+        if (String(log.reason || '').trim()) g.note = String(log.reason).trim()
         groups.set(key, g)
     }
     const out = []
@@ -74,7 +76,7 @@ export function otSessions(logs = []) {
         let elapsed = inAt && outAt ? Math.round((outAt - inAt) / 60000) : 0
         if (inAt && outAt && elapsed <= 0) elapsed += 24 * 60
         const problem = !inAt ? 'no-start' : !outAt ? 'no-end' : (elapsed <= 0 || elapsed > MAX_OT_SESSION_HOURS * 60) ? 'bad-order' : null
-        out.push({ day, session: Number(session), inAt, outAt, elapsed: problem ? 0 : elapsed, problem, reason: g.reason })
+        out.push({ day, session: Number(session), inAt, outAt, elapsed: problem ? 0 : elapsed, problem, reason: g.reason || g.note })
     }
     return out.sort((a, b) => a.day.localeCompare(b.day) || a.session - b.session)
 }
@@ -102,6 +104,20 @@ function regularBlocks(logs) {
 }
 
 /**
+ * When each day's regular time ENDED, where that is later than 6:00 PM:
+ * (Date) => minute of the day, or 0. Someone who works to 6:30 and logs a Time
+ * out of 6:30 has done regular work until then, which is not overtime.
+ */
+export function regularEndFn(logs = []) {
+    const ends = {}
+    for (const [day, b] of Object.entries(regularBlocks(logs))) {
+        const m = b.outAt.getHours() * 60 + b.outAt.getMinutes()
+        if (m > WORK_END_MIN) ends[day] = m
+    }
+    return (date) => ends[toYMD(date)] || 0
+}
+
+/**
  * Sorts the hours in `logs` into the OT types.
  *   opts.dayKind  (Date) => 'work' | 'rest' | 'regularHoliday' | 'specialHoliday',
  *                 from workday.makeDayKind(holidays). Weekends only if omitted.
@@ -112,6 +128,7 @@ function regularBlocks(logs) {
 export function classifyOT(logs = [], { dayKind } = {}) {
     const kindOf = dayKind || makeDayKind()
     const isWork = (d) => kindOf(d) === 'work'
+    const workEnd = regularEndFn(logs)
     const minutes = emptyBuckets()
 
     const sessions = otSessions(logs).filter(s => !s.problem)
@@ -126,7 +143,7 @@ export function classifyOT(logs = [], { dayKind } = {}) {
             // Only overtime matters on a workday; the regular Time In/Out is just the day.
             for (const s of daySessions) {
                 const end = new Date(s.inAt.getTime() + s.elapsed * 60000)
-                for (const t of actualMinutes(s.inAt, end, isWork).minutes) {
+                for (const t of actualMinutes(s.inAt, end, isWork, workEnd).minutes) {
                     minutes[inND(new Date(t)) ? 'regularOTND' : 'regularOT']++
                 }
             }

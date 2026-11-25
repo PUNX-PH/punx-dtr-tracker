@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
-import { CheckCircle2, Clock, CheckCircle, XCircle, Send, Upload, MessageSquare, X, Save, Pencil, ChevronLeft, ChevronRight, Eye, Link as LinkIcon } from 'lucide-react'
+import { CheckCircle2, Clock, CheckCircle, XCircle, Send, Upload, MessageSquare, X, Save, Pencil, ChevronLeft, ChevronRight, Eye, Link as LinkIcon, AlertTriangle } from 'lucide-react'
 import { api, leaveApi } from '../services/api'
 import { checkFiles, prepareFile, isImage, IMAGE_TARGET_BYTES } from '../services/attachments'
 import ClockComp from './Clock'
 import DTRTable from './DTRTable'
 import RecentActivityTable from './RecentActivityTable'
+import { useHolidays } from './useHolidays'
+import { toYMD } from '../services/leave'
+import { deadlineState, deadlineText, clockText, spanText, periodText } from '../services/deadline'
 
 export default function Dashboard({ user }) {
     const submissionDraftKey = `dtr_submission_draft_${user.id}`
@@ -50,6 +53,19 @@ export default function Dashboard({ user }) {
 
     const hasMountedDraftRef = useRef(false)
 
+    // The clock the deadline reminder runs against, so "due today" turns into "overdue" at
+    // 10:00 by itself and the time left counts down without a refresh.
+    const [now, setNow] = useState(() => new Date())
+    useEffect(() => {
+        const t = setInterval(() => setNow(new Date()), 30000)
+        return () => clearInterval(t)
+    }, [])
+    const [cutoffChecked, setCutoffChecked] = useState(false) // the submission has been looked for, so "not submitted" is true
+
+    // On a holiday the hours go under Overtime in the DTR, so Time In / Time Out are off.
+    const { byDate: holidayIndex } = useHolidays([new Date().getFullYear()])
+    const holidayToday = holidayIndex[toYMD(new Date())]?.[0] || null
+
     useEffect(() => {
         loadHistory()
         checkCutoff()
@@ -83,6 +99,7 @@ export default function Dashboard({ user }) {
             // Check if submitted
             const sub = await api.getSubmission(user.id, cutoff.id)
             setSubmission(sub)
+            setCutoffChecked(true)
             if (!sub) {
                 // Determine if we should annoy the user (active cutoff exists and not submitted)
                 setShowCutoffAlert(true)
@@ -110,6 +127,7 @@ export default function Dashboard({ user }) {
     }
 
     const handleLog = async (type) => {
+        if (holidayToday) return alert(`Today is ${holidayToday.name}. On a holiday, enter your hours under Overtime in your DTR below, with a reason.`)
         if (type === 'IN' && hasTimeIn) return; // Prevent double IN (simple check)
         if (type === 'OUT' && hasTimeOut) return;
 
@@ -223,8 +241,8 @@ export default function Dashboard({ user }) {
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500 relative">
-            {/* Cutoff Alert - Compact Popup */}
-            {showCutoffAlert && activeCutoff && (
+            {/* Cutoff Alert - Compact Popup. Left out once the deadline banner below is showing: it says the same thing better and would sit on top of it. */}
+            {showCutoffAlert && activeCutoff && !(cutoffChecked && ['due-today', 'overdue'].includes(deadlineState({ cutoff: activeCutoff, submission, now }).phase)) && (
                 <div className="fixed inset-x-3 top-[calc(4.5rem+env(safe-area-inset-top,0px))] md:inset-x-auto md:top-24 md:right-8 z-50 animate-in slide-in-from-right fade-in duration-500 w-auto md:w-full md:max-w-sm">
                     <div className="bg-[var(--surface-1)] border border-[var(--accent-yellow)]/50 p-5 md:p-6 rounded-2xl shadow-2xl relative bg-opacity-95 backdrop-blur-md">
                         <button
@@ -280,6 +298,43 @@ export default function Dashboard({ user }) {
                 </div>
             </div>
 
+            {/* Deadline reminder: on the deadline day until it passes, then until it is done */}
+            {(() => {
+                if (!cutoffChecked) return null
+                const dl = deadlineState({ cutoff: activeCutoff, submission, now })
+                if (dl.phase !== 'due-today' && dl.phase !== 'overdue') return null
+                const overdue = dl.phase === 'overdue'
+                const tone = overdue ? 'var(--accent-red)' : 'var(--accent-amber)'
+                return (
+                    <div role="alert" className="flex items-start gap-3 p-4 rounded-2xl border" style={{ borderColor: `color-mix(in srgb, ${tone} 40%, transparent)`, background: `color-mix(in srgb, ${tone} 10%, transparent)` }}>
+                        <AlertTriangle size={20} className="shrink-0 mt-0.5" style={{ color: tone }} />
+                        <div className="text-sm leading-relaxed text-[var(--text-secondary)]">
+                            {overdue ? (
+                                <>
+                                    <p className="font-bold" style={{ color: tone }}>Your DTR is overdue</p>
+                                    <p>The DTR for {periodText(activeCutoff)} was due {deadlineText(dl.deadline)}. Please send it now with <strong className="text-[var(--text-primary)]">Send to Admin</strong>.</p>
+                                </>
+                            ) : (
+                                <>
+                                    <p className="font-bold" style={{ color: tone }}>DTR due today by {clockText(dl.deadline)}</p>
+                                    <p>{spanText(dl.msLeft)} left. Send the DTR for {periodText(activeCutoff)} with <strong className="text-[var(--text-primary)]">Send to Admin</strong> before then.</p>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                )
+            })()}
+
+            {holidayToday && (
+                <div className="flex items-start gap-3 p-4 rounded-2xl border border-[var(--accent-teal)]/40 bg-[var(--accent-teal)]/10">
+                    <Clock size={20} className="shrink-0 mt-0.5 text-[var(--accent-teal)]" />
+                    <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
+                        <strong className="text-[var(--text-primary)]">Today is {holidayToday.name}.</strong>{' '}
+                        On a holiday, enter your hours under Overtime in your DTR below, with a reason. Time In / Time Out are off for today.
+                    </p>
+                </div>
+            )}
+
             {/* Action Cards */}
             <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
 
@@ -299,9 +354,9 @@ export default function Dashboard({ user }) {
                 {/* Time In Card */}
                 <button
                     onClick={() => handleLog('IN')}
-                    disabled={processing || hasTimeIn}
+                    disabled={processing || hasTimeIn || !!holidayToday}
                     className={`bg-[var(--surface-1)] p-5 sm:p-6 rounded-3xl border border-[var(--border)] text-left transition-all duration-300 group relative overflow-hidden
-                    ${hasTimeIn ? 'opacity-50 cursor-not-allowed' : 'hover:border-[var(--accent-green)] active:scale-[0.99] hover:-translate-y-1 hover:shadow-lg hover:shadow-[var(--accent-green)]/10'}
+                    ${(hasTimeIn || holidayToday) ? 'opacity-50 cursor-not-allowed' : 'hover:border-[var(--accent-green)] active:scale-[0.99] hover:-translate-y-1 hover:shadow-lg hover:shadow-[var(--accent-green)]/10'}
                 `}
                 >
                     <div className="relative z-10">
@@ -310,7 +365,7 @@ export default function Dashboard({ user }) {
                         </div>
                         <h3 className="text-3xl sm:text-4xl font-bold text-[var(--text-primary)] mb-1">TIME IN</h3>
                         <p className="text-xs font-semibold tracking-widest text-[var(--accent-green)] uppercase">
-                            {hasTimeIn ? 'ALREADY LOGGED' : 'START SHIFT'}
+                            {hasTimeIn ? 'ALREADY LOGGED' : holidayToday ? 'HOLIDAY — USE OVERTIME' : 'START SHIFT'}
                         </p>
                     </div>
                     {/* Glow Effect */}
@@ -320,9 +375,9 @@ export default function Dashboard({ user }) {
                 {/* Time Out Card */}
                 <button
                     onClick={() => handleLog('OUT')}
-                    disabled={processing || hasTimeOut}
+                    disabled={processing || hasTimeOut || !!holidayToday}
                     className={`bg-[var(--surface-1)] p-5 sm:p-6 rounded-3xl border border-[var(--border)] text-left transition-all duration-300 group relative overflow-hidden
-                    ${hasTimeOut ? 'opacity-50 cursor-not-allowed' : 'hover:border-[var(--accent-red)] active:scale-[0.99] hover:-translate-y-1 hover:shadow-lg hover:shadow-red-500/10'}
+                    ${(hasTimeOut || holidayToday) ? 'opacity-50 cursor-not-allowed' : 'hover:border-[var(--accent-red)] active:scale-[0.99] hover:-translate-y-1 hover:shadow-lg hover:shadow-red-500/10'}
                 `}
                 >
                     <div className="relative z-10">
@@ -331,7 +386,7 @@ export default function Dashboard({ user }) {
                         </div>
                         <h3 className="text-3xl sm:text-4xl font-bold text-[var(--text-primary)] mb-1">TIME OUT</h3>
                         <p className="text-xs font-semibold tracking-widest text-[var(--accent-red)] uppercase">
-                            {hasTimeOut ? 'ALREADY LOGGED' : 'END SHIFT'}
+                            {hasTimeOut ? 'ALREADY LOGGED' : holidayToday ? 'HOLIDAY — USE OVERTIME' : 'END SHIFT'}
                         </p>
                     </div>
                     {/* Glow Effect */}

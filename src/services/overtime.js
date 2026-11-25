@@ -18,7 +18,7 @@
 
 import { parseYMD, toYMD } from './leave.js'
 import { MAX_OT_SESSION_HOURS, workOverlapMinutes, actualMinutes, makeDayKind } from './workday.js'
-import { otSessions, classifyOT } from './otTypes.js'
+import { otSessions, classifyOT, regularEndFn } from './otTypes.js'
 
 export { MAX_OT_SESSION_HOURS }
 
@@ -66,6 +66,7 @@ const round2 = (n) => Math.round(n * 100) / 100
 export function otHoursFromLogs(logs = [], opts = {}) {
     const dayKind = opts.dayKind || (opts.isWorkday ? (d) => (opts.isWorkday(d) ? 'work' : 'rest') : makeDayKind())
     const isWorkday = (d) => dayKind(d) === 'work'
+    const workEnd = regularEndFn(logs) // regular time that ran past 6:00 PM is not overtime
 
     let minutes = 0
     let sessions = 0
@@ -80,8 +81,8 @@ export function otHoursFromLogs(logs = [], opts = {}) {
 
         // Only the part outside regular hours is overtime, less the break.
         const end = new Date(inAt.getTime() + s.elapsed * 60000)
-        const overlapMinutes = workOverlapMinutes(inAt, end, isWorkday)
-        const counted = actualMinutes(inAt, end, isWorkday).minutes.length
+        const overlapMinutes = workOverlapMinutes(inAt, end, isWorkday, workEnd)
+        const counted = actualMinutes(inAt, end, isWorkday, workEnd).minutes.length
         if (overlapMinutes > 0) overlaps.push({ day, session, inAt, outAt, overlapMinutes, countedMinutes: counted })
         if (counted > 0) {
             minutes += counted

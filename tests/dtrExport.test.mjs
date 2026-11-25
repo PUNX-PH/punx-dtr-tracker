@@ -153,5 +153,15 @@ it('a template that is not the DTR template is refused, not silently wrecked', (
   assert.throws(() => buildDtrWorkbook(new Uint8Array(bad), { rows: [] }), /template|sheet|styles|rows/i)
 })
 
+console.log('\nthe reason column')
+it('falls back to the day note for older overtime that has no reason of its own', () => {
+  const rows = exportRows({ dates: [day(24)], logs: [L('OT_IN', 24, 18, 0, { session: 0, reason: 'Release night' }), L('OT_OUT', 24, 20, 0, { session: 0, reason: 'Release night' })] })
+  assert.equal(rows[0].reason, 'Release night')
+})
+it('its own reason wins over the day note', () => {
+  const rows = exportRows({ dates: [day(24)], logs: [L('OT_IN', 24, 18, 0, { session: 0, reason: 'note', otReason: 'Hotfix' }), L('OT_OUT', 24, 20, 0, { session: 0, reason: 'note', otReason: 'Hotfix' })] })
+  assert.equal(rows[0].reason, 'Hotfix')
+})
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

@@ -5,6 +5,7 @@ import { orgFields, profileFields } from './org';
 import { spanDays, MAX_SPAN_DAYS, holidaysForYears, holidaysByDate } from './holidays';
 import { makeDayKind } from './workday';
 import { newFileId, splitChunks, joinChunks, dataUrlBytes } from './attachments';
+import { deadlineFor, overdueRecipients, periodText, deadlineText } from './deadline';
 import { calendarEventFrom } from './calendar';
 import { otHoursFromLogs, splitOT, cutoffWindow, offsetEarnedByUser, OT_THRESHOLD_HOURS } from './overtime';
 
@@ -1512,5 +1513,54 @@ export const attachmentApi = {
     remove: async (submissionId, metas) => {
         const refs = (metas || []).flatMap(m => Array.from({ length: m.chunks || 0 }, (_, i) => doc(db, "submissions", submissionId, "files", `${m.id}_${i}`)));
         await Promise.all(refs.map(ref => deleteDoc(ref).catch(() => {})));
+    },
+};
+
+// ---- DTR deadline notices ----
+export const deadlineApi = {
+    /**
+     * After a cutoff's deadline: tell everyone who has not submitted, and tell the admins
+     * who they are. Every notice has a fixed id (cutoff + person), so it goes out ONCE —
+     * another admin opening the dashboard, or a reload, sends nothing twice.
+     *
+     * This runs when an admin opens the dashboard, because nothing in the app runs on its
+     * own while nobody has it open. (The Messenger reminder is a separate scheduled job.)
+     * Returns { missing, notified, adminsTold }.
+     */
+    notifyOverdue: async ({ cutoff, users, submissions, now = new Date() }) => {
+        const result = { missing: [], notified: 0, adminsTold: 0 };
+        const deadline = deadlineFor(cutoff);
+        if (!deadline || now <= deadline) return result;
+
+        const missing = overdueRecipients(users, submissions);
+        result.missing = missing;
+        if (missing.length === 0) return result;
+
+        const period = periodText(cutoff);
+        const sendOnce = async (id, recipientId, type, title, message) => {
+            const ref = doc(db, "notifications", id);
+            if ((await getDoc(ref)).exists()) return false;
+            await setDoc(ref, { recipientId, type, title, message, data: { cutoffId: cutoff.id }, read: false, createdAt: Timestamp.now() });
+            return true;
+        };
+
+        for (const u of missing) {
+            const sent = await sendOnce(
+                `overdue_${cutoff.id}_${u.id}`, u.id, 'DTR_OVERDUE', 'DTR overdue',
+                `Your DTR for ${period} was due ${deadlineText(deadline)}. Please submit it now.`
+            );
+            if (sent) result.notified++;
+        }
+
+        const shown = missing.slice(0, 10).map(u => u.name || u.email || 'Unknown').join(', ');
+        const more = missing.length > 10 ? `, and ${missing.length - 10} more` : '';
+        for (const admin of users.filter(u => !u.removed && (u.role === 'admin' || u.role === 'super_admin'))) {
+            const sent = await sendOnce(
+                `overduesummary_${cutoff.id}_${admin.id}`, admin.id, 'DTR_OVERDUE_SUMMARY', 'DTRs not submitted',
+                `${missing.length} ${missing.length === 1 ? "person hasn't" : "people haven't"} submitted their DTR for ${period}: ${shown}${more}.`
+            );
+            if (sent) result.adminsTold++;
+        }
+        return result;
     },
 };

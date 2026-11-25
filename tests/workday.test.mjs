@@ -82,5 +82,22 @@ it('a half-entered session is checked on what is there', () => {
 it('both problems are reported together', () =>
   assert.deepEqual(kinds(checkOTSession({ date: day(5), inTime: '10:00', outTime: '11:00', reason: '' })), ['reason', 'work-time']))
 
+console.log('\nregular time that runs past 6 PM is not overtime')
+it('a Time out of 6:30 PM pushes the start of overtime to 6:30', () => {
+  const blocked = checkOTSession({ date: day(5), inTime: '18:00', outTime: '20:00', reason: 'x', regularOutTime: '18:30' })
+  assert.deepEqual(blocked.map(p => p.kind), ['work-time'])
+  assert.ok(blocked[0].message.includes('6:30 PM')); assert.ok(blocked[0].message.includes('regular time'))
+  assert.deepEqual(checkOTSession({ date: day(5), inTime: '18:30', outTime: '20:00', reason: 'x', regularOutTime: '18:30' }), [])
+})
+it('a Time out before 6 PM does not loosen the 9-to-6 rule, and none changes nothing', () => {
+  assert.deepEqual(checkOTSession({ date: day(5), inTime: '17:30', outTime: '20:00', reason: 'x', regularOutTime: '17:00' }).map(p => p.kind), ['work-time'])
+  assert.deepEqual(checkOTSession({ date: day(5), inTime: '18:00', outTime: '20:00', reason: 'x', regularOutTime: '' }), [])
+})
+it('the overlap maths takes the later end too', () => {
+  const lateEnd = () => 18 * 60 + 30
+  assert.equal(workOverlapMinutes(at(5, 18), at(5, 20), makeIsWorkday(), lateEnd), 30)
+  assert.equal(workOverlapMinutes(at(5, 18), at(5, 20)), 0)
+})
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)
