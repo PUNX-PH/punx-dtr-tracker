@@ -421,13 +421,15 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
         // Refuse before anything is written: overtime inside regular hours, or
         // overtime with no reason. Nothing is half-saved.
         const problems = findOTProblems()
-        // On a holiday the hours go under Overtime, not Regular Time. Clearing a time is fine; entering one isn't.
+        // On a holiday or a weekend the hours go under Overtime, not Regular Time. Clearing a time is fine; entering one isn't.
         const holidayLines = Object.entries(edits).flatMap(([key, value]) => {
             const m = key.match(/^(.+?)_(IN|OUT)$/)
             if (!m || !value) return []
             const d = new Date(m[1])
+            if (isWorkday(d)) return []
             const h = holidayOn(d)
-            return h ? [`• ${d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}: ${h.name} is a holiday — enter your hours under Overtime, not Regular Time.`] : []
+            const why = h ? `${h.name} is a holiday` : `${d.toLocaleDateString('en-GB', { weekday: 'long' })} is a weekend`
+            return [`• ${d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}: ${why} — enter your hours under Overtime, not Regular Time.`]
         })
         if (problems.length > 0 || holidayLines.length > 0) {
             const lines = [
@@ -655,6 +657,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
         const dayOffLabel = leave && leave.type !== 'offset' && !isPartialDay(leave) ? LEAVE_TYPES[leave.type].short : null
         const holiday = holidayOn(date)
         const hType = holiday ? HOLIDAY_TYPES[holiday.type] : null
+        const nonWorking = !isWorkday(date) // a weekend or a holiday: no Regular Time, hours go under Overtime
         const viewSessions = getVisibleOTSessions(date)
         // A day with nothing on it collapses to one line when just reading.
         const hasAny = !!(getDisplayValue(date, 'IN') || getDisplayValue(date, 'OUT') || viewSessions.length || leave || getDisplayValue(date, 'REASON'))
@@ -664,9 +667,9 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
             <div>
                 <span className={label}>{text}</span>
                 <div className="h-12">
-                    {editMode && holiday && !getInputValue(date, type) ? (
+                    {editMode && nonWorking && !getInputValue(date, type) ? (
                         <div className="h-full flex items-center justify-center px-3 rounded-xl bg-black/30 text-xs text-center text-[var(--text-muted)]">
-                            Holiday — enter your hours under Overtime
+                            {holiday ? 'Holiday' : 'Weekend'} — enter your hours under Overtime
                         </div>
                     ) : editMode ? (
                         <TimeCellEditor
@@ -738,8 +741,8 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                 {editMode ? (
                     <div className="space-y-3">
                         <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--accent-purple)]">Overtime</p>
-                        {holiday && (
-                            <p className="text-xs font-bold leading-snug" style={{ color: hType.color }}>{holiday.name}: enter your hours here, with a reason.</p>
+                        {nonWorking && (
+                            <p className="text-xs font-bold leading-snug text-[var(--accent-purple)]" style={hType ? { color: hType.color } : undefined}>{holiday ? holiday.name : 'Weekend'}: enter your hours here, with a reason.</p>
                         )}
                         {getOTSessionsForDate(date).map((session, n) => {
                             const inV = getInputValue(date, 'OT_IN', session)
@@ -982,7 +985,7 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                     <p className="text-xs leading-relaxed text-[var(--text-secondary)]">
                         <strong className="text-[var(--text-primary)]">Only hours entered under Overtime count as overtime.</strong>{' '}
                         Regular time is your normal day — it can run a little past 6:00 PM (say 6:30) without being overtime.
-                        Each overtime needs a reason, and on a holiday all your hours go under Overtime.
+                        Each overtime needs a reason, and on a holiday or weekend all your hours go under Overtime.
                     </p>
                 </div>
             )}
@@ -1062,6 +1065,8 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                 : '-'
                             const holiday = holidayOn(date)
                             const hType = holiday ? HOLIDAY_TYPES[holiday.type] : null
+                            // A weekend or a holiday is not a regular work day: no Regular Time, hours go under Overtime.
+                            const nonWorking = !isWorkday(date)
                             // A coloured outline round the whole row, drawn per cell (inset
                             // shadows) because a table row can't carry its own border
                             // reliably. pos: 'first' / 'last' close the row's two ends.
@@ -1108,9 +1113,9 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
 
                                 {/* Regular IN */}
                                 <td style={edge()} className="p-0 border-r border-[var(--border)] border-dashed border-white/10 bg-[var(--accent-green)]/5 font-mono h-12">
-                                    {editMode && holiday && !getInputValue(date, 'IN') ? (
-                                        <div className="h-12 flex items-center justify-center px-2 text-center text-[10px] leading-tight text-[var(--text-muted)]" title="On a holiday, enter your hours under Overtime">
-                                            Holiday — use Overtime
+                                    {editMode && nonWorking && !getInputValue(date, 'IN') ? (
+                                        <div className="h-12 flex items-center justify-center px-2 text-center text-[10px] leading-tight text-[var(--text-muted)]" title="This is not a regular work day: enter your hours under Overtime">
+                                            {holiday ? 'Holiday' : 'Weekend'} — use Overtime
                                         </div>
                                     ) : editMode ? (
                                         <div className="h-12">
@@ -1129,9 +1134,9 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
 
                                 {/* Regular OUT */}
                                 <td style={edge()} className="p-0 border-r border-[var(--border)] bg-[var(--accent-green)]/5 font-mono h-12">
-                                    {editMode && holiday && !getInputValue(date, 'OUT') ? (
-                                        <div className="h-12 flex items-center justify-center px-2 text-center text-[10px] leading-tight text-[var(--text-muted)]" title="On a holiday, enter your hours under Overtime">
-                                            Holiday — use Overtime
+                                    {editMode && nonWorking && !getInputValue(date, 'OUT') ? (
+                                        <div className="h-12 flex items-center justify-center px-2 text-center text-[10px] leading-tight text-[var(--text-muted)]" title="This is not a regular work day: enter your hours under Overtime">
+                                            {holiday ? 'Holiday' : 'Weekend'} — use Overtime
                                         </div>
                                     ) : editMode ? (
                                         <div className="h-12">
@@ -1153,9 +1158,9 @@ export default function DTRTable({ user, history, onRefresh, initialDate, period
                                 <td colSpan={2} style={edge()} className="p-0 border-r border-[var(--border)] bg-[var(--accent-purple)]/5 font-mono align-middle">
                                     {editMode ? (
                                         <div className="flex flex-col divide-y divide-[var(--border)]/60">
-                                            {holiday && (
-                                                <p className="px-2 pt-2 text-[10px] font-bold font-sans leading-snug" style={{ color: hType.color }}>
-                                                    {holiday.name}: enter your hours here, with a reason.
+                                            {nonWorking && (
+                                                <p className="px-2 pt-2 text-[10px] font-bold font-sans leading-snug text-[var(--accent-purple)]" style={hType ? { color: hType.color } : undefined}>
+                                                    {holiday ? holiday.name : 'Weekend'}: enter your hours here, with a reason.
                                                 </p>
                                             )}
                                             {getOTSessionsForDate(date).map(session => {

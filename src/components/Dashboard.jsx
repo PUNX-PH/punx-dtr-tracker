@@ -62,9 +62,11 @@ export default function Dashboard({ user }) {
     }, [])
     const [cutoffChecked, setCutoffChecked] = useState(false) // the submission has been looked for, so "not submitted" is true
 
-    // On a holiday the hours go under Overtime in the DTR, so Time In / Time Out are off.
-    const { byDate: holidayIndex } = useHolidays([new Date().getFullYear()])
+    // On a holiday or a weekend the hours go under Overtime in the DTR, so Time In / Time Out are off.
+    const { byDate: holidayIndex, isWorkday } = useHolidays([new Date().getFullYear()])
     const holidayToday = holidayIndex[toYMD(new Date())]?.[0] || null
+    const offToday = !isWorkday(new Date()) // a holiday or a weekend
+    const offName = holidayToday ? holidayToday.name : new Date().toLocaleDateString('en-US', { weekday: 'long' })
 
     useEffect(() => {
         loadHistory()
@@ -127,7 +129,7 @@ export default function Dashboard({ user }) {
     }
 
     const handleLog = async (type) => {
-        if (holidayToday) return alert(`Today is ${holidayToday.name}. On a holiday, enter your hours under Overtime in your DTR below, with a reason.`)
+        if (offToday) return alert(`${holidayToday ? `Today is ${offName}, a holiday` : `Today is ${offName}, not a regular work day`}. Enter your hours under Overtime in your DTR below, with a reason.`)
         if (type === 'IN' && hasTimeIn) return; // Prevent double IN (simple check)
         if (type === 'OUT' && hasTimeOut) return;
 
@@ -325,12 +327,12 @@ export default function Dashboard({ user }) {
                 )
             })()}
 
-            {holidayToday && (
+            {offToday && (
                 <div className="flex items-start gap-3 p-4 rounded-2xl border border-[var(--accent-teal)]/40 bg-[var(--accent-teal)]/10">
                     <Clock size={20} className="shrink-0 mt-0.5 text-[var(--accent-teal)]" />
                     <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
-                        <strong className="text-[var(--text-primary)]">Today is {holidayToday.name}.</strong>{' '}
-                        On a holiday, enter your hours under Overtime in your DTR below, with a reason. Time In / Time Out are off for today.
+                        <strong className="text-[var(--text-primary)]">{holidayToday ? `Today is ${offName}.` : `Today is ${offName} — not a regular work day.`}</strong>{' '}
+                        Enter your hours under Overtime in your DTR below, with a reason. Time In / Time Out are off for today.
                     </p>
                 </div>
             )}
@@ -354,9 +356,9 @@ export default function Dashboard({ user }) {
                 {/* Time In Card */}
                 <button
                     onClick={() => handleLog('IN')}
-                    disabled={processing || hasTimeIn || !!holidayToday}
+                    disabled={processing || hasTimeIn || offToday}
                     className={`bg-[var(--surface-1)] p-5 sm:p-6 rounded-3xl border border-[var(--border)] text-left transition-all duration-300 group relative overflow-hidden
-                    ${(hasTimeIn || holidayToday) ? 'opacity-50 cursor-not-allowed' : 'hover:border-[var(--accent-green)] active:scale-[0.99] hover:-translate-y-1 hover:shadow-lg hover:shadow-[var(--accent-green)]/10'}
+                    ${(hasTimeIn || offToday) ? 'opacity-50 cursor-not-allowed' : 'hover:border-[var(--accent-green)] active:scale-[0.99] hover:-translate-y-1 hover:shadow-lg hover:shadow-[var(--accent-green)]/10'}
                 `}
                 >
                     <div className="relative z-10">
@@ -365,7 +367,7 @@ export default function Dashboard({ user }) {
                         </div>
                         <h3 className="text-3xl sm:text-4xl font-bold text-[var(--text-primary)] mb-1">TIME IN</h3>
                         <p className="text-xs font-semibold tracking-widest text-[var(--accent-green)] uppercase">
-                            {hasTimeIn ? 'ALREADY LOGGED' : holidayToday ? 'HOLIDAY — USE OVERTIME' : 'START SHIFT'}
+                            {hasTimeIn ? 'ALREADY LOGGED' : offToday ? `${holidayToday ? 'HOLIDAY' : 'WEEKEND'} — USE OVERTIME` : 'START SHIFT'}
                         </p>
                     </div>
                     {/* Glow Effect */}
@@ -375,9 +377,9 @@ export default function Dashboard({ user }) {
                 {/* Time Out Card */}
                 <button
                     onClick={() => handleLog('OUT')}
-                    disabled={processing || hasTimeOut || !!holidayToday}
+                    disabled={processing || hasTimeOut || offToday}
                     className={`bg-[var(--surface-1)] p-5 sm:p-6 rounded-3xl border border-[var(--border)] text-left transition-all duration-300 group relative overflow-hidden
-                    ${(hasTimeOut || holidayToday) ? 'opacity-50 cursor-not-allowed' : 'hover:border-[var(--accent-red)] active:scale-[0.99] hover:-translate-y-1 hover:shadow-lg hover:shadow-red-500/10'}
+                    ${(hasTimeOut || offToday) ? 'opacity-50 cursor-not-allowed' : 'hover:border-[var(--accent-red)] active:scale-[0.99] hover:-translate-y-1 hover:shadow-lg hover:shadow-red-500/10'}
                 `}
                 >
                     <div className="relative z-10">
@@ -386,7 +388,7 @@ export default function Dashboard({ user }) {
                         </div>
                         <h3 className="text-3xl sm:text-4xl font-bold text-[var(--text-primary)] mb-1">TIME OUT</h3>
                         <p className="text-xs font-semibold tracking-widest text-[var(--accent-red)] uppercase">
-                            {hasTimeOut ? 'ALREADY LOGGED' : holidayToday ? 'HOLIDAY — USE OVERTIME' : 'END SHIFT'}
+                            {hasTimeOut ? 'ALREADY LOGGED' : offToday ? `${holidayToday ? 'HOLIDAY' : 'WEEKEND'} — USE OVERTIME` : 'END SHIFT'}
                         </p>
                     </div>
                     {/* Glow Effect */}

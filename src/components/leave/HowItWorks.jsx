@@ -80,7 +80,7 @@ export default function HowItWorks({ isSuperAdmin = false }) {
                                 <li>Every OT entry needs <strong>its own reason</strong>, typed in the box under the overtime times. The Notes column is for anything else about the day.</li>
                                 <li><strong>Regular time can run past 6:00 PM</strong> — say your Time out is 6:30 — and that extra half hour is <strong>not</strong> overtime. Overtime has to start after your Time out.</li>
                                 <li>Only hours entered <strong>under Overtime</strong> count as overtime. Hours in Regular Time never do.</li>
-                                <li>On a <strong>holiday</strong>, Regular Time is off: all your hours go under Overtime, with a reason.</li>
+                                <li>On a <strong>holiday or a weekend</strong>, Regular Time is off: all your hours go under Overtime, with a reason.</li>
                                 <li>The first <strong>{OT_THRESHOLD_HOURS} hours</strong> of a cutoff stay ordinary overtime.</li>
                                 <li>Every hour <strong>past {OT_THRESHOLD_HOURS}</strong> becomes offset, 1 hour of overtime = 1 hour of offset. Example: {OT_THRESHOLD_HOURS + 6.5} hours of OT → {OT_THRESHOLD_HOURS} stay overtime, 6.5 become offset.</li>
                                 <li>It is credited when your DTR for that cutoff is <strong>approved</strong>. What was approved is what counts — changing your DTR afterwards doesn’t change it.</li>
