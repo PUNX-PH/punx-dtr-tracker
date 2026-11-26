@@ -22,8 +22,21 @@ export default function SeniorDashboard({ currentUser, focusRequest, onFocusHand
         loadCutoffs()
     }, [])
 
+    // Live, so a DTR resubmitted after a rejection — or approved from the notification
+    // pop-up, which knows nothing about this screen — shows up here by itself instead of
+    // the panel keeping whatever it loaded first.
     useEffect(() => {
-        if (cutoff) loadSubmissions()
+        if (!cutoff) return undefined
+        return api.subscribeSubmissionsForCutoff(
+            cutoff.id,
+            (subs) => {
+                const subMap = {}
+                subs.forEach(s => { subMap[s.userId] = s })
+                setSubmissions(subMap)
+            },
+            () => loadSubmissions()
+        )
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [cutoff])
 
     useEffect(() => {

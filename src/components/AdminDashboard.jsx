@@ -64,10 +64,23 @@ export default function AdminDashboard({ currentUser, focusRequest, onFocusHandl
         loadCutoffs()
     }, [])
 
+    // Live: a DTR being submitted, resubmitted after a rejection, or approved from the
+    // notification pop-up (which knows nothing about this screen) shows up here by itself,
+    // instead of the panel keeping whatever it loaded first. If listening fails it falls
+    // back to a one-off load.
     useEffect(() => {
-        if (cutoff) {
-            loadSubmissions()
-        }
+        if (!cutoff) return undefined
+        return api.subscribeSubmissionsForCutoff(
+            cutoff.id,
+            (subs) => {
+                const subMap = {}
+                subs.forEach(s => { subMap[s.userId] = s })
+                setSubmissions(subMap)
+                setSubmissionsFor(cutoff.id)
+            },
+            () => loadSubmissions()
+        )
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [cutoff])
 
     useEffect(() => {

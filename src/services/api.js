@@ -843,6 +843,21 @@ export const api = {
         }
     },
 
+    /**
+     * A live getSubmissionsForCutoff: calls `onData` with the cutoff's submissions now and
+     * again whenever any of them changes — someone submits, resubmits after a rejection,
+     * or is approved or rejected (from anywhere, including the notification pop-up).
+     * Returns the function that stops listening. `onError` is told if the listener fails.
+     */
+    subscribeSubmissionsForCutoff: (cutoffId, onData, onError) => onSnapshot(
+        query(collection(db, "submissions"), where("cutoffId", "==", cutoffId)),
+        (snap) => onData(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+        (error) => {
+            console.error("Submissions listener error", error);
+            if (onError) onError(error);
+        }
+    ),
+
     logEditActivity: async (userId, summary, details = []) => {
         try {
             const editLog = {
